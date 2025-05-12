@@ -44,12 +44,6 @@
 
 <link rel="apple-touch-icon" href="/images/apple-touch-icon.png" />
 
-<!-- React and Dependencies -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/recharts@2.1.9/umd/Recharts.js"></script>
-<script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
-
 <!-- Fonts and Styles -->
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -466,7 +460,6 @@ p, ul, li {
   flex-grow: 1;
   padding: 1.5rem;
   overflow-y: auto;
-  max-height: 300px;
 }
 
 .conversation {
@@ -483,7 +476,6 @@ p, ul, li {
   opacity: 0;
   transform: translateY(20px);
   animation: messageAppear 0.5s ease-out forwards;
-  animation-fill-mode: both;
 }
 
 .message.ai {
@@ -594,24 +586,6 @@ p, ul, li {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* Dashboard section */
-#max-dashboard {
-  padding: 4rem 0;
-  background-color: var(--bg-darker);
-  position: relative;
-}
-
-#max-dashboard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at 30% 70%, rgba(0, 194, 203, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
-  pointer-events: none;
 }
 
 /* Features section */
@@ -1526,7 +1500,6 @@ footer {
   opacity: 0;
   transform: translateY(20px);
   animation: fadeIn 0.8s ease-out forwards;
-  animation-fill-mode: both;
 }
 
 @keyframes fadeIn {
@@ -1558,36 +1531,6 @@ footer {
 
 .animation-delay-5 {
   animation-delay: 0.5s;
-}
-
-/* Additional mobile responsiveness */
-@media (max-width: 768px) {
-  .hero-title {
-    font-size: 2.5rem;
-  }
-  
-  .hero-stats {
-    flex-direction: column;
-    gap: 1.5rem;
-    align-items: center;
-  }
-  
-  .what-is-content h2 {
-    font-size: 2rem;
-  }
-  
-  .section-title {
-    font-size: 2rem;
-  }
-  
-  .cta-heading {
-    font-size: 2.25rem;
-  }
-}
-
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
 }
 
 </style>
@@ -1874,7 +1817,7 @@ Max • ApexSalesAI Agent
 
 <input type="text" class="demo-input-field" placeholder="Type your message..." id="demoInput">
 
-<button class="demo-send" id="demoSend" aria-label="Send message">
+<button class="demo-send" id="demoSend">
 
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
@@ -1894,13 +1837,6 @@ Max • ApexSalesAI Agent
 
 </div>
 
-</section>
-
-<!-- Dashboard Section -->
-<section id="max-dashboard" class="dashboard-section">
-  <div class="container">
-    <div id="react-dashboard-root"></div>
-  </div>
 </section>
 
 <!-- What is ApexSalesAI Section -->
@@ -1949,9 +1885,6 @@ Max • ApexSalesAI Agent
         <div style="margin-top: 2rem;">
           <a href="platform.html" class="cta">Explore Our Platform</a>
         </div>
-      </div>
-      <div class="what-is-image">
-        <img src="/images/what-is-apexsalesai.png" alt="ApexSalesAI Platform Interface">
       </div>
     </div>
   </div>
@@ -2055,8 +1988,7 @@ Explore the Engine
 
 <a href="platform.html#channels" class="feature-link">
 
-See Multi
--Channel in Action
+See Multi-Channel in Action
 
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
@@ -2106,7 +2038,8 @@ Learn About Forecasting
 
 Explore Integration Options
 
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke
+stroke-linecap="round" stroke-linejoin="round">
 
 <path d="M5 12h14"></path>
 
@@ -2148,7 +2081,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Conversion Rate</span>
                     </div>
                 </div>
-                <a href="industry-technology.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Technology Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2172,7 +2105,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Reduced Admin</span>
                     </div>
                 </div>
-                <a href="industry-healthcare.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Healthcare Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2196,7 +2129,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Cross-Sell Growth</span>
                     </div>
                 </div>
-                <a href="industry-finance.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Financial Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2220,7 +2153,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Process Efficiency</span>
                     </div>
                 </div>
-                <a href="industry-manufacturing.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Manufacturing Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2244,7 +2177,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Repeat Purchases</span>
                     </div>
                 </div>
-                <a href="industry-retail.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Retail Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2268,7 +2201,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Client Retention</span>
                     </div>
                 </div>
-                <a href="industry-professional.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Professional Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2292,7 +2225,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Response Time</span>
                     </div>
                 </div>
-                <a href="industry-education.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Education Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2316,7 +2249,7 @@ Explore Integration Options
                         <span class="industry-stat-label">Agent Productivity</span>
                     </div>
                 </div>
-                <a href="industry-realestate.html" class="industry-link">
+                <a href="javascript:void(0);" class="industry-link">
                     Explore Real Estate Solutions
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"></path>
@@ -2327,7 +2260,7 @@ Explore Integration Options
         </div>
 
         <div class="section-cta" style="text-align: center; margin-top: 4rem;">
-            <a href="industries.html" class="cta">Explore All Industry Solutions</a>
+            <a href="javascript:void(0);" class="cta">Explore All Industry Solutions</a>
         </div>
     </div>
 </section>
@@ -2528,12 +2461,11 @@ Explore Integration Options
         
         <div class="testimonial-author">
           <div class="testimonial-avatar">
-            <img src="/images/testimonial-sarah.jpg" alt="Sarah Chen">
           </div>
           <div class="testimonial-info">
             <h4>Sarah Chen</h4>
             <p>Chief Revenue Officer, TechForward Solutions</p>
-            <img class="testimonial-logo" src="/images/logo-techforward.png" alt="TechForward Solutions">
+            <img class="testimonial-logo" />
           </div>
         </div>
       </div>
@@ -2565,12 +2497,6 @@ Explore Integration Options
     <h3 class="brands-title">TRUSTED BY INDUSTRY LEADERS</h3>
     
     <div class="brands-grid">
-      <img src="/images/brands/brand-techforward.png" alt="TechForward" class="brand-logo">
-      <img src="/images/brands/brand-globalhealth.png" alt="GlobalHealth" class="brand-logo">
-      <img src="/images/brands/brand-nexusfinance.png" alt="Nexus Finance" class="brand-logo">
-      <img src="/images/brands/brand-precisionmfg.png" alt="Precision Manufacturing" class="brand-logo">
-      <img src="/images/brands/brand-retailplus.png" alt="RetailPlus" class="brand-logo">
-      <img src="/images/brands/brand-consulthub.png" alt="ConsultHub" class="brand-logo">
     </div>
   </div>
 </section>
@@ -2585,24 +2511,24 @@ Explore Integration Options
         <p class="footer-about">Intelligent AI agents designed to drive revenue and elevate every customer interaction — built on the ApexOpsAI execution engine.</p>
         
         <div class="footer-social">
-          <a href="https://linkedin.com/company/apexsalesai" aria-label="LinkedIn">
+          <a href="#" aria-label="LinkedIn">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
               <rect x="2" y="9" width="4" height="12"></rect>
               <circle cx="4" cy="4" r="2"></circle>
             </svg>
           </a>
-          <a href="https://twitter.com/apexsalesai" aria-label="Twitter">
+          <a href="#" aria-label="Twitter">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path>
             </svg>
           </a>
-          <a href="https://facebook.com/apexsalesai" aria-label="Facebook">
+          <a href="#" aria-label="Facebook">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
             </svg>
           </a>
-          <a href="https://youtube.com/apexsalesai" aria-label="YouTube">
+          <a href="#" aria-label="YouTube">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
               <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
@@ -2667,129 +2593,71 @@ Explore Integration Options
 
 <!-- JavaScript -->
 <script>
-// Mobile menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-  const mobileNav = document.getElementById('mobileNav');
-  
-  if (mobileMenuBtn && mobileNav) {
-    let isOpen = false;
-    mobileMenuBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      isOpen = !isOpen;
-      mobileNav.style.display = isOpen ? 'block' : 'none';
-      
-      // Animate hamburger menu
-      const svg = mobileMenuBtn.querySelector('svg');
-      if (isOpen) {
-        svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />';
-      } else {
-        svg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />';
-      }
-    });
-  }
-  
-  // Demo chat functionality
-  const demoInput = document.getElementById('demoInput');
-  const demoSend = document.getElementById('demoSend');
-  const demoConversation = document.getElementById('demoConversation');
-  const typingIndicator = document.getElementById('typingIndicator');
-  
-  if (demoSend && demoInput && demoConversation && typingIndicator) {
-    demoSend.addEventListener('click', function() {
-      if (demoInput.value.trim() !== '') {
-        // Add user message
-        const userMessage = document.createElement('div');
-        userMessage.className = 'message human';
-        userMessage.innerHTML = `
-          <div>${demoInput.value}</div>
-          <div class="message-time">${getCurrentTime()}</div>
-        `;
-        demoConversation.querySelector('.conversation').appendChild(userMessage);
-        
-        // Clear input
-        const userText = demoInput.value;
-        demoInput.value = '';
-        
-        // Show typing indicator
-        typingIndicator.style.display = 'flex';
-        demoConversation.scrollTop = demoConversation.scrollHeight;
-        
-        // Simulate AI response after delay
-        setTimeout(function() {
-          typingIndicator.style.display = 'none';
-          
-          // Add AI response based on user input
-          const aiResponse = getEnhancedAIResponse(userText);
-          const aiMessage = document.createElement('div');
-          aiMessage.className = 'message ai';
-          aiMessage.innerHTML = `
-            <div>${aiResponse.text}</div>
+  // Mobile menu toggle
+  document.addEventListener('DOMContentLoaded', function() {
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const mobileNav = document.getElementById('mobileNav');
+    
+    if (mobileMenuBtn && mobileNav) {
+      mobileMenuBtn.addEventListener('click', function() {
+        mobileNav.style.display = mobileNav.style.display === 'block' ? 'none' : 'block';
+      });
+    }
+    
+    // Demo chat functionality
+    const demoInput = document.getElementById('demoInput');
+    const demoSend = document.getElementById('demoSend');
+    const demoConversation = document.getElementById('demoConversation');
+    const typingIndicator = document.getElementById('typingIndicator');
+    
+    if (demoSend && demoInput && demoConversation && typingIndicator) {
+      demoSend.addEventListener('click', function() {
+        if (demoInput.value.trim() !== '') {
+          // Add user message
+          const userMessage = document.createElement('div');
+          userMessage.className = 'message human';
+          userMessage.innerHTML = `
+            <div>${demoInput.value}</div>
             <div class="message-time">${getCurrentTime()}</div>
-            ${aiResponse.metrics ? `
-              <div class="message-metric">
-                <span class="metric-label">${aiResponse.metrics.label}:</span>
-                <span>${aiResponse.metrics.value}</span>
-              </div>
-            ` : ''}
           `;
-          demoConversation.querySelector('.conversation').appendChild(aiMessage);
+          demoConversation.querySelector('.conversation').appendChild(userMessage);
           
-          // Scroll to bottom
+          // Clear input
+          const userText = demoInput.value;
+          demoInput.value = '';
+          
+          // Show typing indicator
+          typingIndicator.style.display = 'flex';
           demoConversation.scrollTop = demoConversation.scrollHeight;
-        }, 1500);
-      }
-    });
-    
-    // Allow pressing Enter to send message
-    demoInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter' && demoInput.value.trim() !== '') {
-        demoSend.click();
-      }
-    });
-  }
-  
-  // Enhanced AI response system with more intelligence
-  function getEnhancedAIResponse(userText) {
-    const text = userText.toLowerCase();
-    
-    if (text.includes('meeting') || text.includes('schedule') || text.includes('calendar')) {
-      return {
-        text: "I've analyzed TechForward's team calendar patterns and identified Thursday at 2PM PT as their optimal meeting time (87% response rate). I can schedule this automatically and prepare a personalized deck highlighting our security features that address their compliance concerns.",
-        metrics: {
-          label: "Meeting Acceptance Probability",
-          value: "92% (Industry avg: 47%)"
+          
+          // Simulate AI response after delay
+          setTimeout(function() {
+            typingIndicator.style.display = 'none';
+            
+            // Add AI response based on user input
+            const aiResponse = getAIResponse(userText);
+            const aiMessage = document.createElement('div');
+            aiMessage.className = 'message ai';
+            aiMessage.innerHTML = `
+              <div>${aiResponse}</div>
+              <div class="message-time">${getCurrentTime()}</div>
+            `;
+            demoConversation.querySelector('.conversation').appendChild(aiMessage);
+            
+            // Scroll to bottom
+            demoConversation.scrollTop = demoConversation.scrollHeight;
+          }, 1500);
         }
-      };
-    } 
-    else if (text.includes('competitors') || text.includes('compared') || text.includes('vs')) {
-      return {
-        text: "I've detected TechForward evaluating us against DataSync and CloudCore. Our security architecture is their primary concern—they've spent 3.4x more time on those pages. I've already prepared competitive differentiation materials highlighting our SOC2 compliance and data sovereignty features.",
-        metrics: {
-          label: "Competitive Win Rate",
-          value: "78% when emphasizing security (Industry avg: 31%)"
+      });
+      
+      // Allow pressing Enter to send message
+      demoInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && demoInput.value.trim() !== '') {
+          demoSend.click();
         }
-      };
+      });
     }
-    else if (text.includes('data') || text.includes('analytics') || text.includes('report')) {
-      return {
-        text: "I've compiled a complete engagement report for TechForward. They've had 17 website visits this week focusing on security and compliance pages. Their engagement score is 94/100—the highest of all current prospects. Their key decision makers are Sarah Chen (CTO) and Michael Rodriguez (CISO).",
-        metrics: {
-          label: "Conversion Probability",
-          value: "87% (Top 2% of all prospects)"
-        }
-      };
-    }
-    else {
-      return {
-        text: "I've identified that TechForward is in the final evaluation stage with a buying committee of 5 people. Their primary concern is meeting new EU data sovereignty requirements. I've proactively prepared personalized outreach for each committee member highlighting our relevant compliance certifications.",
-        metrics: {
-          label: "Decision Timeframe",
-          value: "14 days (Opportunity value: $380K ARR)"
-        }
-      };
-    }
-  }
+  });
   
   // Helper function to get current time in HH:MM format
   function getCurrentTime() {
@@ -2805,107 +2673,26 @@ document.addEventListener('DOMContentLoaded', function() {
     return hours + ':' + minutes + ' ' + ampm;
   }
   
-  // Intersection Observer for animations
-  const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-  };
-  
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.style.animationPlayState = 'running';
-      }
-    });
-  }, observerOptions);
-  
-  // Observe all elements with animation classes
-  document.querySelectorAll('.animate-fade-in').forEach(el => {
-    el.style.animationPlayState = 'paused';
-    observer.observe(el);
-  });
-  
-  // Smooth scrolling for anchor links
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-      e.preventDefault();
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target) {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }
-    });
-  });
-});
-
-// Dashboard code - This is a simplified version that creates a placeholder until the full dashboard loads
-// The actual dashboard will be loaded by dashboard.js and dashboard-integration.js
-(function() {
-  const dashboardRoot = document.getElementById('react-dashboard-root');
-  if (dashboardRoot) {
-    dashboardRoot.innerHTML = `
-      <div style="text-align: center; padding: 3rem 1rem; background: rgba(26, 32, 44, 0.6); border-radius: 0.75rem; color: #cbd5e0;">
-        <h3 style="color: #ffffff; margin-bottom: 1rem;">Loading Interactive Dashboard...</h3>
-        <div style="display: flex; justify-content: center; gap: 0.5rem; margin: 1rem 0;">
-          <div style="width: 0.75rem; height: 0.75rem; background-color: #00c2cb; border-radius: 50%; animation: pulse 1.5s infinite alternate;"></div>
-          <div style="width: 0.75rem; height: 0.75rem; background-color: #00c2cb; border-radius: 50%; animation: pulse 1.5s infinite alternate 0.3s;"></div>
-          <div style="width: 0.75rem; height: 0.75rem; background-color: #00c2cb; border-radius: 50%; animation: pulse 1.5s infinite alternate 0.6s;"></div>
-        </div>
-        <style>
-          @keyframes pulse {
-            0% { opacity: 0.3; transform: scale(0.8); }
-            100% { opacity: 1; transform: scale(1.2); }
-          }
-        </style>
-      </div>
-    `;
+  // Generate AI responses for the demo chat
+  function getAIResponse(userText) {
+    const text = userText.toLowerCase();
+    
+    if (text.includes('meeting') || text.includes('schedule') || text.includes('calendar')) {
+      return "I've started the process of setting up a meeting. Based on their previous interaction patterns, Thursday at 2:00 PM in their timezone would be optimal. Would you like me to send a calendar invite for that time or suggest alternative options?";
+    } 
+    else if (text.includes('competitors') || text.includes('competition')) {
+      return "TechForward Solutions is currently evaluating two other vendors: DataSync and CloudCore. My analysis shows they've spent 60% more time on our security documentation, suggesting that's a key differentiator for us. Would you like me to emphasize our advanced security features in the next communication?";
+    }
+    else if (text.includes('data') || text.includes('analytics') || text.includes('report')) {
+      return "I've prepared a detailed engagement report for TechForward Solutions. They've had 17 website visits in the past week, downloaded 3 resources, and opened our emails at an 87% rate (industry average is 23%). Their engagement score is in the top 5% of all prospects. Would you like to see the full report?";
+    }
+    else if (text.includes('yes') || text.includes('good') || text.includes('great')) {
+      return "Excellent! I'll proceed with that approach. I've also identified two other potential champions at TechForward based on LinkedIn engagement patterns. Would you like me to initiate contact with them as well, or focus solely on Sarah Chen for now?";
+    }
+    else {
+      return "I've analyzed TechForward's recent behavior and noticed they've been comparing our enterprise security features against competitors. Their main concern appears to be data sovereignty compliance. I can prepare a customized presentation addressing this specifically. Would that be helpful?";
+    }
   }
-})();
-
-// Dashboard JavaScript code
-// The full dashboard code should be in the separate dashboard.js file
-// Here is a basic implementation for the dashboard that will load after the main page
-const colors = {
-  primary: '#00c2cb',
-  primaryDark: '#00a8b3',
-  secondary: '#052438',
-  bgCard: 'rgba(26, 32, 44, 0.8)',
-  text: '#e2e8f0',
-  success: '#4caf50',
-  warning: '#ff9800',
-  danger: '#f44336',
-  purple: '#8b5cf6',
-  orange: '#f97316',
-  blue: '#3b82f6',
-  pink: '#ec4899'
-};
-
-// Sample dashboard data - This should be replaced with the complete dashboard.js file
-const dashboardData = {
-  crossfunctionalImpact: [
-    { department: 'Sales', beforeAI: 100, withAI: 340, benefit: 'Pipeline velocity' },
-    { department: 'Marketing', beforeAI: 100, withAI: 289, benefit: 'Lead qualification' },
-    { department: 'CS', beforeAI: 100, withAI: 267, benefit: 'Customer retention' },
-    { department: 'Support', beforeAI: 100, withAI: 413, benefit: 'Resolution speed' },
-    { department: 'Operations', beforeAI: 100, withAI: 274, benefit: 'Process efficiency' },
-    { department: 'Product', beforeAI: 100, withAI: 256, benefit: 'User insights' }
-  ]
-};
-
-// Department configurations - Simplified version for the index.html
-const departments = {
-  sales: { name: 'Sales', icon: 'Target', color: colors.primary },
-  marketing: { name: 'Marketing', icon: 'Search', color: colors.purple },
-  customer_success: { name: 'Customer Success', icon: 'UserCheck', color: colors.success },
-  support: { name: 'Customer Support', icon: 'Headphones', color: colors.blue },
-  operations: { name: 'Operations', icon: 'Settings', color: colors.orange },
-  product: { name: 'Product', icon: 'Code', color: colors.pink }
-};
-
-// The rest of the dashboard implementation would go in dashboard.js
-// This is just a placeholder until the dashboard loads
 </script>
 
 <!-- Botpress AI Webchat Integration -->
