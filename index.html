@@ -177,6 +177,109 @@ p, ul, li {
   width: 100%;
 }
 
+/* Navigation Dropdown */
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown .dropdown-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.nav-dropdown .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 300px;
+  background: linear-gradient(135deg, rgba(13, 19, 33, 0.98), rgba(26, 32, 44, 0.98));
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 194, 203, 0.2);
+  border-radius: 16px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(10px);
+  transition: all 0.3s ease;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 60px rgba(0, 194, 203, 0.1);
+  z-index: 1000;
+}
+
+.nav-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #e2e8f0;
+  transition: all 0.2s ease;
+  gap: 1rem;
+}
+
+.dropdown-item:hover {
+  background: rgba(0, 194, 203, 0.1);
+  color: #00c2cb;
+}
+
+.dropdown-icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 194, 203, 0.1);
+  border-radius: 10px;
+}
+
+.dropdown-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-text strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.dropdown-text small {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin-top: 2px;
+}
+
+.dropdown-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #00c2cb, #0097e6);
+  color: #0d1321;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dropdown-badge.beta {
+  background: linear-gradient(135deg, #8b5cf6, #a855f7);
+  color: #fff;
+}
+
+.dropdown-badge.pro {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #0d1321;
+}
+
 /* Mobile Navigation */
 
 .mobile-menu-btn {
@@ -1575,6 +1678,36 @@ footer {
 
 <li><a href="blog.html">Blog</a></li>
 
+<li class="nav-dropdown">
+  <a href="#" class="dropdown-toggle">Labs <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 4px; vertical-align: middle;"><polyline points="6 9 12 15 18 9"></polyline></svg></a>
+  <div class="dropdown-menu">
+    <a href="marketing-studio/" class="dropdown-item">
+      <span class="dropdown-icon">🎨</span>
+      <span class="dropdown-text">
+        <strong>Marketing Studio</strong>
+        <small>AI-powered content & video creation</small>
+      </span>
+      <span class="dropdown-badge">New</span>
+    </a>
+    <a href="marketing-studio/studio/labs" class="dropdown-item">
+      <span class="dropdown-icon">🧪</span>
+      <span class="dropdown-text">
+        <strong>Lyfye Labs</strong>
+        <small>Experimental AI features</small>
+      </span>
+      <span class="dropdown-badge beta">Beta</span>
+    </a>
+    <a href="marketing-studio/studio/video" class="dropdown-item">
+      <span class="dropdown-icon">🎬</span>
+      <span class="dropdown-text">
+        <strong>Video Studio</strong>
+        <small>Runway, Sora, HeyGen integrations</small>
+      </span>
+      <span class="dropdown-badge pro">Pro</span>
+    </a>
+  </div>
+</li>
+
 <li><a href="contact.html">Contact</a></li>
 
 </ul>
@@ -1616,6 +1749,8 @@ footer {
 <a href="onboarding.html">Onboarding</a>
 
 <a href="blog.html">Blog</a>
+
+<a href="marketing-studio/" style="color: #00c2cb;">🧪 Labs - Marketing Studio</a>
 
 <a href="contact.html">Contact</a>
 
