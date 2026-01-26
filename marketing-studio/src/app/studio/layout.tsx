@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   Settings,
@@ -15,8 +16,10 @@ import {
   Sparkles,
   FlaskConical,
   CheckCircle,
+  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DemoModeBanner } from '@/components/ui/demo-mode-banner'
 
 const NAV_ITEMS = [
   { href: '/studio', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -36,14 +39,21 @@ export default function StudioLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href
     return pathname.startsWith(href)
   }
 
+  const userName = session?.user?.name || 'User'
+  const userEmail = session?.user?.email || ''
+  const userInitial = userName.charAt(0).toUpperCase()
+
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Demo Mode Banner */}
+      <DemoModeBanner />
       {/* Top header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center justify-between px-6 py-3">
@@ -77,16 +87,32 @@ export default function StudioLayout({
             </button>
 
             {/* User menu */}
-            <button className="flex items-center space-x-3 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm">
-                U
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3 px-3 py-1.5 rounded-lg">
+                {session?.user?.image ? (
+                  <img
+                    src={session.user.image}
+                    alt={userName}
+                    className="w-8 h-8 rounded-full"
+                  />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                    {userInitial}
+                  </div>
+                )}
+                <div className="text-left hidden sm:block">
+                  <p className="text-sm font-medium text-slate-900">{userName}</p>
+                  <p className="text-xs text-slate-500">{userEmail || 'Pro Plan'}</p>
+                </div>
               </div>
-              <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium text-slate-900">User</p>
-                <p className="text-xs text-slate-500">Pro Plan</p>
-              </div>
-              <ChevronDown className="w-4 h-4 text-slate-400" />
-            </button>
+              <button
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </header>

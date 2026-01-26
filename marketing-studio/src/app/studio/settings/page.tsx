@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IntegrationType, IntegrationStatus } from '@/types'
 import { getAllConnectors } from '@/lib/connectors'
@@ -76,6 +77,29 @@ export default function SettingsPage() {
           Manage integrations, permissions, and security settings
         </p>
       </div>
+
+      {/* AI Providers Section */}
+      <Link
+        href="/studio/settings/ai"
+        className="block card hover:border-purple-300 hover:bg-purple-50/50 transition-colors group"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 group-hover:text-purple-700">
+                AI Providers
+              </h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Configure Anthropic Claude, OpenAI GPT-4, and other AI providers for content generation
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-purple-600" />
+        </div>
+      </Link>
 
       {/* Kill Switch Section */}
       <div className="card border-red-200 bg-red-50">

@@ -1459,9 +1459,21 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                       </div>
 
                       {generationError && (
-                        <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-                          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                          <p className="text-sm">{generationError}</p>
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                          <div className="flex items-start space-x-3">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm text-red-700 font-medium">{generationError}</p>
+                              {generationError.toLowerCase().includes('not configured') && (
+                                <a
+                                  href="/studio/settings/ai"
+                                  className="inline-flex items-center mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
+                                >
+                                  Fix AI Provider Settings →
+                                </a>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       )}
 
