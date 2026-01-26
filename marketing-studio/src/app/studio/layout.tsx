@@ -19,7 +19,7 @@ import {
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DemoModeBanner } from '@/components/ui/demo-mode-banner'
+import { StudioStatusBanner } from '@/components/ui/studio-status-banner'
 import { FadeTransition } from '@/components/ui/page-transition'
 import { CommandPalette } from '@/components/ui/command-palette'
 import { MiaProvider } from '@/components/providers/mia-provider'
@@ -57,8 +57,8 @@ export default function StudioLayout({
   return (
     <MiaProvider>
     <div className="min-h-screen bg-slate-50">
-      {/* Demo Mode Banner */}
-      <DemoModeBanner />
+      {/* Status Banners (Demo Mode + AI Config) */}
+      <StudioStatusBanner />
       {/* Top header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center justify-between px-6 py-3">
