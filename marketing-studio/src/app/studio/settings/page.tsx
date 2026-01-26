@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IntegrationType, IntegrationStatus } from '@/types'
 import { getAllConnectors } from '@/lib/connectors'
@@ -98,6 +98,29 @@ export default function SettingsPage() {
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-purple-600" />
+        </div>
+      </Link>
+
+      {/* Brand Voice Section */}
+      <Link
+        href="/studio/settings/brand"
+        className="block card hover:border-pink-300 hover:bg-pink-50/50 transition-colors group"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 bg-pink-100 rounded-lg">
+              <MessageSquare className="w-5 h-5 text-pink-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 group-hover:text-pink-700">
+                Brand Voice
+              </h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Define your brand's tone, target audience, and content preferences for AI generation
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-pink-600" />
         </div>
       </Link>
 

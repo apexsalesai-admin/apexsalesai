@@ -20,6 +20,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DemoModeBanner } from '@/components/ui/demo-mode-banner'
+import { FadeTransition } from '@/components/ui/page-transition'
+import { CommandPalette } from '@/components/ui/command-palette'
+import { MiaProvider } from '@/components/providers/mia-provider'
+import { MiaTrigger } from '@/components/ui/mia-trigger'
 
 const NAV_ITEMS = [
   { href: '/studio', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -51,6 +55,7 @@ export default function StudioLayout({
   const userInitial = userName.charAt(0).toUpperCase()
 
   return (
+    <MiaProvider>
     <div className="min-h-screen bg-slate-50">
       {/* Demo Mode Banner */}
       <DemoModeBanner />
@@ -74,11 +79,11 @@ export default function StudioLayout({
           </Link>
 
           <div className="flex items-center space-x-4">
-            {/* AI Status */}
-            <div className="flex items-center space-x-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-medium text-emerald-700">Mia Online</span>
-            </div>
+            {/* Command Palette Trigger */}
+            <CommandPalette />
+
+            {/* AI Status / Mia Trigger */}
+            <MiaTrigger />
 
             {/* Notifications */}
             <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
@@ -197,9 +202,10 @@ export default function StudioLayout({
 
         {/* Main content */}
         <main className="flex-1 p-8">
-          {children}
+          <FadeTransition>{children}</FadeTransition>
         </main>
       </div>
     </div>
+    </MiaProvider>
   )
 }
