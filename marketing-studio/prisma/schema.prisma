@@ -1,0 +1,1429 @@
+// Lyfye Marketing Studio - Production-Grade Prisma Schema
+// Multi-tenant extension on top of existing database
+// IMPORTANT: This database serves multiple products - do not remove existing models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// NEW: WORKSPACE & MULTI-TENANCY FOR MARKETING STUDIO
+// ============================================================================
+
+model StudioWorkspace {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique  // URL-safe identifier
+  domain        String?   // Optional custom domain
+
+  // Branding
+  logoUrl       String?
+  primaryColor  String?   @default("#8b5cf6")
+
+  // Settings
+  settings      Json      @default("{}")
+  features      Json      @default("{}")  // Feature flags
+
+  // Limits
+  maxUsers      Int       @default(5)
+  maxContent    Int       @default(1000)
+
+  // Relations
+  members       StudioWorkspaceMember[]
+  integrations  StudioIntegration[]
+  assets        StudioAsset[]
+  videoJobs     StudioVideoJob[]
+  publishJobs   StudioPublishJob[]
+  auditLogs     StudioAuditLog[]
+  brandGuardrails StudioBrandGuardrails?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([slug])
+  @@map("studio_workspaces")
+}
+
+model StudioWorkspaceMember {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId        String    // References echo_breaker_users.id or other user ID
+
+  role          StudioWorkspaceRole @default(CREATOR)
+
+  invitedAt     DateTime  @default(now())
+  joinedAt      DateTime?
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("studio_workspace_members")
+}
+
+enum StudioWorkspaceRole {
+  OWNER       // Full control, billing, can delete workspace
+  ADMIN       // Manage members, integrations, settings
+  APPROVER    // Can approve/reject content
+  CREATOR     // Can create and edit content
+  VIEWER      // Read-only access
+}
+
+// ============================================================================
+// NEW: BRAND GUARDRAILS
+// ============================================================================
+
+model StudioBrandGuardrails {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Voice profile
+  voiceTones      String[]  @default([])
+  writingStyle    String?
+
+  // Compliance
+  bannedClaims    String[]  @default([])
+  complianceRules String[]  @default([])
+  doNotSayList    String[]  @default([])
+  requiredDisclosures String[] @default([])
+
+  // CTA
+  ctaStyle        String?
+  ctaExamples     String[]  @default([])
+
+  // Personas/Audiences
+  targetAudiences Json      @default("[]")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("studio_brand_guardrails")
+}
+
+// ============================================================================
+// NEW: INTEGRATION CONNECTIONS (Per-Workspace, Encrypted Tokens)
+// ============================================================================
+
+enum StudioIntegrationType {
+  YOUTUBE
+  TIKTOK
+  LINKEDIN
+  X_TWITTER
+  FACEBOOK
+  INSTAGRAM
+  THREADS
+  PINTEREST
+  // AI/Video providers
+  OPENAI
+  ANTHROPIC
+  ELEVENLABS
+  HEYGEN
+  RUNWAY
+  MIDJOURNEY
+}
+
+enum StudioIntegrationStatus {
+  PENDING       // OAuth initiated
+  CONNECTED     // Active connection
+  DISCONNECTED  // User disconnected
+  REVOKED       // Admin revoked
+  ERROR         // Connection error
+  EXPIRED       // Token expired, needs refresh
+}
+
+model StudioIntegration {
+  id              String            @id @default(cuid())
+  workspaceId     String
+  workspace       StudioWorkspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  type            StudioIntegrationType
+  status          StudioIntegrationStatus @default(PENDING)
+
+  // Encrypted tokens - stored as: iv:ciphertext:authTag (base64)
+  accessTokenEncrypted   String?   @db.Text
+  refreshTokenEncrypted  String?   @db.Text
+  tokenExpiresAt         DateTime?
+
+  // Token metadata (not sensitive)
+  tokenType       String?   @default("Bearer")
+
+  // Scopes
+  scopesGranted   String[]  @default([])
+  scopesRequired  String[]  @default([])
+
+  // Channel info (external platform IDs)
+  externalId      String?   // User/page/channel ID on the platform
+  externalName    String?   // Display name
+  externalUrl     String?   // Profile/channel URL
+  externalMeta    Json      @default("{}")  // Platform-specific metadata
+
+  // Connection health
+  lastTestedAt    DateTime?
+  lastTestResult  String?   // "success" | "error:reason"
+  errorCount      Int       @default(0)
+
+  // Audit
+  connectedBy     String?   // User ID who connected
+  revokedBy       String?   // User ID who revoked
+  revokedAt       DateTime?
+  revokeReason    String?
+
+  // Relations
+  publishResults  StudioPublishResult[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, type])
+  @@index([status])
+  @@index([type])
+  @@map("studio_integrations")
+}
+
+// ============================================================================
+// NEW: ASSETS (Images, Videos, Audio stored in Vercel Blob)
+// ============================================================================
+
+enum StudioAssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  THUMBNAIL
+  DOCUMENT
+}
+
+enum StudioAssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+  DELETED
+}
+
+enum StudioAssetProvider {
+  UPLOAD        // User uploaded
+  DALLE         // DALL-E generated
+  MIDJOURNEY    // Midjourney generated
+  RUNWAY        // Runway video
+  HEYGEN        // HeyGen avatar video
+  ELEVENLABS    // ElevenLabs audio
+  SORA          // OpenAI Sora video
+  PIKA          // Pika Labs video
+}
+
+model StudioAsset {
+  id              String        @id @default(cuid())
+  workspaceId     String
+  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Type & Status
+  type            StudioAssetType
+  status          StudioAssetStatus   @default(UPLOADING)
+
+  // File info
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+
+  // Storage
+  storageProvider String        @default("vercel-blob")  // vercel-blob | s3 | r2
+  storageKey      String        // Key/path in storage
+  publicUrl       String?       // Public URL if available
+
+  // Generation source
+  provider        StudioAssetProvider @default(UPLOAD)
+  providerJobId   String?       // External job ID
+  providerMeta    Json          @default("{}")  // Provider-specific metadata
+
+  // Dimensions (for images/videos)
+  width           Int?
+  height          Int?
+  durationSeconds Float?
+
+  // Processing
+  processingError String?
+
+  // Thumbnails (for videos)
+  thumbnailUrl    String?
+
+  // Relations
+  videoJob        StudioVideoJob?     @relation(fields: [videoJobId], references: [id])
+  videoJobId      String?
+
+  // Link to content via contentId (references ScheduledContent.id)
+  contentId       String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([workspaceId])
+  @@index([type])
+  @@index([status])
+  @@index([contentId])
+  @@map("studio_assets")
+}
+
+// ============================================================================
+// NEW: VIDEO JOBS
+// ============================================================================
+
+enum StudioVideoJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StudioVideoJobType {
+  TEXT_TO_VIDEO     // Generate video from text
+  AVATAR_VIDEO      // AI avatar speaking
+  SCRIPT_TO_VIDEO   // Full script to video
+  IMAGE_TO_VIDEO    // Animate image
+  VOICEOVER         // Generate voiceover only
+  THUMBNAIL         // Generate thumbnail
+}
+
+model StudioVideoJob {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  workspace       StudioWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Job type
+  type            StudioVideoJobType
+  status          StudioVideoJobStatus  @default(QUEUED)
+
+  // Input - references ScheduledContent.id
+  contentId       String?
+  inputScript     String?         @db.Text
+  inputPrompt     String?         @db.Text
+  inputAssetId    String?         // For image-to-video
+
+  // Configuration
+  config          Json            @default("{}")
+
+  // Provider tracking
+  provider        String?         // runway | heygen | elevenlabs | dalle
+  providerJobId   String?         // External job ID
+  providerStatus  String?         // Provider's status string
+  providerMeta    Json            @default("{}")
+
+  // Progress
+  progress        Int             @default(0)  // 0-100
+  progressMessage String?
+
+  // Output
+  outputAssets    StudioAsset[]
+
+  // Error handling
+  errorMessage    String?
+  errorCode       String?
+  retryCount      Int             @default(0)
+  maxRetries      Int             @default(3)
+
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  // Cost tracking
+  estimatedCost   Float?
+  actualCost      Float?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([contentId])
+  @@map("studio_video_jobs")
+}
+
+// ============================================================================
+// NEW: PUBLISH JOBS & RESULTS (Enhanced publishing with verification)
+// ============================================================================
+
+enum StudioPublishJobStatus {
+  PENDING         // Waiting to publish
+  VALIDATING      // Checking integrations
+  PUBLISHING      // In progress
+  VERIFYING       // Verifying post exists
+  COMPLETED       // All channels done
+  PARTIAL         // Some channels failed
+  FAILED          // All channels failed
+  CANCELLED       // User cancelled
+}
+
+model StudioPublishJob {
+  id              String                @id @default(cuid())
+  workspaceId     String
+  workspace       StudioWorkspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // References ScheduledContent.id
+  contentId       String
+
+  status          StudioPublishJobStatus  @default(PENDING)
+
+  // Target channels
+  targetChannels  String[]          @default([])
+
+  // Results per channel
+  results         StudioPublishResult[]
+
+  // Scheduling
+  scheduledFor    DateTime?
+
+  // Timing
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  // Idempotency
+  idempotencyKey  String?           @unique
+
+  // Error summary
+  errorSummary    String?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([workspaceId])
+  @@index([contentId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@map("studio_publish_jobs")
+}
+
+enum StudioPublishResultStatus {
+  PENDING
+  PUBLISHING
+  VERIFYING
+  SUCCESS
+  FAILED
+  SKIPPED       // Integration not connected
+}
+
+model StudioPublishResult {
+  id              String                    @id @default(cuid())
+  publishJobId    String
+  publishJob      StudioPublishJob          @relation(fields: [publishJobId], references: [id], onDelete: Cascade)
+
+  // Channel
+  channel         StudioIntegrationType
+  integrationId   String?
+  integration     StudioIntegration?        @relation(fields: [integrationId], references: [id])
+
+  status          StudioPublishResultStatus @default(PENDING)
+
+  // Platform response
+  externalPostId  String?             // Post ID on the platform
+  permalink       String?             // URL to the post
+  platformResponse Json               @default("{}")  // Raw API response
+
+  // Verification
+  verified        Boolean             @default(false)
+  verifiedAt      DateTime?
+  verificationError String?
+
+  // Error details
+  errorCode       String?
+  errorMessage    String?
+
+  // Timing
+  publishedAt     DateTime?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([publishJobId])
+  @@index([channel])
+  @@index([status])
+  @@map("studio_publish_results")
+}
+
+// ============================================================================
+// NEW: CONTENT APPROVAL (For approval workflow)
+// ============================================================================
+
+enum StudioApprovalAction {
+  SUBMITTED     // Submitted for approval
+  APPROVED      // Approved
+  REJECTED      // Rejected with reason
+  REQUESTED_CHANGES // Needs changes
+  WITHDRAWN     // Creator withdrew
+}
+
+model StudioContentApproval {
+  id              String              @id @default(cuid())
+  // References ScheduledContent.id
+  contentId       String
+
+  action          StudioApprovalAction
+
+  // Reviewer (user ID)
+  reviewerId      String?
+
+  // Feedback
+  notes           String?         @db.Text
+
+  // Immutable timestamp
+  createdAt       DateTime        @default(now())
+
+  @@index([contentId])
+  @@index([reviewerId])
+  @@map("studio_content_approvals")
+}
+
+// ============================================================================
+// NEW: CONTENT COMMENTS
+// ============================================================================
+
+model StudioContentComment {
+  id              String          @id @default(cuid())
+  // References ScheduledContent.id
+  contentId       String
+
+  authorId        String
+  body            String          @db.Text
+
+  // Reply threading
+  parentId        String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([contentId])
+  @@map("studio_content_comments")
+}
+
+// ============================================================================
+// NEW: AUDIT LOG (IMMUTABLE) - Separate from existing AuditLog
+// ============================================================================
+
+enum StudioAuditAction {
+  // Workspace
+  WORKSPACE_CREATED
+  WORKSPACE_UPDATED
+  WORKSPACE_DELETED
+  MEMBER_INVITED
+  MEMBER_JOINED
+  MEMBER_REMOVED
+  MEMBER_ROLE_CHANGED
+
+  // Integration
+  INTEGRATION_CONNECTED
+  INTEGRATION_DISCONNECTED
+  INTEGRATION_REVOKED
+  INTEGRATION_REFRESHED
+  INTEGRATION_ERROR
+  INTEGRATION_TESTED
+
+  // Content
+  CONTENT_CREATED
+  CONTENT_UPDATED
+  CONTENT_DELETED
+  CONTENT_SUBMITTED
+  CONTENT_APPROVED
+  CONTENT_REJECTED
+  CONTENT_SCHEDULED
+  CONTENT_PUBLISHED
+  CONTENT_FAILED
+
+  // Assets
+  ASSET_UPLOADED
+  ASSET_GENERATED
+  ASSET_DELETED
+
+  // Video Jobs
+  VIDEO_JOB_CREATED
+  VIDEO_JOB_COMPLETED
+  VIDEO_JOB_FAILED
+
+  // Publishing
+  PUBLISH_JOB_CREATED
+  PUBLISH_JOB_COMPLETED
+  PUBLISH_JOB_FAILED
+
+  // Settings
+  BRAND_GUARDRAILS_UPDATED
+  SETTINGS_UPDATED
+
+  // Auth
+  USER_SIGNED_IN
+  USER_SIGNED_OUT
+}
+
+model StudioAuditLog {
+  id              String          @id @default(cuid())
+  workspaceId     String?
+  workspace       StudioWorkspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  action          StudioAuditAction
+
+  // Actor
+  userId          String?
+  userEmail       String?     // Denormalized
+
+  // Target
+  resourceType    String?     // content | integration | asset | etc.
+  resourceId      String?
+
+  // Details (immutable snapshot)
+  details         Json        @default("{}")
+
+  // Request context
+  ipAddress       String?
+  userAgent       String?
+
+  // NO updatedAt - immutable
+  createdAt       DateTime    @default(now())
+
+  @@index([workspaceId])
+  @@index([action])
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("studio_audit_logs")
+}
+
+// ============================================================================
+// NEW: MODEL REGISTRY (For AI model selection)
+// ============================================================================
+
+model StudioModelRegistry {
+  id              String    @id @default(cuid())
+
+  // Model identity
+  provider        String    // openai | anthropic | google
+  modelId         String    // claude-3-opus-20240229
+  displayName     String    // Claude 3 Opus
+
+  // Capabilities
+  capabilities    String[]  @default([])  // ["text", "vision", "function_calling"]
+
+  // Quality tier
+  tier            String    @default("balanced")  // fast | balanced | premium
+
+  // Pricing (per 1M tokens)
+  inputPricePer1M   Float?
+  outputPricePer1M  Float?
+
+  // Limits
+  maxInputTokens  Int?
+  maxOutputTokens Int?
+
+  // Availability
+  isEnabled       Boolean   @default(true)
+  isDefault       Boolean   @default(false)
+
+  // Ordering
+  sortOrder       Int       @default(0)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([provider, modelId])
+  @@index([provider])
+  @@index([isEnabled])
+  @@map("studio_model_registry")
+}
+
+// ============================================================================
+// NEW: USAGE TRACKING
+// ============================================================================
+
+model StudioUsageRecord {
+  id              String    @id @default(cuid())
+  workspaceId     String
+
+  // What was used
+  resourceType    String    // ai_tokens | video_generation | storage | publish
+  provider        String?   // openai | anthropic | runway | etc.
+  model           String?   // claude-3-opus | gpt-4 | etc.
+
+  // Quantities
+  inputTokens     Int?
+  outputTokens    Int?
+  durationSeconds Float?
+  sizeBytes       Int?
+
+  // Cost
+  estimatedCost   Float?
+
+  // Reference
+  referenceType   String?   // content | video_job | asset
+  referenceId     String?
+
+  // Period
+  period          String    // 2024-01 (for aggregation)
+
+  createdAt       DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([resourceType])
+  @@index([period])
+  @@map("studio_usage_records")
+}
+
+// ============================================================================
+// EXISTING MODELS - PRESERVED FROM DATABASE
+// These are all existing tables that serve other products
+// ============================================================================
+
+model Agent {
+  id          Int           @id @default(autoincrement())
+  userId      Int?          @unique
+  model       String        @default("gpt-4o-mini")
+  status      String        @default("active")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  name        String
+  role        String
+  User        User?         @relation(fields: [userId], references: [id])
+  AgentAction AgentAction[]
+}
+
+model AgentAction {
+  id                  Int                @id @default(autoincrement())
+  agentId             Int
+  leadId              Int
+  action              String
+  priority            String
+  confidence          Float
+  reason              String?
+  createdAt           DateTime           @default(now())
+  executionDuration   Int?
+  executionResult     String?
+  overriddenBy        Int?
+  overrideReason      String?
+  roiImpact           Float?
+  sequenceExecutionId Int?
+  status              String             @default("executed")
+  Agent               Agent              @relation(fields: [agentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Lead                Lead               @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  SequenceExecution   SequenceExecution? @relation(fields: [sequenceExecutionId], references: [id])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int
+  userId     Int?
+  action     String
+  details    String?
+  createdAt  DateTime @default(now())
+  actorId    String?
+  after      Json?
+  before     Json?
+  externalId String?
+  orgId      String?
+  status     String   @default("success")
+  targetId   String?
+  targetType String?
+  Tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User       User?    @relation(fields: [userId], references: [id])
+}
+
+model AuthToken {
+  id            Int      @id @default(autoincrement())
+  provider      String
+  access_token  String
+  refresh_token String?
+  expires_at    DateTime
+  created_at    DateTime @default(now())
+  updated_at    DateTime
+  userId        Int
+  tenantId      Int
+  metadata      String?
+}
+
+model FeatureFlag {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  name      String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model GDPRRequest {
+  id          Int       @id @default(autoincrement())
+  leadId      Int
+  type        String
+  status      String
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+  Lead        Lead      @relation(fields: [leadId], references: [id])
+}
+
+model Lead {
+  id                Int                 @id @default(autoincrement())
+  tenantId          Int?
+  name              String
+  email             String
+  industry          String?
+  stage             String?
+  confidence_score  Float?
+  source            String?
+  assignedToId      Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  company           String?
+  firstName         String?
+  lastName          String?
+  status            String?
+  AgentAction       AgentAction[]
+  GDPRRequest       GDPRRequest[]
+  User              User?               @relation(fields: [assignedToId], references: [id])
+  Tenant            Tenant?             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  SequenceExecution SequenceExecution[]
+  SequenceState     SequenceState[]
+}
+
+model ObservabilityEvent {
+  id         Int       @id @default(autoincrement())
+  tenantId   Int?
+  type       String?
+  message    String
+  meta       String?
+  createdAt  DateTime  @default(now())
+  data       Json?
+  level      String?
+  occurredAt DateTime?
+  source     String?
+  Tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+// ScheduledContent - Core content model for Marketing Studio
+model ScheduledContent {
+  id             String        @id
+  title          String
+  body           String
+  contentType    ContentType   @default(POST)
+  aiGenerated    Boolean       @default(false)
+  aiTopic        String?
+  aiTone         String?
+  hashtags       String[]      @default([])
+  callToAction   String?
+  mediaUrls      String[]      @default([])
+  channels       String[]      @default([])
+  variations     Json          @default("[]")
+  status         ContentStatus @default(DRAFT)
+  scheduledFor   DateTime?
+  publishedAt    DateTime?
+  publishResults Json          @default("[]")
+  errorMessage   String?
+  approvalStatus String?
+  approvedById   String?
+  approvedAt     DateTime?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+
+  @@index([createdById])
+  @@index([scheduledFor])
+  @@index([status])
+}
+
+model SequenceDefinition {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  description       String?
+  type              String?
+  tenantId          Int?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  isActive          Boolean             @default(true)
+  Tenant            Tenant?             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  SequenceExecution SequenceExecution[]
+  SequenceState     SequenceState[]
+  SequenceStep      SequenceStep[]
+}
+
+model SequenceExecution {
+  id                   Int                 @id @default(autoincrement())
+  sequenceStateId      Int?
+  sequenceStepId       Int?
+  executionTime        DateTime            @default(now())
+  result               Json?
+  nextStepId           String?
+  completedAt          DateTime?
+  leadId               Int?
+  metadata             Json?
+  sequenceDefinitionId Int?
+  startedAt            DateTime?
+  status               String?
+  AgentAction          AgentAction[]
+  Lead                 Lead?               @relation(fields: [leadId], references: [id])
+  SequenceDefinition   SequenceDefinition? @relation(fields: [sequenceDefinitionId], references: [id])
+  SequenceState        SequenceState?      @relation(fields: [sequenceStateId], references: [id])
+  SequenceStep         SequenceStep?       @relation(fields: [sequenceStepId], references: [id])
+  SequenceMetrics      SequenceMetrics?
+  agent_action_logs    agent_action_logs[]
+}
+
+model SequenceMetrics {
+  id                  Int               @id @default(autoincrement())
+  sequenceExecutionId Int               @unique
+  timeSavedMinutes    Float?
+  revenueImpact       Float?
+  costSavings         Float?
+  confidenceScore     Float?
+  createdAt           DateTime          @default(now())
+  SequenceExecution   SequenceExecution @relation(fields: [sequenceExecutionId], references: [id])
+}
+
+model SequenceState {
+  id                   Int                 @id @default(autoincrement())
+  sequenceDefinitionId Int
+  leadId               Int
+  currentStepId        String
+  context              Json
+  status               String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime
+  SequenceExecution    SequenceExecution[]
+  Lead                 Lead                @relation(fields: [leadId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  SequenceDefinition   SequenceDefinition  @relation(fields: [sequenceDefinitionId], references: [id])
+}
+
+model SequenceStep {
+  id                   Int                 @id @default(autoincrement())
+  sequenceDefinitionId Int
+  stepId               String?
+  name                 String
+  description          String?
+  action               String?
+  conditions           Json?
+  nextSteps            Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime
+  delayHours           Int?
+  order                Int?
+  type                 String?
+  SequenceExecution    SequenceExecution[]
+  SequenceDefinition   SequenceDefinition  @relation(fields: [sequenceDefinitionId], references: [id])
+}
+
+model Tenant {
+  id                 Int                  @id @default(autoincrement())
+  name               String
+  orgId              String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  domain             String?
+  AuditLog           AuditLog[]
+  FeatureFlag        FeatureFlag[]
+  Lead               Lead[]
+  ObservabilityEvent ObservabilityEvent[]
+  SequenceDefinition SequenceDefinition[]
+  User               User[]
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  name      String
+  role      String
+  tenantId  Int
+  createdAt DateTime   @default(now())
+  updatedAt DateTime
+  Agent     Agent?
+  AuditLog  AuditLog[]
+  Lead      Lead[]
+  Tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model accounts {
+  id                 String             @id
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+  echo_breaker_users echo_breaker_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model agent_action_logs {
+  id                  String             @id
+  agentId             String?
+  sequenceExecutionId Int?
+  type                String
+  status              String
+  input               Json
+  output              Json?
+  createdAt           DateTime           @default(now())
+  agent_profiles      agent_profiles?    @relation(fields: [agentId], references: [id])
+  SequenceExecution   SequenceExecution? @relation(fields: [sequenceExecutionId], references: [id])
+}
+
+model agent_profiles {
+  id                String              @id
+  name              String
+  role              String
+  status            String              @default("active")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  agent_action_logs agent_action_logs[]
+}
+
+model agent_tasks {
+  id            String    @id
+  campaignId    String
+  agentType     String
+  status        String    @default("queued")
+  input         Json
+  output        Json?
+  costTokensIn  Int       @default(0)
+  costTokensOut Int       @default(0)
+  latencyMs     Int       @default(0)
+  error         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+  startedAt     DateTime?
+  completedAt   DateTime?
+  costUsd       Decimal   @default(0) @db.Decimal(10, 6)
+  model         String    @default("gpt-4o-mini")
+  tokensIn      Int       @default(0)
+  tokensOut     Int       @default(0)
+  campaigns     campaigns @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, agentType])
+  @@index([status])
+}
+
+model blog_analytics_events {
+  id                 String     @id
+  postId             String
+  eventType          String
+  userId             String?
+  sessionId          String?
+  metadata           Json?
+  appInsightsEventId String?
+  appInsightsSent    Boolean    @default(false)
+  dataverseRecordId  String?
+  dataverseSynced    Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  blog_posts         blog_posts @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([appInsightsSent])
+  @@index([createdAt])
+  @@index([dataverseSynced])
+  @@index([postId, eventType])
+}
+
+model blog_posts {
+  id                    String                  @id
+  slug                  String                  @unique
+  title                 String
+  content               String
+  excerpt               String
+  image                 String?
+  generatedBy           String?
+  generatedByUserId     String?
+  approvedBy            String?
+  approvedAt            DateTime?
+  createdBy             String
+  createdByEmail        String?
+  lastModifiedBy        String?
+  lastModifiedAt        DateTime?
+  generationModel       String?
+  generationCost        Decimal?                @db.Decimal(8, 4)
+  generationTokens      Int?
+  generationTime        Int?
+  complianceChecked     Boolean                 @default(false)
+  complianceStatus      String?
+  complianceNotes       String?
+  author                String                  @default("ApexSalesAI Editorial Team")
+  authorEmail           String?
+  publishedAt           DateTime?
+  publishedBy           String?
+  status                BlogPostStatus          @default(DRAFT)
+  scheduledFor          DateTime?
+  metaTitle             String?
+  metaDescription       String?
+  keywords              String[]                @default([])
+  canonicalUrl          String?
+  tags                  String[]                @default([])
+  category              String?
+  syndicatedTo          String[]                @default([])
+  syndicationUrls       Json?
+  version               Int                     @default(1)
+  previousVersionId     String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  blog_analytics_events blog_analytics_events[]
+  blog_posts            blog_posts?             @relation("blog_postsToblog_posts", fields: [previousVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_blog_posts      blog_posts[]            @relation("blog_postsToblog_posts")
+  post_engagement       post_engagement[]
+
+  @@index([approvedBy])
+  @@index([complianceStatus])
+  @@index([createdBy])
+  @@index([generatedBy])
+  @@index([slug])
+  @@index([status, publishedAt])
+}
+
+model campaigns {
+  id             String           @id
+  title          String
+  objective      String
+  audience       String
+  brandVoice     String
+  channels       String[]
+  targetLength   String           @default("medium")
+  createdById    String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  status         String           @default("draft")
+  agent_tasks    agent_tasks[]
+  content_assets content_assets[]
+
+  @@index([createdById])
+  @@index([status, createdAt])
+}
+
+model career_profiles {
+  id            String         @id
+  userId        String
+  headline      String?
+  skills        String[]
+  portfolioUrls String[]
+  socialLinks   Json?
+  resumeUrl     String?
+  visibility    String         @default("private")
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime
+  label         String
+  summary       String?
+  job_analyses  job_analyses[]
+  resumes       resumes[]
+
+  @@unique([userId, label])
+  @@index([userId])
+  @@index([visibility])
+}
+
+model content_assets {
+  id          String    @id
+  campaignId  String
+  type        String
+  title       String
+  body        String
+  metadata    Json
+  version     Int       @default(1)
+  parentId    String?
+  publishedAt DateTime?
+  publishedTo String[]  @default([])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+  status      String    @default("draft")
+  campaigns   campaigns @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, type])
+  @@index([status])
+}
+
+model content_performance {
+  id          String   @id
+  assetId     String
+  platform    String
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  engagement  Float    @default(0)
+  conversions Int      @default(0)
+  spendUsd    Float    @default(0)
+  periodStart DateTime
+  periodEnd   DateTime
+  insights    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([assetId])
+  @@index([periodStart])
+  @@index([platform])
+}
+
+model echo_breaker_users {
+  id                   String          @id
+  email                String?         @unique
+  name                 String?
+  image                String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime
+  lastLoginAt          DateTime?
+  emailVerified        DateTime?
+  provider             String?         @default("entra")
+  exportsCount         Int             @default(0)
+  lastResetAt          DateTime        @default(now())
+  monthlyExports       Int             @default(0)
+  monthlyVerifications Int             @default(0)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  subscriptionEndsAt   DateTime?
+  subscriptionStatus   String          @default("active")
+  subscriptionTier     String          @default("free")
+  trialEndsAt          DateTime?
+  verificationsCount   Int             @default(0)
+  accounts             accounts[]
+  sessions             sessions[]
+  verifications        verifications[]
+
+  @@index([email])
+  @@index([subscriptionStatus])
+  @@index([subscriptionTier])
+}
+
+model integrations {
+  id           String   @id
+  userId       String
+  provider     String
+  accessToken  String
+  refreshToken String
+  instanceUrl  String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model job_analyses {
+  id              String          @id
+  profileId       String
+  jobSource       String
+  rawText         String
+  parsedJson      Json
+  fitScore        Int?
+  matchSummary    Json?
+  generated       Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime
+  career_profiles career_profiles @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([profileId])
+}
+
+model manual_tasks {
+  id        String   @id
+  type      String
+  payload   Json
+  priority  Int      @default(5)
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+
+  @@index([status, priority])
+}
+
+model metric_events {
+  id         String    @id
+  name       String?
+  metric     String?
+  value      Float
+  unit       String?
+  dims       Json?
+  dimensions Json?
+  occurredAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([metric, createdAt])
+  @@index([name, createdAt])
+}
+
+model oauth_tokens {
+  id           String    @id
+  userId       String
+  platform     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+
+  @@unique([userId, platform])
+  @@index([userId])
+}
+
+model post_engagement {
+  id               String     @id
+  postId           String
+  date             DateTime   @db.Date
+  views            Int        @default(0)
+  uniqueViews      Int        @default(0)
+  avgTimeOnPage    Int        @default(0)
+  bounceRate       Decimal    @default(0) @db.Decimal(5, 4)
+  shares           Int        @default(0)
+  likes            Int        @default(0)
+  comments         Int        @default(0)
+  leadConversions  Int        @default(0)
+  demoRequests     Int        @default(0)
+  revenueInfluence Decimal    @default(0) @db.Decimal(12, 2)
+  organicTraffic   Int        @default(0)
+  socialTraffic    Int        @default(0)
+  directTraffic    Int        @default(0)
+  referralTraffic  Int        @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime
+  blog_posts       blog_posts @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, date])
+  @@index([date])
+}
+
+model publish_jobs {
+  id           String    @id
+  orgId        String?
+  userId       String
+  assetId      String
+  platform     String
+  status       String    @default("queued")
+  scheduledAt  DateTime?
+  postedAt     DateTime?
+  postUrl      String?
+  errorMessage String?
+  impressions  Int       @default(0)
+  clicks       Int       @default(0)
+  engagement   Float     @default(0)
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime
+
+  @@index([assetId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([userId])
+}
+
+model resumes {
+  id               String          @id
+  profileId        String
+  storagePath      String
+  parsedJson       Json
+  originalFilename String
+  mimetype         String
+  bytes            Int
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime
+  career_profiles  career_profiles @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+}
+
+model scheduled_publishes {
+  id          String    @id
+  assetId     String
+  channel     String
+  scheduledAt DateTime
+  payload     Json
+  status      String    @default("pending")
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+
+  @@index([assetId])
+  @@index([scheduledAt, status])
+}
+
+model sessions {
+  id                 String             @id
+  sessionToken       String             @unique
+  userId             String
+  expires            DateTime
+  echo_breaker_users echo_breaker_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model verification_tokens {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model verifications {
+  id                 String              @id
+  claim              String
+  verdict            String
+  verdictLabel       String
+  confidence         Float
+  confidenceBand     String
+  evidenceStrength   String
+  summary            String
+  bottomLine         String?
+  evidenceShows      String[]
+  spreadFactors      String[]
+  sources            Json
+  decisionPanel      Json?
+  actionScenarios    Json?
+  methodology        Json?
+  verificationId     String              @unique
+  isPublic           Boolean             @default(true)
+  viewCount          Int                 @default(0)
+  shareCount         Int                 @default(0)
+  userId             String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  exportCount        Int                 @default(0)
+  exportHistory      Json?               @default("[]")
+  ipAddress          String?
+  lastExportedAt     DateTime?
+  lastViewedAt       DateTime            @default(now())
+  notes              String?
+  shareHistory       Json?               @default("[]")
+  sharedWith         String[]            @default([])
+  status             String              @default("active")
+  tags               String[]            @default([])
+  userAgent          String?
+  echo_breaker_users echo_breaker_users? @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([isPublic])
+  @@index([status])
+  @@index([userId])
+  @@index([verificationId])
+}
+
+enum BlogPostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ContentStatus {
+  DRAFT
+  SCHEDULED
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum ContentType {
+  POST
+  VIDEO
+  ARTICLE
+  THREAD
+}
