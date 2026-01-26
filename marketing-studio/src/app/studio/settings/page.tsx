@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight, MessageSquare } from 'lucide-react'
+import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight, MessageSquare, Key } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IntegrationType, IntegrationStatus } from '@/types'
 import { getAllConnectors } from '@/lib/connectors'
@@ -121,6 +121,29 @@ export default function SettingsPage() {
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-pink-600" />
+        </div>
+      </Link>
+
+      {/* Auth Diagnostics (Admin/Demo only) */}
+      <Link
+        href="/studio/settings/auth"
+        className="block card hover:border-slate-300 hover:bg-slate-50/50 transition-colors group"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 bg-slate-100 rounded-lg">
+              <Key className="w-5 h-5 text-slate-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 group-hover:text-slate-700">
+                Auth Diagnostics
+              </h2>
+              <p className="text-sm text-slate-600 mt-1">
+                Debug authentication configuration, OAuth callbacks, and session status
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600" />
         </div>
       </Link>
 

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 
 // Mock data - in production, this would come from the telemetry API
 const KPI_DATA = {
@@ -66,6 +67,9 @@ export default function StudioDashboard() {
           Overview of your marketing performance and activity
         </p>
       </div>
+
+      {/* Onboarding Checklist (shown until setup complete) */}
+      <OnboardingChecklist />
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -12,22 +12,33 @@ interface AIStatus {
   }
 }
 
+const DISMISS_KEY = 'lyfye-ai-banner-dismissed'
+
 export function StudioStatusBanner() {
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(true) // Default to true to avoid flash
 
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   useEffect(() => {
+    // Check if user has dismissed the banner this session
+    const wasDismissed = sessionStorage.getItem(DISMISS_KEY) === 'true'
+    setDismissed(wasDismissed)
+
     // Check AI configuration status
     fetch('/api/ai/status')
       .then(res => res.json())
       .then(data => {
+        // Handle the actual API response format
+        const anyConfigured = data.data?.anyConfigured ||
+          data.data?.providers?.some((p: any) => p.configured) ||
+          false
+
         setAiStatus({
-          configured: data.anthropic?.configured || data.openai?.configured || false,
+          configured: anyConfigured,
           providers: {
-            anthropic: data.anthropic?.configured || false,
-            openai: data.openai?.configured || false,
+            anthropic: data.data?.providers?.find((p: any) => p.id === 'anthropic')?.configured || false,
+            openai: data.data?.providers?.find((p: any) => p.id === 'openai')?.configured || false,
           }
         })
       })
@@ -36,6 +47,11 @@ export function StudioStatusBanner() {
         setAiStatus({ configured: false, providers: { anthropic: false, openai: false } })
       })
   }, [])
+
+  const handleDismiss = () => {
+    setDismissed(true)
+    sessionStorage.setItem(DISMISS_KEY, 'true')
+  }
 
   // Don't show AI warning if dismissed or still loading
   const showAIWarning = aiStatus && !aiStatus.configured && !dismissed
@@ -76,7 +92,7 @@ export function StudioStatusBanner() {
               Go to AI Settings
             </Link>
             <button
-              onClick={() => setDismissed(true)}
+              onClick={handleDismiss}
               className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
               title="Dismiss"
             >

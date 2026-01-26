@@ -424,14 +424,43 @@ export default function IntegrationsPage() {
         </div>
       )}
 
+      {/* Coming Soon Section */}
+      <div className="p-6 bg-white rounded-xl border border-slate-200">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+            Coming Soon
+          </span>
+          <h3 className="font-bold text-slate-900">Future Integrations</h3>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <p className="font-medium text-slate-900">Brave Search API</p>
+            <p className="text-sm text-slate-500 mt-1">Real-time web research for content insights</p>
+          </div>
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <p className="font-medium text-slate-900">Google Gemini</p>
+            <p className="text-sm text-slate-500 mt-1">Multimodal AI for advanced content generation</p>
+          </div>
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <p className="font-medium text-slate-900">Perplexity</p>
+            <p className="text-sm text-slate-500 mt-1">AI-powered research assistant</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 mt-4">
+          Want a specific integration? Let us know at feedback@lyfye.com
+        </p>
+      </div>
+
       {/* Help Section */}
       <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-200">
         <h3 className="font-bold text-slate-900 mb-2">Need Help?</h3>
         <p className="text-sm text-slate-600 mb-4">
-          To connect integrations, add your API keys to the <code className="bg-white/50 px-1 rounded">.env.local</code> file in your project root, then restart the development server.
+          To connect integrations, add your API keys to your Vercel project environment variables, or to <code className="bg-white/50 px-1 rounded">.env.local</code> for local development.
         </p>
         <div className="bg-slate-900 text-slate-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          <pre>{`# .env.local
+          <pre>{`# .env.local (for local development)
+# Or add to Vercel Dashboard → Settings → Environment Variables
+
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ELEVENLABS_API_KEY=...

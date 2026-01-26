@@ -17,6 +17,8 @@ import {
   ArrowRight,
   Command,
   BarChart3,
+  MessageSquare,
+  Key,
 } from 'lucide-react'
 
 interface CommandItem {
@@ -114,6 +116,22 @@ export function CommandPalette({ onOpenMia }: CommandPaletteProps) {
       category: 'navigation',
       keywords: ['claude', 'openai', 'gpt', 'anthropic'],
     },
+    {
+      id: 'nav-brand-voice',
+      label: 'Go to Brand Voice',
+      icon: MessageSquare,
+      action: () => router.push('/studio/settings/brand'),
+      category: 'navigation',
+      keywords: ['tone', 'style', 'voice', 'audience'],
+    },
+    {
+      id: 'nav-auth-diagnostics',
+      label: 'Go to Auth Diagnostics',
+      icon: Key,
+      action: () => router.push('/studio/settings/auth'),
+      category: 'navigation',
+      keywords: ['login', 'oauth', 'session', 'debug'],
+    },
 
     // Actions
     {
@@ -133,6 +151,24 @@ export function CommandPalette({ onOpenMia }: CommandPaletteProps) {
       action: () => router.push('/studio/approvals'),
       category: 'action',
       keywords: ['review', 'pending'],
+    },
+    {
+      id: 'action-connect-ai',
+      label: 'Connect AI Provider',
+      description: 'Add Anthropic or OpenAI API key',
+      icon: Sparkles,
+      action: () => router.push('/studio/settings/ai'),
+      category: 'action',
+      keywords: ['setup', 'configure', 'api', 'key'],
+    },
+    {
+      id: 'action-set-brand-voice',
+      label: 'Set Brand Voice',
+      description: 'Define your tone and style',
+      icon: MessageSquare,
+      action: () => router.push('/studio/settings/brand'),
+      category: 'action',
+      keywords: ['tone', 'voice', 'style', 'preferences'],
     },
 
     // AI
