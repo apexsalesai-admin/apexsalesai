@@ -2,8 +2,26 @@
 
 import { Sparkles } from 'lucide-react'
 
+/**
+ * Demo Mode Banner
+ *
+ * PRODUCTION RULES:
+ * - NEVER shows on production domains (studio.lyfye.com, *.vercel.app)
+ * - Only visible in local development with NEXT_PUBLIC_DEMO_MODE=true
+ */
 export function DemoModeBanner() {
-  // Check if demo mode via environment or header
+  // Check if we're in a production environment (client-side)
+  const isProductionDomain = typeof window !== 'undefined' && (
+    window.location.hostname === 'studio.lyfye.com' ||
+    window.location.hostname.endsWith('.vercel.app')
+  )
+
+  // NEVER show demo banner in production
+  if (isProductionDomain) {
+    return null
+  }
+
+  // Check if demo mode via environment
   const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   if (!isDemoMode) return null

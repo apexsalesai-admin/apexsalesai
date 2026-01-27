@@ -38,7 +38,7 @@ export default function AuthDiagnosticsPage() {
   const fetchDiagnostics = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/diagnostics')
+      const res = await fetch('/api/diagnostics/auth')
       const data = await res.json()
       setDiagnostics(data.diagnostics || [])
     } catch (error) {

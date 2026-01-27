@@ -159,13 +159,13 @@ function LoginContent() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-              <p className="text-amber-400 font-medium">
-                No auth providers configured
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-400 font-medium">
+                Authentication Not Available
               </p>
               <p className="text-gray-400 text-sm mt-2">
-                Set DEMO_MODE=true or configure OAuth providers in environment
-                variables.
+                No OAuth providers are configured. Please contact your
+                administrator to configure Google or Microsoft authentication.
               </p>
             </div>
           )}

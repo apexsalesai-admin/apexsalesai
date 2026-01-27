@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Sparkles, Settings, X } from 'lucide-react'
+import { AlertTriangle, Settings, X } from 'lucide-react'
 
 interface AIStatus {
   configured: boolean
@@ -14,11 +14,25 @@ interface AIStatus {
 
 const DISMISS_KEY = 'lyfye-ai-banner-dismissed'
 
+/**
+ * Studio Status Banner
+ *
+ * PRODUCTION RULES:
+ * - Demo mode banner NEVER shows in production
+ * - AI configuration warning shows in all environments
+ */
 export function StudioStatusBanner() {
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null)
   const [dismissed, setDismissed] = useState(true) // Default to true to avoid flash
 
-  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+  // Check if we're in a production environment (client-side)
+  const isProductionDomain = typeof window !== 'undefined' && (
+    window.location.hostname === 'studio.lyfye.com' ||
+    window.location.hostname.endsWith('.vercel.app')
+  )
+
+  // Demo mode is NEVER allowed in production
+  const isDemoAllowed = !isProductionDomain && process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   useEffect(() => {
     // Check if user has dismissed the banner this session
@@ -31,14 +45,14 @@ export function StudioStatusBanner() {
       .then(data => {
         // Handle the actual API response format
         const anyConfigured = data.data?.anyConfigured ||
-          data.data?.providers?.some((p: any) => p.configured) ||
+          data.data?.providers?.some((p: { configured: boolean }) => p.configured) ||
           false
 
         setAiStatus({
           configured: anyConfigured,
           providers: {
-            anthropic: data.data?.providers?.find((p: any) => p.id === 'anthropic')?.configured || false,
-            openai: data.data?.providers?.find((p: any) => p.id === 'openai')?.configured || false,
+            anthropic: data.data?.providers?.find((p: { id: string; configured: boolean }) => p.id === 'anthropic')?.configured || false,
+            openai: data.data?.providers?.find((p: { id: string; configured: boolean }) => p.id === 'openai')?.configured || false,
           }
         })
       })
@@ -58,12 +72,11 @@ export function StudioStatusBanner() {
 
   return (
     <>
-      {/* Demo Mode Banner - subtle indicator */}
-      {isDemoMode && (
+      {/* Demo Mode Banner - ONLY in non-production local development */}
+      {isDemoAllowed && (
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-1.5 text-center text-xs font-medium flex items-center justify-center gap-2">
-          <Sparkles className="w-3 h-3" />
-          <span>Demo Mode</span>
-          <span className="opacity-75">— Using mock data</span>
+          <span>🧪 Local Demo Mode</span>
+          <span className="opacity-75">— Not available in production</span>
         </div>
       )}
 

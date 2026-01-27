@@ -4,7 +4,10 @@
  * Protected routes: /studio/*, /onboarding/*
  * Public routes: /, /login, /api/auth/*
  *
- * In DEMO_MODE, users are auto-signed in as demo user.
+ * PRODUCTION RULES:
+ * - DEMO_MODE is NEVER allowed in production (VERCEL_ENV=production)
+ * - Real OAuth session required for all protected routes
+ * - No X-Demo-Mode header in production
  */
 
 import { NextResponse } from 'next/server'
@@ -15,7 +18,18 @@ import { getToken } from 'next-auth/jwt'
 const protectedRoutes = ['/studio', '/onboarding']
 
 // Routes that are always public
-const publicRoutes = ['/', '/login', '/api/auth']
+const publicRoutes = ['/', '/login', '/api/auth', '/api/diagnostics', '/api/ai/status', '/api/health']
+
+/**
+ * Check if demo mode is allowed - NEVER in production
+ */
+function isDemoAllowed(): boolean {
+  const isProd = process.env.VERCEL_ENV === 'production'
+  if (isProd) {
+    return false // NEVER allow demo in production
+  }
+  return process.env.DEMO_MODE === 'true'
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -43,10 +57,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for demo mode - auto-allow if enabled
-  if (process.env.DEMO_MODE === 'true') {
+  // Check for demo mode - ONLY allowed in non-production
+  if (isDemoAllowed()) {
     const response = NextResponse.next()
-    // Add demo mode header for client-side detection
+    // Add demo mode header ONLY in non-production
     response.headers.set('x-demo-mode', 'true')
     return response
   }

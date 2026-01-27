@@ -4,7 +4,11 @@
  * Supports:
  * - Google OAuth
  * - Microsoft (Azure AD) OAuth
- * - Demo Mode (DEMO_MODE=true bypasses auth)
+ * - Demo Mode (ONLY in non-production environments)
+ *
+ * PRODUCTION RULES:
+ * - DEMO_MODE is NEVER allowed when VERCEL_ENV=production
+ * - At least one real OAuth provider must be configured
  *
  * Environment Variables Required:
  * - NEXTAUTH_SECRET: Random secret for JWT encryption
@@ -18,9 +22,6 @@
  * - AZURE_AD_CLIENT_ID
  * - AZURE_AD_CLIENT_SECRET
  * - AZURE_AD_TENANT_ID
- *
- * For Demo Mode:
- * - DEMO_MODE=true
  */
 
 import { NextAuthOptions } from 'next-auth'
@@ -28,7 +29,18 @@ import GoogleProvider from 'next-auth/providers/google'
 import AzureADProvider from 'next-auth/providers/azure-ad'
 import CredentialsProvider from 'next-auth/providers/credentials'
 
-// Demo user for DEMO_MODE
+/**
+ * Check if demo mode is allowed - NEVER in production
+ */
+function isDemoAllowed(): boolean {
+  const isProd = process.env.VERCEL_ENV === 'production'
+  if (isProd) {
+    return false // NEVER allow demo in production
+  }
+  return process.env.DEMO_MODE === 'true'
+}
+
+// Demo user for DEMO_MODE (non-production only)
 const DEMO_USER = {
   id: 'demo-user',
   name: 'Demo User',
@@ -62,15 +74,15 @@ export const authOptions: NextAuthOptions = {
         ]
       : []),
 
-    // Demo Mode Credentials Provider
-    ...(process.env.DEMO_MODE === 'true'
+    // Demo Mode Credentials Provider - ONLY in non-production
+    ...(isDemoAllowed()
       ? [
           CredentialsProvider({
             id: 'demo',
             name: 'Demo Mode',
             credentials: {},
             async authorize() {
-              // In demo mode, always return the demo user
+              // In demo mode (non-production only), return the demo user
               return DEMO_USER
             },
           }),
@@ -137,15 +149,14 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === 'development',
 }
 
-// Helper to check if demo mode is enabled
+// Helper to check if demo mode is enabled (production-safe)
 export function isDemoMode(): boolean {
-  return process.env.DEMO_MODE === 'true'
+  return isDemoAllowed()
 }
 
-// Helper to check if any auth provider is configured
-export function hasAuthProvider(): boolean {
+// Helper to check if any real OAuth provider is configured
+export function hasRealOAuthProvider(): boolean {
   return (
-    isDemoMode() ||
     !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) ||
     !!(
       process.env.AZURE_AD_CLIENT_ID &&
@@ -153,4 +164,9 @@ export function hasAuthProvider(): boolean {
       process.env.AZURE_AD_TENANT_ID
     )
   )
+}
+
+// Helper to check if any auth provider is configured
+export function hasAuthProvider(): boolean {
+  return isDemoAllowed() || hasRealOAuthProvider()
 }
