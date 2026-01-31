@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
 
 /**
  * Health Check Endpoint
@@ -29,8 +30,20 @@ export async function GET() {
   const hasOpenAIKey = !!process.env.OPENAI_API_KEY
   const hasAnyAI = hasAnthropicKey || hasOpenAIKey
 
-  // Check database
+  // Check database - actually test connection
   const hasDatabaseUrl = !!process.env.DATABASE_URL
+  let dbConnected = false
+  let dbError: string | null = null
+
+  if (hasDatabaseUrl) {
+    try {
+      // Test actual database connection with a simple query
+      await prisma.$queryRaw`SELECT 1`
+      dbConnected = true
+    } catch (error) {
+      dbError = error instanceof Error ? error.message : 'Unknown database error'
+    }
+  }
 
   // Demo mode check
   const demoModeEnvSet = process.env.DEMO_MODE === 'true'
@@ -52,6 +65,8 @@ export async function GET() {
     },
     database: {
       configured: hasDatabaseUrl,
+      connected: dbConnected,
+      error: dbError,
     },
     environment: {
       vercel: !!process.env.VERCEL,
@@ -61,10 +76,10 @@ export async function GET() {
     },
   }
 
-  // Production health requires: auth secret, auth url, oauth, and AI
+  // Production health requires: auth secret, auth url, oauth, AI, and database
   const isHealthy = isProd
-    ? hasNextAuthSecret && hasNextAuthUrl && hasAnyOAuth && hasAnyAI
-    : hasNextAuthSecret || demoModeEffective
+    ? hasNextAuthSecret && hasNextAuthUrl && hasAnyOAuth && hasAnyAI && dbConnected
+    : (hasNextAuthSecret || demoModeEffective) && dbConnected
 
   const status = isHealthy ? 'healthy' : 'degraded'
 
