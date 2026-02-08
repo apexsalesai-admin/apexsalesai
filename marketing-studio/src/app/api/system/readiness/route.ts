@@ -18,6 +18,13 @@ import {
   getPublishRequirements,
 } from '@/lib/readiness'
 
+// Prevent any caching — readiness must always be fresh
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Check authentication
@@ -29,7 +36,7 @@ export async function GET(request: NextRequest) {
           success: false,
           error: 'Authentication required',
         },
-        { status: 401 }
+        { status: 401, headers: NO_CACHE_HEADERS }
       )
     }
 
@@ -84,7 +91,7 @@ export async function GET(request: NextRequest) {
       response.publishRequirements = await getPublishRequirements({ workspaceId })
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, { headers: NO_CACHE_HEADERS })
   } catch (error) {
     console.error('[API:Readiness] Error:', error)
 
@@ -94,7 +101,7 @@ export async function GET(request: NextRequest) {
         error: error instanceof Error ? error.message : 'Internal server error',
         timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     )
   }
 }

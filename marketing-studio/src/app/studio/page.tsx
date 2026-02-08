@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare, Activity, Loader2 } from 'lucide-react'
+import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare, Activity, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 
@@ -347,22 +347,35 @@ function SystemReadinessWidget() {
     required: boolean
   }> | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [overallReady, setOverallReady] = useState(false)
   const [score, setScore] = useState(0)
+  const [lastChecked, setLastChecked] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetch('/api/system/readiness')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.readiness) {
-          setChecks(data.readiness.checks)
-          setOverallReady(data.readiness.overallReady)
-          setScore(data.readiness.overallScore)
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+  const fetchReadiness = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+
+    try {
+      const res = await fetch('/api/system/readiness')
+      const data = await res.json()
+      if (data.success && data.readiness) {
+        setChecks(data.readiness.checks)
+        setOverallReady(data.readiness.overallReady)
+        setScore(data.readiness.overallScore)
+      }
+      if (data.timestamp) {
+        setLastChecked(data.timestamp)
+      }
+    } catch (err) {
+      console.error('[SystemReadinessWidget]', err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
+
+  useEffect(() => { fetchReadiness() }, [fetchReadiness])
 
   if (loading) {
     return (
@@ -406,17 +419,32 @@ function SystemReadinessWidget() {
             <h2 className="text-lg font-semibold text-slate-900">System Readiness</h2>
             <p className="text-sm text-slate-500">
               {overallReady ? 'All systems operational' : 'Some systems need attention'}
+              {lastChecked && (
+                <span className="ml-2 text-slate-400">
+                  &middot; Last checked: {new Date(lastChecked).toLocaleTimeString()}
+                </span>
+              )}
             </p>
           </div>
         </div>
-        <span className={cn(
-          'px-3 py-1 text-sm font-semibold rounded-full',
-          overallReady
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-amber-100 text-amber-700'
-        )}>
-          {score}%
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchReadiness(true)}
+            disabled={refreshing}
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
+          </button>
+          <span className={cn(
+            'px-3 py-1 text-sm font-semibold rounded-full',
+            overallReady
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-amber-100 text-amber-700'
+          )}>
+            {score}%
+          </span>
+        </div>
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {checks.map((check) => (
