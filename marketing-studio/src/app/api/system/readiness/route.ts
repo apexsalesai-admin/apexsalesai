@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
     const includeOnboarding = searchParams.get('onboarding') === 'true'
     const includePublish = searchParams.get('publish') === 'true'
 
-    // Get readiness status
-    const readiness = await getSystemReadiness(workspaceId)
+    // Get readiness status — pass workspaceId to scope workspace-specific checks
+    const readiness = await getSystemReadiness({ workspaceId })
 
     // Fetch DB integrations for status badges
     let dbIntegrations: Array<{
@@ -67,20 +67,21 @@ export async function GET(request: NextRequest) {
       // Fail gracefully — integrations list is non-critical
     }
 
-    // Build response
+    // Build response — timestamp at envelope level per spec
     const response: Record<string, unknown> = {
       success: true,
       readiness: { ...readiness, dbIntegrations },
+      timestamp: new Date().toISOString(),
     }
 
     // Include onboarding steps if requested
     if (includeOnboarding) {
-      response.onboarding = await getOnboardingSteps(workspaceId)
+      response.onboarding = await getOnboardingSteps({ workspaceId })
     }
 
     // Include publish requirements if requested
     if (includePublish) {
-      response.publishRequirements = await getPublishRequirements(workspaceId)
+      response.publishRequirements = await getPublishRequirements({ workspaceId })
     }
 
     return NextResponse.json(response)

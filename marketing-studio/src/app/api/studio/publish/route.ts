@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
       channels,
     })
 
-    // Check system readiness before publishing
-    const publishRequirements = await getPublishRequirements(workspaceId)
+    // Check system readiness before publishing (scoped to workspace)
+    const publishRequirements = await getPublishRequirements({ workspaceId })
 
     if (!publishRequirements.canPublish) {
       console.error('[API:Publish] System not ready', {

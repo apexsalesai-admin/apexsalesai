@@ -3,9 +3,19 @@
  *
  * Provides real-time system health and configuration status.
  * Used for onboarding flow, dashboard indicators, and publish gates.
+ *
+ * All public functions accept an optional workspaceId to scope
+ * workspace-specific checks (brand voice, integrations, workspace existence).
+ * Environment-level checks (AI provider, auth, database, Inngest) are global.
  */
 
 import { prisma } from '@/lib/db'
+
+/** Options accepted by all readiness functions. */
+export interface ReadinessOptions {
+  /** Optional workspace ID to scope workspace-specific checks. */
+  workspaceId?: string
+}
 
 export interface ReadinessCheck {
   name: string
@@ -312,11 +322,10 @@ async function checkPlatformConnected(
 }
 
 /**
- * Check if any content has been created
+ * Check if any content has been created.
+ * Note: ScheduledContent has no workspaceId column, so this is always global.
  */
-async function checkContentCreated(
-  workspaceId?: string
-): Promise<ReadinessCheck> {
+async function checkContentCreated(): Promise<ReadinessCheck> {
   console.log(LOG_PREFIX, 'Checking content creation')
 
   try {
@@ -344,12 +353,18 @@ async function checkContentCreated(
 }
 
 /**
- * Get comprehensive system readiness status
+ * Get comprehensive system readiness status.
+ *
+ * @param opts.workspaceId - Scope workspace-specific checks to this workspace.
+ *   When omitted, workspace/brand-voice/integration checks look for any record.
  */
 export async function getSystemReadiness(
-  workspaceId?: string
+  opts: ReadinessOptions | string = {}
 ): Promise<SystemReadiness> {
-  console.log(LOG_PREFIX, 'Starting system readiness check')
+  // Backward-compat: accept a bare workspaceId string
+  const { workspaceId } = typeof opts === 'string' ? { workspaceId: opts } : opts
+
+  console.log(LOG_PREFIX, 'Starting system readiness check', workspaceId ? `(workspace: ${workspaceId})` : '(global)')
 
   const checks = await Promise.all([
     checkAuthConfigured(),
@@ -359,7 +374,7 @@ export async function getSystemReadiness(
     checkWorkspaceExists(workspaceId),
     checkBrandVoiceConfigured(workspaceId),
     checkPlatformConnected(workspaceId),
-    checkContentCreated(workspaceId),
+    checkContentCreated(),
   ])
 
   // Calculate readiness flags
@@ -402,9 +417,11 @@ export async function getSystemReadiness(
 }
 
 /**
- * Get onboarding steps with completion status
+ * Get onboarding steps with completion status.
+ *
+ * @param opts.workspaceId - Scope to a specific workspace.
  */
-export async function getOnboardingSteps(workspaceId?: string): Promise<{
+export async function getOnboardingSteps(opts: ReadinessOptions | string = {}): Promise<{
   steps: Array<{
     id: string
     title: string
@@ -417,7 +434,7 @@ export async function getOnboardingSteps(workspaceId?: string): Promise<{
   totalCount: number
   percentComplete: number
 }> {
-  const readiness = await getSystemReadiness(workspaceId)
+  const readiness = await getSystemReadiness(opts)
 
   const steps = [
     {
@@ -467,13 +484,15 @@ export async function getOnboardingSteps(workspaceId?: string): Promise<{
 }
 
 /**
- * Get missing requirements for publishing
+ * Get missing requirements for publishing.
+ *
+ * @param opts.workspaceId - Scope to a specific workspace.
  */
-export async function getPublishRequirements(workspaceId?: string): Promise<{
+export async function getPublishRequirements(opts: ReadinessOptions | string = {}): Promise<{
   canPublish: boolean
   missing: string[]
 }> {
-  const readiness = await getSystemReadiness(workspaceId)
+  const readiness = await getSystemReadiness(opts)
 
   const missing: string[] = []
 
