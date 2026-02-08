@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { ContentStatus } from '@prisma/client'
+import { getPublishRequirements } from '@/lib/readiness'
 
 // Social Media Publishing API - Uses real platform APIs
 // Requires OAuth tokens configured in Settings > Integrations
@@ -424,6 +425,24 @@ export async function POST(request: NextRequest) {
     if (!contentId) {
       return NextResponse.json(
         { success: false, error: 'Content ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Check system readiness before publishing
+    const publishRequirements = await getPublishRequirements()
+
+    if (!publishRequirements.canPublish) {
+      console.error('[API:Publish] System not ready', {
+        missing: publishRequirements.missing,
+      })
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'System not ready',
+          missing: publishRequirements.missing,
+        },
         { status: 400 }
       )
     }

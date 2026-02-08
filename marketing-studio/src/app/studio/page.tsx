@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react'
+import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare, Activity, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 
@@ -70,6 +71,9 @@ export default function StudioDashboard() {
 
       {/* Onboarding Checklist (shown until setup complete) */}
       <OnboardingChecklist />
+
+      {/* System Readiness Widget */}
+      <SystemReadinessWidget />
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -330,6 +334,108 @@ function KPICard({
           'text-xs mt-2',
           trendPositive ? 'text-green-600' : 'text-slate-400'
         )}>{trend}</p>
+      </div>
+    </div>
+  )
+}
+
+function SystemReadinessWidget() {
+  const [checks, setChecks] = useState<Array<{
+    name: string
+    status: 'ready' | 'pending' | 'error'
+    message: string
+    required: boolean
+  }> | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [overallReady, setOverallReady] = useState(false)
+  const [score, setScore] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/system/readiness')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.readiness) {
+          setChecks(data.readiness.checks)
+          setOverallReady(data.readiness.overallReady)
+          setScore(data.readiness.overallScore)
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="card">
+        <div className="flex items-center gap-3 text-slate-500">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Checking system readiness...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!checks) return null
+
+  const statusColor = (status: string) => {
+    if (status === 'ready') return 'bg-emerald-500'
+    if (status === 'error') return 'bg-red-500'
+    return 'bg-amber-500'
+  }
+
+  const statusText = (status: string) => {
+    if (status === 'ready') return 'text-emerald-700 bg-emerald-50'
+    if (status === 'error') return 'text-red-700 bg-red-50'
+    return 'text-amber-700 bg-amber-50'
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            'p-2 rounded-lg',
+            overallReady ? 'bg-emerald-100' : 'bg-amber-100'
+          )}>
+            <Activity className={cn(
+              'w-5 h-5',
+              overallReady ? 'text-emerald-600' : 'text-amber-600'
+            )} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">System Readiness</h2>
+            <p className="text-sm text-slate-500">
+              {overallReady ? 'All systems operational' : 'Some systems need attention'}
+            </p>
+          </div>
+        </div>
+        <span className={cn(
+          'px-3 py-1 text-sm font-semibold rounded-full',
+          overallReady
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-amber-100 text-amber-700'
+        )}>
+          {score}%
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {checks.map((check) => (
+          <div
+            key={check.name}
+            className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50"
+          >
+            <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', statusColor(check.status))} />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">{check.name}</p>
+              <p className={cn(
+                'text-xs px-1.5 py-0.5 rounded inline-block mt-0.5',
+                statusText(check.status)
+              )}>
+                {check.message}
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

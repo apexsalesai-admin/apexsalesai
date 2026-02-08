@@ -35,6 +35,14 @@ interface IntegrationStatus {
   [key: string]: boolean
 }
 
+interface DbIntegration {
+  id: string
+  type: string
+  status: 'PENDING' | 'CONNECTED' | 'DISCONNECTED' | 'REVOKED' | 'ERROR' | 'EXPIRED'
+  externalName: string | null
+  lastTestResult: string | null
+}
+
 interface ApiKeyConfig {
   id: string
   name: string
@@ -192,6 +200,7 @@ const CATEGORIES = [
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<IntegrationStatus>({})
+  const [dbIntegrations, setDbIntegrations] = useState<DbIntegration[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({})
@@ -201,9 +210,23 @@ export default function IntegrationsPage() {
   useEffect(() => {
     async function checkIntegrations() {
       try {
-        const response = await fetch('/api/video/generate')
-        const data = await response.json()
-        setIntegrations(data.integrations || {})
+        const [envRes, dbRes] = await Promise.all([
+          fetch('/api/video/generate').catch(() => null),
+          fetch('/api/system/readiness').catch(() => null),
+        ])
+
+        if (envRes?.ok) {
+          const data = await envRes.json()
+          setIntegrations(data.integrations || {})
+        }
+
+        if (dbRes?.ok) {
+          const data = await dbRes.json()
+          if (data.success && data.readiness?.checks) {
+            // Extract platform integration info from readiness checks
+            setDbIntegrations(data.readiness.dbIntegrations || [])
+          }
+        }
       } catch (e) {
         console.error('Failed to check integrations:', e)
       } finally {
@@ -311,21 +334,50 @@ export default function IntegrationsPage() {
         <div className="grid gap-4">
           {filteredKeys.map(apiKey => {
             const isConnected = integrations[apiKey.id]
+            const dbMatch = dbIntegrations.find(
+              (d) => d.type.toLowerCase() === apiKey.id.toLowerCase()
+            )
             const Icon = apiKey.icon
+
+            // Determine badge based on DB status + env var status
+            const getBadge = () => {
+              if (dbMatch) {
+                switch (dbMatch.status) {
+                  case 'CONNECTED':
+                    return { label: 'Connected', color: 'bg-emerald-100 text-emerald-700', icon: Check }
+                  case 'EXPIRED':
+                  case 'PENDING':
+                    return { label: 'Needs Auth', color: 'bg-amber-100 text-amber-700', icon: AlertCircle }
+                  case 'ERROR':
+                  case 'REVOKED':
+                    return { label: 'Error', color: 'bg-red-100 text-red-700', icon: AlertCircle }
+                  case 'DISCONNECTED':
+                    return { label: 'Disconnected', color: 'bg-slate-100 text-slate-700', icon: AlertCircle }
+                }
+              }
+              if (isConnected) {
+                return { label: 'Connected', color: 'bg-emerald-100 text-emerald-700', icon: Check }
+              }
+              return { label: 'Not Connected', color: 'bg-amber-100 text-amber-700', icon: AlertCircle }
+            }
+
+            const badge = getBadge()
+            const BadgeIcon = badge.icon
+            const hasConnection = isConnected || dbMatch?.status === 'CONNECTED'
 
             return (
               <div
                 key={apiKey.id}
                 className={cn(
                   'p-6 bg-white rounded-xl border-2 transition-all',
-                  isConnected ? 'border-emerald-200' : 'border-slate-200'
+                  hasConnection ? 'border-emerald-200' : dbMatch?.status === 'ERROR' ? 'border-red-200' : 'border-slate-200'
                 )}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-4">
                     <div className={cn(
                       'w-12 h-12 rounded-xl flex items-center justify-center',
-                      isConnected
+                      hasConnection
                         ? 'bg-emerald-100 text-emerald-600'
                         : 'bg-slate-100 text-slate-400'
                     )}>
@@ -334,18 +386,19 @@ export default function IntegrationsPage() {
                     <div>
                       <div className="flex items-center space-x-3">
                         <h3 className="font-bold text-slate-900">{apiKey.name}</h3>
-                        {isConnected ? (
-                          <span className="flex items-center space-x-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                            <Check className="w-3 h-3" />
-                            <span>Connected</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center space-x-1 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-                            <AlertCircle className="w-3 h-3" />
-                            <span>Not Connected</span>
-                          </span>
-                        )}
+                        <span className={cn(
+                          'flex items-center space-x-1 text-xs px-2 py-1 rounded-full',
+                          badge.color
+                        )}>
+                          <BadgeIcon className="w-3 h-3" />
+                          <span>{badge.label}</span>
+                        </span>
                       </div>
+                      {dbMatch?.externalName && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Account: {dbMatch.externalName}
+                        </p>
+                      )}
                       <p className="text-sm text-slate-500 mt-1">{apiKey.description}</p>
                       <div className="flex items-center space-x-4 mt-3">
                         <code className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
@@ -365,7 +418,7 @@ export default function IntegrationsPage() {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    {isConnected ? (
+                    {hasConnection ? (
                       <button className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors flex items-center space-x-2">
                         <RefreshCw className="w-4 h-4" />
                         <span>Reconnect</span>
@@ -388,7 +441,7 @@ export default function IntegrationsPage() {
                 </div>
 
                 {/* API Key Input (hidden by default) */}
-                {!isConnected && (
+                {!hasConnection && (
                   <div className="mt-4 pt-4 border-t border-slate-100">
                     <p className="text-xs text-slate-500 mb-2">
                       Add <code className="bg-slate-100 px-1 rounded">{apiKey.envVar}</code> to your <code className="bg-slate-100 px-1 rounded">.env.local</code> file:

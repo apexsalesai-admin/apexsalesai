@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/db'
 import {
   getSystemReadiness,
   getOnboardingSteps,
@@ -41,10 +42,35 @@ export async function GET(request: NextRequest) {
     // Get readiness status
     const readiness = await getSystemReadiness(workspaceId)
 
+    // Fetch DB integrations for status badges
+    let dbIntegrations: Array<{
+      id: string
+      type: string
+      status: string
+      externalName: string | null
+      lastTestResult: string | null
+    }> = []
+    try {
+      const integrations = await prisma.studioIntegration.findMany({
+        where: workspaceId ? { workspaceId } : {},
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          externalName: true,
+          lastTestResult: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      dbIntegrations = integrations
+    } catch {
+      // Fail gracefully — integrations list is non-critical
+    }
+
     // Build response
     const response: Record<string, unknown> = {
       success: true,
-      readiness,
+      readiness: { ...readiness, dbIntegrations },
     }
 
     // Include onboarding steps if requested

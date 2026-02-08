@@ -137,23 +137,41 @@ async function checkInngestConnected(): Promise<ReadinessCheck> {
   console.log(LOG_PREFIX, 'Checking Inngest connection')
 
   try {
-    // Check if Inngest environment is configured
     const hasInngestKey =
       !!process.env.INNGEST_EVENT_KEY || !!process.env.INNGEST_SIGNING_KEY
     const isDev = process.env.NODE_ENV === 'development'
 
-    // In development, Inngest dev server should be running
+    // In development, try to ping the Inngest dev server
+    if (isDev) {
+      try {
+        const inngestUrl = process.env.INNGEST_DEV_URL || 'http://localhost:8288'
+        const res = await fetch(`${inngestUrl}/health`, {
+          signal: AbortSignal.timeout(2000),
+        })
+        if (res.ok) {
+          return {
+            name: 'Job Queue',
+            status: 'ready',
+            message: 'Inngest dev server running',
+            required: false,
+          }
+        }
+      } catch {
+        // Dev server not running — fall through to env check
+      }
+    }
+
     // In production, keys should be configured
-    const configured = isDev || hasInngestKey
+    const configured = hasInngestKey
 
     return {
       name: 'Job Queue',
       status: configured ? 'ready' : 'pending',
       message: configured
-        ? isDev
-          ? 'Inngest dev server'
-          : 'Inngest connected'
-        : 'Configure Inngest keys',
+        ? 'Inngest connected'
+        : isDev
+          ? 'Start Inngest dev server (npx inngest-cli@latest dev)'
+          : 'Configure Inngest keys',
       required: false,
     }
   } catch (error) {
@@ -221,12 +239,12 @@ async function checkBrandVoiceConfigured(
     if (workspaceId) {
       brandGuardrails = await prisma.studioBrandGuardrails.findFirst({
         where: { workspaceId },
-        select: { id: true, toneOfVoice: true },
+        select: { id: true, writingStyle: true },
       })
     } else {
       // Check if any brand guardrails exist
       brandGuardrails = await prisma.studioBrandGuardrails.findFirst({
-        select: { id: true, toneOfVoice: true },
+        select: { id: true, writingStyle: true },
       })
     }
 
@@ -234,7 +252,7 @@ async function checkBrandVoiceConfigured(
       name: 'Brand Voice',
       status: brandGuardrails ? 'ready' : 'pending',
       message: brandGuardrails
-        ? `Configured: ${brandGuardrails.toneOfVoice || 'Custom'}`
+        ? `Configured: ${brandGuardrails.writingStyle || 'Custom'}`
         : 'Set up brand voice',
       required: false,
     }
@@ -302,15 +320,8 @@ async function checkContentCreated(
   console.log(LOG_PREFIX, 'Checking content creation')
 
   try {
-    let contentCount = 0
-
-    if (workspaceId) {
-      contentCount = await prisma.scheduledContent.count({
-        where: { workspaceId },
-      })
-    } else {
-      contentCount = await prisma.scheduledContent.count()
-    }
+    // ScheduledContent does not have a workspaceId column, so always count all
+    const contentCount = await prisma.scheduledContent.count()
 
     return {
       name: 'First Content',
