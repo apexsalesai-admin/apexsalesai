@@ -222,7 +222,7 @@ export default function IntegrationsPage() {
   // Test Publish modal state
   const [showTestPublish, setShowTestPublish] = useState(false)
   const [testPublishText, setTestPublishText] = useState('')
-  const [testPublishConfirmed, setTestPublishConfirmed] = useState(false)
+  const [testPublishConfirmText, setTestPublishConfirmText] = useState('')
   const [testPublishLoading, setTestPublishLoading] = useState(false)
   const [testPublishResult, setTestPublishResult] = useState<{
     success: boolean
@@ -230,20 +230,52 @@ export default function IntegrationsPage() {
     permalink?: string
     error?: string
     errorType?: string
+    code?: string
+    correlationId?: string
+    idempotent?: boolean
   } | null>(null)
 
+  // Derive workspaceId from the first DB integration's workspace (best available)
+  const linkedInIntegration = dbIntegrations.find((d) => d.type === 'LINKEDIN')
+
   const handleTestPublish = useCallback(async () => {
-    if (!testPublishConfirmed || !testPublishText.trim()) return
+    if (testPublishConfirmText !== 'PUBLISH' || !testPublishText.trim()) return
     setTestPublishLoading(true)
     setTestPublishResult(null)
 
     try {
+      // Resolve workspaceId: fetch from readiness endpoint if needed
+      let wsId: string | undefined
+      try {
+        const readinessRes = await fetch('/api/system/readiness')
+        const readinessData = await readinessRes.json()
+        // Use the first integration's workspaceId as a proxy
+        const liIntegration = readinessData?.readiness?.dbIntegrations?.find(
+          (d: { type: string }) => d.type === 'LINKEDIN'
+        )
+        if (liIntegration?.id) {
+          // We need workspaceId — fetch from integration detail
+          // For now, use the workspace from system readiness
+        }
+      } catch { /* non-fatal */ }
+
+      // Fetch workspaceId from the first available workspace
+      if (!wsId) {
+        try {
+          const wsRes = await fetch('/api/studio/workspace')
+          const wsData = await wsRes.json()
+          wsId = wsData?.workspace?.id || wsData?.data?.id
+        } catch { /* non-fatal */ }
+      }
+
       const res = await fetch('/api/publish/linkedin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: testPublishText.trim(),
           confirm: true,
+          confirmText: 'PUBLISH',
+          workspaceId: wsId,
         }),
       })
       const data = await res.json()
@@ -253,6 +285,9 @@ export default function IntegrationsPage() {
         permalink: data.permalink,
         error: data.error,
         errorType: data.errorType,
+        code: data.code,
+        correlationId: data.correlationId,
+        idempotent: data.idempotent,
       })
     } catch (err) {
       setTestPublishResult({
@@ -262,7 +297,7 @@ export default function IntegrationsPage() {
     } finally {
       setTestPublishLoading(false)
     }
-  }, [testPublishConfirmed, testPublishText])
+  }, [testPublishConfirmText, testPublishText])
 
   const fetchTokenHealth = useCallback(async () => {
     setTestingConnection(true)
@@ -549,7 +584,7 @@ export default function IntegrationsPage() {
                             onClick={() => {
                               setShowTestPublish(true)
                               setTestPublishText('')
-                              setTestPublishConfirmed(false)
+                              setTestPublishConfirmText('')
                               setTestPublishResult(null)
                             }}
                             className="px-4 py-2 text-sm font-medium text-purple-700 hover:text-purple-900 hover:bg-purple-50 rounded-lg transition-colors flex items-center space-x-2"
@@ -672,18 +707,25 @@ export default function IntegrationsPage() {
                 </p>
               </div>
 
-              {/* Confirmation Checkbox */}
-              <label className="flex items-start space-x-3 cursor-pointer">
+              {/* Two-Step Confirmation */}
+              <div>
+                <label className="block text-sm text-slate-700 mb-2">
+                  Type <strong className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">PUBLISH</strong> to confirm this is a live post to your LinkedIn profile:
+                </label>
                 <input
-                  type="checkbox"
-                  checked={testPublishConfirmed}
-                  onChange={(e) => setTestPublishConfirmed(e.target.checked)}
-                  className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  type="text"
+                  value={testPublishConfirmText}
+                  onChange={(e) => setTestPublishConfirmText(e.target.value)}
+                  placeholder="Type PUBLISH to confirm"
+                  className={cn(
+                    'w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 font-mono',
+                    testPublishConfirmText === 'PUBLISH'
+                      ? 'border-emerald-300 focus:ring-emerald-500/20 focus:border-emerald-500'
+                      : 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-500'
+                  )}
+                  autoComplete="off"
                 />
-                <span className="text-sm text-slate-700">
-                  I understand this will publish a <strong>real post</strong> to my LinkedIn profile that is visible to my network.
-                </span>
-              </label>
+              </div>
 
               {/* Result */}
               {testPublishResult && (
@@ -696,7 +738,10 @@ export default function IntegrationsPage() {
                   {testPublishResult.success ? (
                     <div>
                       <p className="font-medium flex items-center gap-2">
-                        <Check className="w-4 h-4" /> Published successfully!
+                        <Check className="w-4 h-4" />
+                        {testPublishResult.idempotent
+                          ? 'Already published (duplicate prevented)'
+                          : 'Published successfully!'}
                       </p>
                       {testPublishResult.permalink && (
                         <a
@@ -708,6 +753,11 @@ export default function IntegrationsPage() {
                           View on LinkedIn <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
+                      {testPublishResult.correlationId && (
+                        <p className="mt-1 text-xs text-emerald-600">
+                          Trace: {testPublishResult.correlationId}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div>
@@ -718,6 +768,11 @@ export default function IntegrationsPage() {
                       {testPublishResult.errorType && (
                         <p className="mt-1 text-xs text-red-600">
                           Error type: {testPublishResult.errorType}
+                        </p>
+                      )}
+                      {testPublishResult.correlationId && (
+                        <p className="mt-1 text-xs text-red-500">
+                          Trace: {testPublishResult.correlationId}
                         </p>
                       )}
                     </div>
@@ -736,7 +791,7 @@ export default function IntegrationsPage() {
               </button>
               <button
                 onClick={handleTestPublish}
-                disabled={!testPublishConfirmed || !testPublishText.trim() || testPublishLoading}
+                disabled={testPublishConfirmText !== 'PUBLISH' || !testPublishText.trim() || testPublishLoading}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {testPublishLoading ? (

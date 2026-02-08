@@ -470,7 +470,7 @@ export async function getOnboardingSteps(opts: ReadinessOptions | string = {}): 
       title: 'Set Brand Voice',
       description: 'Define your tone, audience, and content guidelines',
       completed: readiness.brandVoiceConfigured,
-      href: '/studio/brand-voice',
+      href: '/studio/settings/brand',
       order: 2,
     },
     {

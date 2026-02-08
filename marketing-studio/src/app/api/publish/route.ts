@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { ContentStatus } from '@prisma/client'
 import { getPublishRequirements } from '@/lib/readiness'
 
-// Social Media Publishing API - Uses real platform APIs
-// Requires OAuth tokens configured in Settings > Integrations
+// LEGACY Social Media Publishing API
+// Deprecated: Use /api/publish/linkedin for LinkedIn or /api/studio/publish for Inngest-based publishing.
+// This route is kept for backward compatibility but now enforces auth.
 
 interface PublishResult {
   channel: string
@@ -418,8 +421,18 @@ const PUBLISHERS: Record<string, (content: any) => Promise<PublishResult>> = {
 }
 
 // POST - Publish content to selected channels
+// DEPRECATED: Prefer /api/publish/linkedin or /api/studio/publish
 export async function POST(request: NextRequest) {
   try {
+    // Auth gate (P9 hardening — was missing)
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const { contentId, channels } = await request.json()
 
     if (!contentId) {

@@ -10,6 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
@@ -25,6 +27,15 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
   try {
+    // Auth gate (P9 hardening)
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     // Parse and validate request body
     const body = await request.json()
     const validation = PublishRequestSchema.safeParse(body)
