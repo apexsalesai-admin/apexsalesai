@@ -1,5 +1,5 @@
 import { hasPermission, hasAllPermissions, hasAnyPermission, getRolePermissions } from '@/lib/rbac'
-import { UserRole } from '@prisma/client'
+import { UserRole } from './__fixtures__/enums'
 
 describe('RBAC Permission System', () => {
   describe('hasPermission', () => {

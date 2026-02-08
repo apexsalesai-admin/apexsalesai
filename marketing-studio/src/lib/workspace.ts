@@ -98,7 +98,7 @@ export async function getOrCreateWorkspace(
     // 1. Check membership table first (canonical path)
     const membership = await prisma.studioWorkspaceMember.findFirst({
       where: { userId },
-      orderBy: { invitedAt: 'asc' },
+      orderBy: { joinedAt: 'asc' },
       include: {
         workspace: {
           select: { id: true, name: true, slug: true, createdAt: true },
@@ -223,7 +223,7 @@ export async function listUserWorkspaces(
     // Primary: membership-based lookup
     const memberships = await prisma.studioWorkspaceMember.findMany({
       where: { userId },
-      orderBy: { invitedAt: 'asc' },
+      orderBy: { joinedAt: 'asc' },
       include: {
         workspace: {
           select: { id: true, name: true, slug: true, createdAt: true },

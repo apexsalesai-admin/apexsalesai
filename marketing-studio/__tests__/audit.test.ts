@@ -5,7 +5,7 @@
  * In a real environment, these would need a test database or mocking.
  */
 
-import { AuditAction } from '@prisma/client'
+import { AuditAction } from './__fixtures__/enums'
 
 // Mock the prisma client for testing
 jest.mock('@/lib/db', () => ({
@@ -57,12 +57,12 @@ describe('Audit Log System', () => {
       mockCreate.mockResolvedValue({ id: 'log-2' })
 
       await createAuditLog({
-        action: 'USER_LOGIN',
+        action: 'SETTINGS_UPDATED',
       })
 
       expect(mockCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          action: 'USER_LOGIN',
+          action: 'SETTINGS_UPDATED',
           details: {},
         }),
       })
