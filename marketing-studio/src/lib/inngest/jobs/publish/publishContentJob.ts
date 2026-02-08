@@ -16,6 +16,7 @@
 import { inngest } from '../../client'
 import { prisma } from '@/lib/db'
 import { publishToPlatform } from '../../connectors'
+import { safeDecrypt } from '@/lib/encryption'
 import type { JobResult, PublishJobOutput } from '../../types'
 import { StudioIntegrationType } from '@prisma/client'
 
@@ -188,10 +189,9 @@ export const publishContentJob = inngest.createFunction(
             },
           })
 
-          // In production, we would decrypt the token here using encryption.ts
-          // For now, we'll pass undefined to trigger simulated publish
+          // Decrypt the OAuth token for real API publishing
           const accessToken = integration?.accessTokenEncrypted
-            ? undefined // TODO: decrypt(integration.accessTokenEncrypted)
+            ? safeDecrypt(integration.accessTokenEncrypted) ?? undefined
             : undefined
 
           // Execute connector

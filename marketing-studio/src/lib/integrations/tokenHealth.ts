@@ -7,6 +7,8 @@
  */
 
 import { prisma } from '@/lib/db'
+import { safeDecrypt } from '@/lib/encryption'
+import { validateLinkedInToken } from '@/lib/publishing/linkedinPublisher'
 
 const LOG_PREFIX = '[INTEGRATIONS]'
 
@@ -87,6 +89,41 @@ export async function checkIntegrationHealth(
       } else if (hasError) {
         status = 'ERROR'
         message = `Last test failed: ${integration.lastTestResult}`
+      }
+
+      // Live token validation for LinkedIn (real API call)
+      if (status === 'CONNECTED' && platform === 'LINKEDIN' && hasToken) {
+        try {
+          const decryptedToken = safeDecrypt(integration.accessTokenEncrypted)
+          if (decryptedToken) {
+            console.log(LOG_PREFIX, 'Running live LinkedIn token validation...')
+            const validation = await validateLinkedInToken(decryptedToken)
+
+            // Update DB with test result
+            await prisma.studioIntegration.update({
+              where: { id: integration.id },
+              data: {
+                lastTestedAt: now,
+                lastTestResult: validation.valid
+                  ? `ok:${validation.displayName || 'verified'}`
+                  : `error:${validation.error || 'validation failed'}`,
+              },
+            })
+
+            if (!validation.valid) {
+              status = 'ERROR'
+              message = `Live validation failed: ${validation.error}`
+            } else {
+              message = `Token verified — ${validation.displayName}`
+            }
+          } else {
+            status = 'ERROR'
+            message = 'Token decryption failed'
+          }
+        } catch (liveErr) {
+          console.warn(LOG_PREFIX, 'Live LinkedIn validation error (non-fatal):', liveErr)
+          // Non-fatal — keep existing status from static checks
+        }
       }
 
       const healthy = status === 'CONNECTED'

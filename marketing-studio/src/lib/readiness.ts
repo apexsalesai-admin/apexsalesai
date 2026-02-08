@@ -278,7 +278,8 @@ async function checkBrandVoiceConfigured(
 }
 
 /**
- * Check if any platform integrations are connected
+ * Check if any platform integrations are connected with healthy tokens.
+ * Verifies both DB status=CONNECTED AND that the token exists and is not expired.
  */
 async function checkPlatformConnected(
   workspaceId?: string
@@ -286,28 +287,47 @@ async function checkPlatformConnected(
   console.log(LOG_PREFIX, 'Checking platform integrations')
 
   try {
-    let integrationCount = 0
+    const now = new Date()
+    const whereClause = {
+      status: 'CONNECTED' as const,
+      ...(workspaceId ? { workspaceId } : {}),
+    }
 
-    if (workspaceId) {
-      integrationCount = await prisma.studioIntegration.count({
-        where: {
-          workspaceId,
-          status: 'CONNECTED',
-        },
-      })
+    const integrations = await prisma.studioIntegration.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        type: true,
+        accessTokenEncrypted: true,
+        tokenExpiresAt: true,
+      },
+    })
+
+    // Count integrations that have a token and aren't expired
+    const healthyCount = integrations.filter((i) => {
+      const hasToken = !!i.accessTokenEncrypted
+      const isExpired = i.tokenExpiresAt ? i.tokenExpiresAt < now : false
+      return hasToken && !isExpired
+    }).length
+
+    const totalConnected = integrations.length
+
+    let message: string
+    if (healthyCount > 0) {
+      message = `${healthyCount} channel${healthyCount > 1 ? 's' : ''} connected`
+      if (healthyCount < totalConnected) {
+        message += ` (${totalConnected - healthyCount} with token issues)`
+      }
+    } else if (totalConnected > 0) {
+      message = `${totalConnected} connected but tokens expired or missing`
     } else {
-      integrationCount = await prisma.studioIntegration.count({
-        where: { status: 'CONNECTED' },
-      })
+      message = 'Connect a publishing channel'
     }
 
     return {
       name: 'Platform Integration',
-      status: integrationCount > 0 ? 'ready' : 'pending',
-      message:
-        integrationCount > 0
-          ? `${integrationCount} channel${integrationCount > 1 ? 's' : ''} connected`
-          : 'Connect a publishing channel',
+      status: healthyCount > 0 ? 'ready' : 'pending',
+      message,
       required: false,
     }
   } catch (error) {
