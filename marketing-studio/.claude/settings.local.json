@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm run build)",
+      "Bash(git add:*)",
+      "Bash(npx vercel:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(node -e:*)",
+      "Bash(git grep:*)",
+      "Bash(git commit:*)",
+      "Bash(dir:*)",
+      "Bash(npx prisma:*)",
+      "Bash(ls:*)",
+      "Bash(where:*)",
+      "Bash(npx tsc:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout /t 2 /nobreak)",
+      "Bash(echo:*)",
+      "Bash(kill:*)",
+      "Bash(npm run dev:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

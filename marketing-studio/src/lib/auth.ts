@@ -29,6 +29,24 @@ import GoogleProvider from 'next-auth/providers/google'
 import AzureADProvider from 'next-auth/providers/azure-ad'
 import CredentialsProvider from 'next-auth/providers/credentials'
 
+// Session duration: 8 hours in seconds
+const SESSION_MAX_AGE = 8 * 60 * 60
+
+// Structured error logging for OAuth events
+function logAuthEvent(
+  event: 'signin' | 'callback' | 'session' | 'error',
+  details: Record<string, unknown>
+) {
+  const timestamp = new Date().toISOString()
+  const prefix = `[NextAuth:${event.toUpperCase()}]`
+
+  if (event === 'error') {
+    console.error(prefix, timestamp, JSON.stringify(details))
+  } else {
+    console.log(prefix, timestamp, JSON.stringify(details))
+  }
+}
+
 /**
  * Check if demo mode is allowed - NEVER in production
  */
@@ -96,12 +114,28 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
+    async signIn({ user, account, profile }) {
+      logAuthEvent('signin', {
+        provider: account?.provider,
+        email: user?.email,
+        success: true,
+      })
+      return true
+    },
+
     async jwt({ token, user, account }) {
       // Initial sign in
       if (user) {
         token.id = user.id
         token.role = (user as typeof DEMO_USER).role || 'VIEWER'
         token.provider = account?.provider
+        token.email = user.email
+
+        logAuthEvent('callback', {
+          provider: account?.provider,
+          userId: user.id,
+          email: user.email,
+        })
       }
       return token
     },
@@ -111,6 +145,12 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string
         session.user.role = token.role as string
         session.user.provider = token.provider as string
+
+        logAuthEvent('session', {
+          provider: token.provider,
+          userId: token.id,
+          email: token.email,
+        })
       }
       return session
     },
@@ -123,9 +163,27 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
+  // Event handlers for error logging
+  events: {
+    async signIn({ user, account }) {
+      logAuthEvent('signin', {
+        provider: account?.provider,
+        userId: user?.id,
+        email: user?.email,
+        event: 'completed',
+      })
+    },
+    async signOut({ token }) {
+      logAuthEvent('session', {
+        userId: token?.id,
+        event: 'signout',
+      })
+    },
+  },
+
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: SESSION_MAX_AGE, // 8 hours
   },
 
   cookies: {
@@ -146,7 +204,27 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
+  // Only enable debug in development
   debug: process.env.NODE_ENV === 'development',
+
+  // Custom logger for production error tracking
+  logger: {
+    error(code, metadata) {
+      logAuthEvent('error', {
+        code,
+        message: metadata?.message || 'Unknown error',
+        stack: metadata?.stack,
+      })
+    },
+    warn(code) {
+      console.warn('[NextAuth:WARN]', code)
+    },
+    debug(code, metadata) {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[NextAuth:DEBUG]', code, metadata)
+      }
+    },
+  },
 }
 
 // Helper to check if demo mode is enabled (production-safe)
