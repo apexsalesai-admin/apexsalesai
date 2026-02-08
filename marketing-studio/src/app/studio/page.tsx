@@ -357,10 +357,50 @@ function SystemReadinessWidget() {
     else setLoading(true)
 
     try {
-      const res = await fetch('/api/system/readiness')
-      const data = await res.json()
+      // Fetch system readiness and token health in parallel
+      const [readinessRes, tokenRes] = await Promise.all([
+        fetch('/api/system/readiness'),
+        fetch('/api/integrations/test').catch(() => null),
+      ])
+
+      const data = await readinessRes.json()
       if (data.success && data.readiness) {
-        setChecks(data.readiness.checks)
+        let allChecks = [...data.readiness.checks]
+
+        // Append token health check from /api/integrations/test
+        if (tokenRes?.ok) {
+          const tokenData = await tokenRes.json()
+          if (tokenData.success) {
+            const integrations = tokenData.integrations || []
+            const expired = integrations.filter((i: { status: string }) => i.status === 'EXPIRED').length
+            const errors = integrations.filter((i: { status: string }) => i.status === 'ERROR').length
+            const total = integrations.length
+
+            let tokenStatus: 'ready' | 'pending' | 'error' = 'ready'
+            let tokenMessage = 'No integrations configured'
+
+            if (total > 0) {
+              if (errors > 0) {
+                tokenStatus = 'error'
+                tokenMessage = `${errors} token error${errors > 1 ? 's' : ''}`
+              } else if (expired > 0) {
+                tokenStatus = 'pending'
+                tokenMessage = `${expired} token${expired > 1 ? 's' : ''} expired`
+              } else {
+                tokenMessage = `${total} token${total > 1 ? 's' : ''} healthy`
+              }
+            }
+
+            allChecks.push({
+              name: 'Platform Tokens',
+              status: tokenStatus,
+              message: tokenMessage,
+              required: false,
+            })
+          }
+        }
+
+        setChecks(allChecks)
         setOverallReady(data.readiness.overallReady)
         setScore(data.readiness.overallScore)
       }

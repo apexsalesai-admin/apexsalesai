@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Zap,
   Check,
@@ -19,6 +19,7 @@ import {
   Brain,
   Sparkles,
   RefreshCw,
+  Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -206,13 +207,40 @@ export default function IntegrationsPage() {
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({})
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({})
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [tokenLastChecked, setTokenLastChecked] = useState<string | null>(null)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [tokenHealth, setTokenHealth] = useState<Array<{
+    platform: string
+    status: string
+    lastChecked: string
+    message?: string
+  }>>([])
+
+  const fetchTokenHealth = useCallback(async () => {
+    setTestingConnection(true)
+    try {
+      const res = await fetch('/api/integrations/test')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setTokenHealth(data.integrations || [])
+          setTokenLastChecked(data.timestamp)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to test integrations:', e)
+    } finally {
+      setTestingConnection(false)
+    }
+  }, [])
 
   useEffect(() => {
     async function checkIntegrations() {
       try {
-        const [envRes, dbRes] = await Promise.all([
+        const [envRes, dbRes, tokenRes] = await Promise.all([
           fetch('/api/video/generate').catch(() => null),
           fetch('/api/system/readiness').catch(() => null),
+          fetch('/api/integrations/test').catch(() => null),
         ])
 
         if (envRes?.ok) {
@@ -223,8 +251,15 @@ export default function IntegrationsPage() {
         if (dbRes?.ok) {
           const data = await dbRes.json()
           if (data.success && data.readiness?.checks) {
-            // Extract platform integration info from readiness checks
             setDbIntegrations(data.readiness.dbIntegrations || [])
+          }
+        }
+
+        if (tokenRes?.ok) {
+          const data = await tokenRes.json()
+          if (data.success) {
+            setTokenHealth(data.integrations || [])
+            setTokenLastChecked(data.timestamp)
           }
         }
       } catch (e) {
@@ -259,16 +294,35 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
+      <div className="flex items-start justify-between">
         <div className="flex items-center space-x-3 mb-2">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Integrations</h1>
-            <p className="text-slate-500">Connect your favorite AI and creative tools</p>
+            <p className="text-slate-500">
+              Connect your favorite AI and creative tools
+              {tokenLastChecked && (
+                <span className="ml-2 text-slate-400">
+                  &middot; Last checked: {new Date(tokenLastChecked).toLocaleTimeString()}
+                </span>
+              )}
+            </p>
           </div>
         </div>
+        <button
+          onClick={fetchTokenHealth}
+          disabled={testingConnection}
+          className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {testingConnection ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4" />
+          )}
+          <span>Test Connections</span>
+        </button>
       </div>
 
       {/* Status Summary */}
@@ -399,6 +453,28 @@ export default function IntegrationsPage() {
                           Account: {dbMatch.externalName}
                         </p>
                       )}
+                      {(() => {
+                        const tokenInfo = tokenHealth.find(
+                          (t) => t.platform.toLowerCase() === apiKey.id.toLowerCase()
+                        )
+                        if (tokenInfo && tokenInfo.status === 'EXPIRED') {
+                          return (
+                            <p className="flex items-center gap-1 text-xs text-amber-600 mt-0.5">
+                              <Clock className="w-3 h-3" />
+                              Token expired — reconnect required
+                            </p>
+                          )
+                        }
+                        if (tokenInfo && tokenInfo.status === 'ERROR') {
+                          return (
+                            <p className="flex items-center gap-1 text-xs text-red-600 mt-0.5">
+                              <AlertCircle className="w-3 h-3" />
+                              {tokenInfo.message || 'Token error'}
+                            </p>
+                          )
+                        }
+                        return null
+                      })()}
                       <p className="text-sm text-slate-500 mt-1">{apiKey.description}</p>
                       <div className="flex items-center space-x-4 mt-3">
                         <code className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded">
