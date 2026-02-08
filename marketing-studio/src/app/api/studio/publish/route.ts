@@ -15,6 +15,7 @@ import { authOptions } from '@/lib/auth'
 import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
+import { assertWorkspaceAccess } from '@/lib/workspace'
 
 // Request validation schema
 const PublishRequestSchema = z.object({
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     // Auth gate (P9 hardening)
     const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session?.user?.email) {
       return NextResponse.json(
         { success: false, error: 'Authentication required' },
         { status: 401 }
@@ -56,6 +57,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { workspaceId, contentId, channels } = validation.data
+
+    // P10: Workspace authorization via membership
+    const workspace = await assertWorkspaceAccess({
+      workspaceId,
+      userId: session.user.id,
+    })
+
+    if (!workspace) {
+      return NextResponse.json(
+        { success: false, error: 'Workspace access denied' },
+        { status: 403 }
+      )
+    }
 
     console.log('[API:Publish] Request received', {
       workspaceId,
@@ -102,25 +116,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify workspace exists
-    const workspace = await prisma.studioWorkspace.findUnique({
-      where: { id: workspaceId },
-      select: { id: true, name: true },
-    })
-
-    if (!workspace) {
-      console.error('[API:Publish] Workspace not found', { workspaceId })
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Workspace not found',
-        },
-        { status: 404 }
-      )
-    }
-
-    // Send event to Inngest
+    // Send event to Inngest (workspace already verified by assertWorkspaceAccess)
     const { ids } = await inngest.send({
       name: 'studio/publish.content',
       data: {

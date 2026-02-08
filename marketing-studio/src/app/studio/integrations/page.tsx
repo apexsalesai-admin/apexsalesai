@@ -219,6 +219,9 @@ export default function IntegrationsPage() {
     message?: string
   }>>([])
 
+  // Deterministic workspaceId — fetched once from workspace API
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+
   // Test Publish modal state
   const [showTestPublish, setShowTestPublish] = useState(false)
   const [testPublishText, setTestPublishText] = useState('')
@@ -235,39 +238,19 @@ export default function IntegrationsPage() {
     idempotent?: boolean
   } | null>(null)
 
-  // Derive workspaceId from the first DB integration's workspace (best available)
-  const linkedInIntegration = dbIntegrations.find((d) => d.type === 'LINKEDIN')
-
   const handleTestPublish = useCallback(async () => {
     if (testPublishConfirmText !== 'PUBLISH' || !testPublishText.trim()) return
+    if (!workspaceId) {
+      setTestPublishResult({
+        success: false,
+        error: 'Workspace not loaded. Please wait and try again.',
+      })
+      return
+    }
     setTestPublishLoading(true)
     setTestPublishResult(null)
 
     try {
-      // Resolve workspaceId: fetch from readiness endpoint if needed
-      let wsId: string | undefined
-      try {
-        const readinessRes = await fetch('/api/system/readiness')
-        const readinessData = await readinessRes.json()
-        // Use the first integration's workspaceId as a proxy
-        const liIntegration = readinessData?.readiness?.dbIntegrations?.find(
-          (d: { type: string }) => d.type === 'LINKEDIN'
-        )
-        if (liIntegration?.id) {
-          // We need workspaceId — fetch from integration detail
-          // For now, use the workspace from system readiness
-        }
-      } catch { /* non-fatal */ }
-
-      // Fetch workspaceId from the first available workspace
-      if (!wsId) {
-        try {
-          const wsRes = await fetch('/api/studio/workspace')
-          const wsData = await wsRes.json()
-          wsId = wsData?.workspace?.id || wsData?.data?.id
-        } catch { /* non-fatal */ }
-      }
-
       const res = await fetch('/api/publish/linkedin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -275,7 +258,7 @@ export default function IntegrationsPage() {
           text: testPublishText.trim(),
           confirm: true,
           confirmText: 'PUBLISH',
-          workspaceId: wsId,
+          workspaceId,
         }),
       })
       const data = await res.json()
@@ -297,7 +280,7 @@ export default function IntegrationsPage() {
     } finally {
       setTestPublishLoading(false)
     }
-  }, [testPublishConfirmText, testPublishText])
+  }, [testPublishConfirmText, testPublishText, workspaceId])
 
   const fetchTokenHealth = useCallback(async () => {
     setTestingConnection(true)
@@ -320,11 +303,19 @@ export default function IntegrationsPage() {
   useEffect(() => {
     async function checkIntegrations() {
       try {
-        const [envRes, dbRes, tokenRes] = await Promise.all([
+        const [envRes, dbRes, tokenRes, wsRes] = await Promise.all([
           fetch('/api/video/generate').catch(() => null),
           fetch('/api/system/readiness').catch(() => null),
           fetch('/api/integrations/test').catch(() => null),
+          fetch('/api/studio/workspace').catch(() => null),
         ])
+
+        // Resolve workspace deterministically
+        if (wsRes?.ok) {
+          const wsData = await wsRes.json()
+          const id = wsData?.data?.id
+          if (id) setWorkspaceId(id)
+        }
 
         if (envRes?.ok) {
           const data = await envRes.json()

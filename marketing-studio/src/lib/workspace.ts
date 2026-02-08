@@ -1,7 +1,7 @@
 /**
  * Workspace Management
  *
- * Handles workspace creation, retrieval, and bootstrapping for new users.
+ * Handles workspace creation, retrieval, bootstrapping, and authorization.
  */
 
 import { prisma } from '@/lib/db'
@@ -12,6 +12,68 @@ export interface WorkspaceInfo {
   slug: string
   ownerId: string
   createdAt: Date
+}
+
+/**
+ * Assert that a user has access to a workspace.
+ *
+ * Checks StudioWorkspaceMember first (proper multi-tenant auth).
+ * Falls back to workspace ownership via raw query for legacy workspaces
+ * created before membership tracking was enforced.
+ *
+ * Auto-creates a membership record on ownership fallback for future lookups.
+ *
+ * @returns Workspace info if access is granted, null if denied.
+ */
+export async function assertWorkspaceAccess(params: {
+  workspaceId: string
+  userId: string
+}): Promise<{ id: string; name: string } | null> {
+  // 1. Check membership table (canonical path)
+  const member = await prisma.studioWorkspaceMember.findUnique({
+    where: {
+      workspaceId_userId: {
+        workspaceId: params.workspaceId,
+        userId: params.userId,
+      },
+    },
+    include: {
+      workspace: {
+        select: { id: true, name: true },
+      },
+    },
+  })
+
+  if (member) {
+    return member.workspace
+  }
+
+  // 2. Fallback: ownership check via raw query (backward compat)
+  //    ownerId exists in DB but may not be in current Prisma schema
+  const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
+    SELECT id, name FROM studio_workspaces
+    WHERE id = ${params.workspaceId} AND "ownerId" = ${params.userId}
+    LIMIT 1
+  `
+
+  if (rows.length > 0) {
+    // Auto-create membership record so future checks use the fast path
+    try {
+      await prisma.studioWorkspaceMember.create({
+        data: {
+          workspaceId: params.workspaceId,
+          userId: params.userId,
+          role: 'OWNER',
+          joinedAt: new Date(),
+        },
+      })
+    } catch {
+      // Ignore — might already exist (race condition)
+    }
+    return rows[0]
+  }
+
+  return null
 }
 
 /**
@@ -63,6 +125,21 @@ export async function getOrCreateWorkspace(
         },
       },
     })
+
+    // Create membership record for proper multi-tenant auth
+    try {
+      await prisma.studioWorkspaceMember.create({
+        data: {
+          workspaceId: newWorkspace.id,
+          userId,
+          role: 'OWNER',
+          joinedAt: new Date(),
+        },
+      })
+    } catch {
+      // Non-fatal — workspace still usable via ownership fallback
+      console.warn('[WORKSPACE] Failed to create membership record')
+    }
 
     console.log('[WORKSPACE] Created workspace:', newWorkspace.id)
 

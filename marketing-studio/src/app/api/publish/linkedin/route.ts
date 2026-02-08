@@ -1,15 +1,15 @@
 /**
- * LinkedIn Direct Publish API — Production-Hardened (P9)
+ * LinkedIn Direct Publish API — P10 Hardened
  *
  * POST /api/publish/linkedin
  *
  * Publishes a text post to LinkedIn using real API calls.
  *
  * Gates (all required):
- * 1. Authentication (NextAuth session)
- * 2. workspaceId (required, verified against session)
+ * 1. Authentication (NextAuth session with user.id)
+ * 2. workspaceId (required, verified via StudioWorkspaceMember)
  * 3. Two-step confirmation: confirm=true AND confirmText="PUBLISH"
- * 4. Idempotency check (no duplicate posts)
+ * 4. Idempotency check (SUCCESS-only dedup, 202 for PUBLISHING, retry on FAILED)
  * 5. Integration must belong to the workspace
  * 6. Token must be decryptable and not expired
  *
@@ -23,7 +23,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { ContentType, ContentStatus } from '@prisma/client'
 import { safeDecrypt } from '@/lib/encryption'
+import { assertWorkspaceAccess } from '@/lib/workspace'
 import {
   publishLinkedInTextPost,
   validateLinkedInText,
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     // ── 1. Auth Gate ────────────────────────────────────────────────────
     const session = await getServerSession(authOptions)
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session?.user?.email) {
       return NextResponse.json(
         { success: false, error: 'Authentication required', correlationId },
         { status: 401, headers: NO_CACHE_HEADERS }
@@ -96,10 +98,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify workspace exists and caller has access
-    const workspace = await prisma.studioWorkspace.findUnique({
-      where: { id: workspaceId },
-      select: { id: true, name: true },
+    // ── 3b. Workspace Authorization (P10: real membership check) ────────
+    const workspace = await assertWorkspaceAccess({
+      workspaceId,
+      userId: session.user.id,
     })
 
     if (!workspace) {
@@ -154,7 +156,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
     })
 
-    // ── 6. Idempotency Check ────────────────────────────────────────────
+    // ── 6. Idempotency Check (P10: correctness fix) ─────────────────────
     const idempotencyKey = clientIdempotencyKey || computeIdempotencyKey(workspaceId, text)
 
     const existingJob = await prisma.studioPublishJob.findUnique({
@@ -162,30 +164,61 @@ export async function POST(request: NextRequest) {
       include: { results: true },
     })
 
-    if (existingJob && (existingJob.status === 'COMPLETED' || existingJob.status === 'PUBLISHING')) {
-      const existingResult = existingJob.results.find(
+    if (existingJob) {
+      // Only return IDEMPOTENT_HIT when a SUCCESS result actually exists
+      const successResult = existingJob.results.find(
         (r) => r.channel === 'LINKEDIN' && r.status === 'SUCCESS'
       )
 
-      log('Idempotent hit — returning existing result', {
-        existingJobId: existingJob.id,
-        existingPostId: existingResult?.externalPostId,
-      })
+      if (existingJob.status === 'COMPLETED' && successResult) {
+        log('Idempotent hit — returning existing SUCCESS result', {
+          existingJobId: existingJob.id,
+          existingPostId: successResult.externalPostId,
+        })
 
-      return NextResponse.json(
-        {
-          success: true,
-          idempotent: true,
-          code: 'IDEMPOTENT_HIT',
-          postId: existingResult?.externalPostId,
-          permalink: existingResult?.permalink,
-          jobId: existingJob.id,
-          correlationId,
-          durationMs: Date.now() - startTime,
-          timestamp: new Date().toISOString(),
-        },
-        { headers: NO_CACHE_HEADERS }
-      )
+        return NextResponse.json(
+          {
+            success: true,
+            idempotent: true,
+            code: 'IDEMPOTENT_HIT',
+            postId: successResult.externalPostId,
+            permalink: successResult.permalink,
+            jobId: existingJob.id,
+            correlationId,
+            durationMs: Date.now() - startTime,
+            timestamp: new Date().toISOString(),
+          },
+          { headers: NO_CACHE_HEADERS }
+        )
+      }
+
+      if (existingJob.status === 'PUBLISHING') {
+        log('Job already in progress', { existingJobId: existingJob.id })
+
+        return NextResponse.json(
+          {
+            success: true,
+            code: 'PUBLISHING_IN_PROGRESS',
+            jobId: existingJob.id,
+            correlationId,
+            message: 'A publish job for this content is already in progress',
+            durationMs: Date.now() - startTime,
+            timestamp: new Date().toISOString(),
+          },
+          { status: 202, headers: NO_CACHE_HEADERS }
+        )
+      }
+
+      // FAILED status: allow retry — delete the old job so a new one can use the key
+      if (existingJob.status === 'FAILED') {
+        log('Previous job failed — allowing retry', { existingJobId: existingJob.id })
+        await prisma.studioPublishResult.deleteMany({
+          where: { publishJobId: existingJob.id },
+        })
+        await prisma.studioPublishJob.delete({
+          where: { id: existingJob.id },
+        })
+      }
     }
 
     // ── 7. Find CONNECTED LinkedIn Integration (workspace-scoped) ───────
@@ -216,7 +249,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Double-check workspace ownership (defense in depth)
+    // Defense in depth: verify integration workspace matches request
     if (integration.workspaceId !== workspaceId) {
       logError('Workspace mismatch on integration', {
         integrationWorkspaceId: integration.workspaceId,
@@ -261,7 +294,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── 10. Create ScheduledContent record (real contentId) ─────────────
+    // ── 10. Create ScheduledContent record (P10: proper enums) ──────────
     let contentId: string
     try {
       const contentRecord = await prisma.scheduledContent.create({
@@ -269,10 +302,10 @@ export async function POST(request: NextRequest) {
           id: `lnk-${correlationId.slice(0, 8)}-${Date.now()}`,
           title: text.trim().slice(0, 100),
           body: text.trim(),
-          contentType: 'POST',
+          contentType: ContentType.POST,
           aiGenerated: false,
           channels: ['LINKEDIN'],
-          status: 'PUBLISHED',
+          status: ContentStatus.PUBLISHED,
           publishedAt: new Date(),
         },
       })
@@ -303,7 +336,7 @@ export async function POST(request: NextRequest) {
       await prisma.scheduledContent.update({
         where: { id: contentId },
         data: {
-          status: 'FAILED',
+          status: ContentStatus.FAILED,
           errorMessage: result.errorMessage,
         },
       }).catch(() => {}) // non-fatal
@@ -315,7 +348,7 @@ export async function POST(request: NextRequest) {
         data: {
           workspaceId,
           action: result.success ? 'CONTENT_PUBLISHED' : 'PUBLISH_JOB_FAILED',
-          userId: session.user.email,
+          userId: session.user.id,
           userEmail: session.user.email,
           resourceType: 'LINKEDIN_POST',
           resourceId: result.externalPostId || contentId,
