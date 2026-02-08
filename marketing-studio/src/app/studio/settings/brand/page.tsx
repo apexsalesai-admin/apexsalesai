@@ -103,58 +103,105 @@ export default function BrandVoiceSettingsPage() {
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
 
-  // Load settings from localStorage on mount (backward-compatible)
+  // Load settings: DB first, localStorage fallback
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
+    async function loadBrandVoice() {
       try {
-        const parsed = JSON.parse(stored)
-        // Backward compat: old format had single `tone` string
-        const tones = parsed.tones
-          ? parsed.tones
-          : parsed.tone
-            ? [parsed.tone]
-            : ['professional']
-        setSettings({
-          brandName: parsed.brandName || '',
-          tones,
-          forbiddenPhrases: parsed.forbiddenPhrases || '',
-          ctaStyle: parsed.ctaStyle || 'direct',
-          targetAudience: parsed.targetAudience || '',
-          industryContext: parsed.industryContext || '',
-          industry: parsed.industry || '',
-        })
+        // 1. Resolve workspaceId
+        const wsRes = await fetch('/api/studio/workspace')
+        const wsData = await wsRes.json()
+        const wsId = wsData?.data?.id
+        if (wsId) setWorkspaceId(wsId)
+
+        // 2. Try loading from DB
+        if (wsId) {
+          const bvRes = await fetch(`/api/studio/brand-voice?workspaceId=${wsId}`)
+          const bvData = await bvRes.json()
+          if (bvData.success && bvData.data) {
+            setSettings({
+              brandName: bvData.data.brandName || '',
+              tones: bvData.data.tones || ['professional'],
+              forbiddenPhrases: bvData.data.forbiddenPhrases || '',
+              ctaStyle: bvData.data.ctaStyle || 'direct',
+              targetAudience: bvData.data.targetAudience || '',
+              industryContext: bvData.data.industryContext || '',
+              industry: bvData.data.industry || '',
+            })
+            setLoading(false)
+            return
+          }
+        }
+
+        // 3. Fallback: localStorage (backward compat for pre-DB users)
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored)
+            const tones = parsed.tones
+              ? parsed.tones
+              : parsed.tone
+                ? [parsed.tone]
+                : ['professional']
+            setSettings({
+              brandName: parsed.brandName || '',
+              tones,
+              forbiddenPhrases: parsed.forbiddenPhrases || '',
+              ctaStyle: parsed.ctaStyle || 'direct',
+              targetAudience: parsed.targetAudience || '',
+              industryContext: parsed.industryContext || '',
+              industry: parsed.industry || '',
+            })
+          } catch (e) {
+            console.error('Failed to parse stored brand voice:', e)
+          }
+        }
       } catch (e) {
-        console.error('Failed to parse stored brand voice:', e)
+        console.error('Failed to load brand voice:', e)
+      } finally {
+        setLoading(false)
       }
     }
+    loadBrandVoice()
   }, [])
 
   const handleSave = async () => {
     setSaving(true)
     setSaved(false)
 
-    // Save to localStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    try {
+      // Always keep localStorage in sync
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
 
-    // TODO: Save to database when workspace context is available
-    // await fetch('/api/settings/brand', {
-    //   method: 'POST',
-    //   body: JSON.stringify(settings),
-    // })
+      // Save to DB if workspace is available
+      if (workspaceId) {
+        const res = await fetch('/api/studio/brand-voice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...settings, workspaceId }),
+        })
+        const data = await res.json()
+        if (!data.success) {
+          console.error('Brand voice save failed:', data.error)
+          toast.error('Save failed', { description: data.error })
+          setSaving(false)
+          return
+        }
+      }
 
-    // Simulate API delay
-    await new Promise((r) => setTimeout(r, 500))
-
-    setSaving(false)
-    setSaved(true)
-    toast.success('Brand voice saved', {
-      description: 'Your settings will be applied to all generated content',
-    })
-
-    // Reset saved indicator after 3 seconds
-    setTimeout(() => setSaved(false), 3000)
+      setSaved(true)
+      toast.success('Brand voice saved', {
+        description: 'Your settings will be applied to all generated content',
+      })
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      console.error('Brand voice save error:', e)
+      toast.error('Save failed', { description: 'Network error' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const updateField = <K extends keyof BrandVoice>(field: K, value: BrandVoice[K]) => {
@@ -225,6 +272,11 @@ export default function BrandVoiceSettingsPage() {
         </div>
       </div>
 
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        </div>
+      ) : (
       <div className="space-y-8">
         {/* Brand Name */}
         <section className="bg-white rounded-xl border border-slate-200 p-6">
@@ -405,6 +457,7 @@ export default function BrandVoiceSettingsPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

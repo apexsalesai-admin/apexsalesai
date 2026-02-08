@@ -1,7 +1,11 @@
 /**
- * Workspace Management
+ * Workspace Management — P11 aligned (membership-based)
  *
  * Handles workspace creation, retrieval, bootstrapping, and authorization.
+ *
+ * All ownership checks use StudioWorkspaceMember (canonical path) with a raw SQL
+ * fallback for the legacy "ownerId" column that exists in the DB but is not exposed
+ * in the current Prisma schema.
  */
 
 import { prisma } from '@/lib/db'
@@ -10,18 +14,17 @@ export interface WorkspaceInfo {
   id: string
   name: string
   slug: string
-  ownerId: string
   createdAt: Date
 }
+
+// ─── Authorization ──────────────────────────────────────────────────────────
 
 /**
  * Assert that a user has access to a workspace.
  *
- * Checks StudioWorkspaceMember first (proper multi-tenant auth).
- * Falls back to workspace ownership via raw query for legacy workspaces
- * created before membership tracking was enforced.
- *
- * Auto-creates a membership record on ownership fallback for future lookups.
+ * 1. Checks StudioWorkspaceMember (canonical path).
+ * 2. Falls back to ownerId via raw SQL for legacy workspaces.
+ * 3. Auto-creates a membership record on ownership fallback.
  *
  * @returns Workspace info if access is granted, null if denied.
  */
@@ -49,7 +52,6 @@ export async function assertWorkspaceAccess(params: {
   }
 
   // 2. Fallback: ownership check via raw query (backward compat)
-  //    ownerId exists in DB but may not be in current Prisma schema
   const rows = await prisma.$queryRaw<Array<{ id: string; name: string }>>`
     SELECT id, name FROM studio_workspaces
     WHERE id = ${params.workspaceId} AND "ownerId" = ${params.userId}
@@ -76,80 +78,116 @@ export async function assertWorkspaceAccess(params: {
   return null
 }
 
+// ─── Bootstrap / CRUD ───────────────────────────────────────────────────────
+
 /**
- * Get or create a default workspace for a user
+ * Get or create a default workspace for a user.
+ *
+ * Lookup order:
+ * 1. Membership table (user has a StudioWorkspaceMember record)
+ * 2. Legacy ownerId via raw SQL
+ * 3. Create new workspace + OWNER membership
  */
 export async function getOrCreateWorkspace(
   userId: string,
-  userEmail?: string
+  _userEmail?: string
 ): Promise<WorkspaceInfo> {
   console.log('[WORKSPACE] Getting or creating workspace for user:', userId)
 
   try {
-    // First, check if user has any workspace
-    const existingWorkspace = await prisma.studioWorkspace.findFirst({
-      where: {
-        ownerId: userId,
-      },
-      orderBy: {
-        createdAt: 'asc',
+    // 1. Check membership table first (canonical path)
+    const membership = await prisma.studioWorkspaceMember.findFirst({
+      where: { userId },
+      orderBy: { invitedAt: 'asc' },
+      include: {
+        workspace: {
+          select: { id: true, name: true, slug: true, createdAt: true },
+        },
       },
     })
 
-    if (existingWorkspace) {
-      console.log('[WORKSPACE] Found existing workspace:', existingWorkspace.id)
-      return {
-        id: existingWorkspace.id,
-        name: existingWorkspace.name,
-        slug: existingWorkspace.slug,
-        ownerId: existingWorkspace.ownerId,
-        createdAt: existingWorkspace.createdAt,
-      }
+    if (membership) {
+      console.log('[WORKSPACE] Found via membership:', membership.workspace.id)
+      return membership.workspace
     }
 
-    // Create default workspace
+    // 2. Fallback: legacy ownerId via raw SQL
+    const legacyRows = await prisma.$queryRaw<
+      Array<{ id: string; name: string; slug: string; createdAt: Date }>
+    >`
+      SELECT id, name, slug, "createdAt"
+      FROM studio_workspaces
+      WHERE "ownerId" = ${userId}
+      ORDER BY "createdAt" ASC
+      LIMIT 1
+    `
+
+    if (legacyRows.length > 0) {
+      const ws = legacyRows[0]
+      console.log('[WORKSPACE] Found via legacy ownerId:', ws.id)
+
+      // Auto-create membership for future fast-path
+      try {
+        await prisma.studioWorkspaceMember.create({
+          data: {
+            workspaceId: ws.id,
+            userId,
+            role: 'OWNER',
+            joinedAt: new Date(),
+          },
+        })
+      } catch {
+        // Ignore — might already exist
+      }
+
+      return ws
+    }
+
+    // 3. Create new workspace + OWNER membership in a transaction
     const workspaceName = 'My Workspace'
     const slug = `workspace-${userId.substring(0, 8)}-${Date.now()}`
 
     console.log('[WORKSPACE] Creating new workspace:', workspaceName)
 
-    const newWorkspace = await prisma.studioWorkspace.create({
-      data: {
-        name: workspaceName,
-        slug,
-        ownerId: userId,
-        settings: {
-          defaultTone: 'professional',
-          defaultAudience: 'business professionals',
-          timezone: 'America/New_York',
-        },
-      },
-    })
-
-    // Create membership record for proper multi-tenant auth
-    try {
-      await prisma.studioWorkspaceMember.create({
+    const newWorkspace = await prisma.$transaction(async (tx) => {
+      const created = await tx.studioWorkspace.create({
         data: {
-          workspaceId: newWorkspace.id,
+          name: workspaceName,
+          slug,
+          settings: {
+            defaultTone: 'professional',
+            defaultAudience: 'business professionals',
+            timezone: 'America/New_York',
+          },
+        },
+        select: { id: true, name: true, slug: true, createdAt: true },
+      })
+
+      await tx.studioWorkspaceMember.create({
+        data: {
+          workspaceId: created.id,
           userId,
           role: 'OWNER',
           joinedAt: new Date(),
         },
       })
-    } catch {
-      // Non-fatal — workspace still usable via ownership fallback
-      console.warn('[WORKSPACE] Failed to create membership record')
-    }
+
+      // Legacy backfill: set ownerId for backward compat (non-fatal)
+      try {
+        await tx.$executeRaw`
+          UPDATE studio_workspaces
+          SET "ownerId" = ${userId}
+          WHERE id = ${created.id} AND ("ownerId" IS NULL OR "ownerId" = '')
+        `
+      } catch {
+        // Ignore — column may not exist
+      }
+
+      return created
+    })
 
     console.log('[WORKSPACE] Created workspace:', newWorkspace.id)
-
-    return {
-      id: newWorkspace.id,
-      name: newWorkspace.name,
-      slug: newWorkspace.slug,
-      ownerId: newWorkspace.ownerId,
-      createdAt: newWorkspace.createdAt,
-    }
+    return newWorkspace
   } catch (error) {
     console.error('[WORKSPACE] Error:', error)
     throw error
@@ -157,7 +195,7 @@ export async function getOrCreateWorkspace(
 }
 
 /**
- * Get workspace by ID
+ * Get workspace by ID (no auth check — use assertWorkspaceAccess for gated access)
  */
 export async function getWorkspaceById(
   workspaceId: string
@@ -165,19 +203,10 @@ export async function getWorkspaceById(
   try {
     const workspace = await prisma.studioWorkspace.findUnique({
       where: { id: workspaceId },
+      select: { id: true, name: true, slug: true, createdAt: true },
     })
 
-    if (!workspace) {
-      return null
-    }
-
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      slug: workspace.slug,
-      ownerId: workspace.ownerId,
-      createdAt: workspace.createdAt,
-    }
+    return workspace
   } catch (error) {
     console.error('[WORKSPACE] Get by ID error:', error)
     return null
@@ -185,24 +214,52 @@ export async function getWorkspaceById(
 }
 
 /**
- * List all workspaces for a user
+ * List all workspaces for a user via membership table.
  */
 export async function listUserWorkspaces(
   userId: string
 ): Promise<WorkspaceInfo[]> {
   try {
-    const workspaces = await prisma.studioWorkspace.findMany({
-      where: { ownerId: userId },
-      orderBy: { createdAt: 'asc' },
+    // Primary: membership-based lookup
+    const memberships = await prisma.studioWorkspaceMember.findMany({
+      where: { userId },
+      orderBy: { invitedAt: 'asc' },
+      include: {
+        workspace: {
+          select: { id: true, name: true, slug: true, createdAt: true },
+        },
+      },
     })
 
-    return workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      slug: w.slug,
-      ownerId: w.ownerId,
-      createdAt: w.createdAt,
-    }))
+    if (memberships.length > 0) {
+      return memberships.map((m) => m.workspace)
+    }
+
+    // Fallback: legacy ownerId via raw SQL
+    const legacyRows = await prisma.$queryRaw<WorkspaceInfo[]>`
+      SELECT id, name, slug, "createdAt"
+      FROM studio_workspaces
+      WHERE "ownerId" = ${userId}
+      ORDER BY "createdAt" ASC
+    `
+
+    // Auto-migrate membership for each found workspace
+    for (const ws of legacyRows) {
+      try {
+        await prisma.studioWorkspaceMember.create({
+          data: {
+            workspaceId: ws.id,
+            userId,
+            role: 'OWNER',
+            joinedAt: new Date(),
+          },
+        })
+      } catch {
+        // Ignore — might already exist
+      }
+    }
+
+    return legacyRows
   } catch (error) {
     console.error('[WORKSPACE] List error:', error)
     return []
@@ -210,29 +267,25 @@ export async function listUserWorkspaces(
 }
 
 /**
- * Update workspace settings
+ * Update workspace name/settings.
+ * Caller must have already verified access via assertWorkspaceAccess().
  */
 export async function updateWorkspace(
   workspaceId: string,
   data: { name?: string; settings?: Record<string, unknown> }
 ): Promise<WorkspaceInfo | null> {
   try {
+    const updateData: Record<string, unknown> = {}
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.settings !== undefined) updateData.settings = data.settings
+
     const workspace = await prisma.studioWorkspace.update({
       where: { id: workspaceId },
-      data: {
-        name: data.name,
-        settings: data.settings,
-        updatedAt: new Date(),
-      },
+      data: updateData,
+      select: { id: true, name: true, slug: true, createdAt: true },
     })
 
-    return {
-      id: workspace.id,
-      name: workspace.name,
-      slug: workspace.slug,
-      ownerId: workspace.ownerId,
-      createdAt: workspace.createdAt,
-    }
+    return workspace
   } catch (error) {
     console.error('[WORKSPACE] Update error:', error)
     return null
