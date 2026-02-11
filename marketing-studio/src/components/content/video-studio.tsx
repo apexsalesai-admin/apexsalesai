@@ -171,30 +171,71 @@ export function VideoStudio({ script, title, onVideoGenerated }: VideoStudioProp
     setGenerationProgress([])
 
     try {
-      // Use new provider-based estimate to validate before rendering
+      const providerName = selectedVideoTool?.toLowerCase() || 'template'
+
+      const providerLabel = providerName.charAt(0).toUpperCase() + providerName.slice(1)
+
+      // 1. Check budget before committing
+      setGenerationProgress([{ step: 'Checking budget', progress: 10 }])
       const estimateRes = await fetch('/api/studio/render/estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: selectedVideoTool?.toLowerCase() || 'template',
-          durationSeconds: duration,
-          aspectRatio,
-        }),
+        body: JSON.stringify({ provider: providerName, durationSeconds: duration, aspectRatio }),
       })
       const estimateData = await estimateRes.json()
+      if (!estimateData.success) throw new Error(estimateData.error || 'Failed to estimate cost')
+      if (!estimateData.data?.withinBudget) throw new Error(estimateData.data?.warning || 'Render budget exceeded')
 
-      if (!estimateData.success) {
-        setError(estimateData.error || 'Failed to estimate cost')
-      } else if (!estimateData.data?.withinBudget) {
-        setError(estimateData.data?.warning || 'Render budget exceeded. Adjust provider or duration.')
-      } else {
-        // Show estimate — full renders are done via Studio > Content > Video Assets
-        const videoResult: VideoResult = {
-          steps: [{ step: 'estimate', status: 'complete', message: `Estimated cost: $${estimateData.data.estimatedUsd.toFixed(2)}. Use the Video Assets tab in Content Studio for full render with provider controls.` }],
-        }
-        setResult(videoResult)
-        onVideoGenerated?.(videoResult)
+      // 2. Save content as draft
+      setGenerationProgress([{ step: 'Saving content', progress: 30 }])
+      const contentRes = await fetch('/api/content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || 'Untitled Video',
+          body: script || 'Video content',
+          contentType: 'VIDEO',
+          channels: ['youtube'],
+          aiGenerated: true,
+        }),
+      })
+      const contentData = await contentRes.json()
+      if (!contentData.success) throw new Error(contentData.error || 'Failed to save content')
+
+      // 3. Create version
+      setGenerationProgress([{ step: 'Creating version', progress: 50 }])
+      const versionRes = await fetch('/api/studio/versions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contentId: contentData.data.id,
+          script,
+          visualPrompt: script,
+          config: { duration, aspectRatio },
+          label: 'Video Studio render',
+        }),
+      })
+      const versionData = await versionRes.json()
+      if (!versionData.success) throw new Error(versionData.error || 'Failed to create version')
+
+      // 4. Trigger render
+      setGenerationProgress([{ step: `Rendering with ${providerLabel}`, progress: 70 }])
+      const renderRes = await fetch(`/api/studio/versions/${versionData.data.id}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: providerName, durationSeconds: duration, aspectRatio }),
+      })
+      const renderData = await renderRes.json()
+      if (!renderData.success) throw new Error(renderData.error || 'Render failed')
+      setGenerationProgress([{ step: 'Render dispatched', progress: 100 }])
+
+      const videoResult: VideoResult = {
+        steps: [
+          { step: 'render', status: renderData.data?.status || 'dispatched', message: `Job ${renderData.data?.jobId}` },
+        ],
       }
+      setResult(videoResult)
+      onVideoGenerated?.(videoResult)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate video')
     } finally {

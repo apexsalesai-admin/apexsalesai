@@ -147,6 +147,36 @@ export const generateVideoJob = inngest.createFunction(
       return result
     })
 
+    // Short-circuit: if provider completed on submit (e.g. template), skip polling
+    if (submission.status === 'completed') {
+      await step.run('finalize-immediate', async () => {
+        await prisma.studioVideoJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'COMPLETED',
+            progress: 100,
+            progressMessage: 'Render complete (instant)',
+            completedAt: new Date(),
+          },
+        })
+        if (renderLogId) {
+          await recordRenderOutcome(renderLogId, 'completed').catch(e =>
+            console.warn('[BUDGET:OUTCOME:ERR]', { renderLogId, error: e instanceof Error ? e.message : 'unknown' })
+          )
+        }
+      })
+
+      const durationMs = Date.now() - startTime
+      console.log(`[${providerName.toUpperCase()}:COMPLETE]`, { jobId, instant: true })
+      console.log('[INNGEST:JOB:DONE]', { jobId, finalStatus: 'completed', provider: providerName, durationMs })
+      return {
+        success: true,
+        data: { jobId, status: 'completed' as const, provider: providerName },
+        durationMs,
+        timestamp: new Date().toISOString(),
+      }
+    }
+
     // Step 3: Poll for completion with exponential backoff
     let finalStatus: 'completed' | 'failed' = 'failed'
     let outputUrl: string | undefined
@@ -215,7 +245,7 @@ export const generateVideoJob = inngest.createFunction(
     // Step 4: Finalize
     await step.run('finalize', async () => {
       // Map provider name → StudioAssetProvider enum value
-      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'INVIDEO' }
+      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'TEMPLATE' }
       const assetProvider = assetProviderMap[providerName] || 'RUNWAY'
 
       if (finalStatus === 'completed' && outputUrl) {

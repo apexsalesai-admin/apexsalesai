@@ -2264,20 +2264,56 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                         setVideoRenderState({ status: 'QUEUED' })
                         try {
                           setVideoRenderState({ status: 'RENDERING', progress: 10 })
-                          // Use template provider (free) for the content creation wizard.
-                          // Full provider selection is available from Studio > Content > Video Assets tab.
-                          setVideoRenderState({ status: 'RENDERING', progress: 50 })
-                          const res = await fetch('/api/studio/render/estimate', {
+                          const aspectRatio = draft.contentType === 'reel' ? '9:16' : '16:9'
+                          const durationSeconds = draft.contentType === 'reel' ? 15 : 30
+
+                          // 1. Save content as draft to get a contentId
+                          setVideoRenderState({ status: 'RENDERING', progress: 20 })
+                          const contentRes = await fetch('/api/content', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: draft.title || 'Untitled Video',
+                              body: draft.body || draft.videoScript || 'Video content',
+                              contentType: draft.contentType?.toUpperCase() || 'VIDEO',
+                              channels: draft.channels?.length ? draft.channels : ['youtube'],
+                              aiGenerated: true,
+                            }),
+                          })
+                          const contentData = await contentRes.json()
+                          if (!contentData.success) throw new Error(contentData.error || 'Failed to save content')
+
+                          // 2. Create a version
+                          setVideoRenderState({ status: 'RENDERING', progress: 40 })
+                          const versionRes = await fetch('/api/studio/versions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              contentId: contentData.data.id,
+                              script: draft.videoScript || draft.body,
+                              visualPrompt: draft.videoScript || draft.body,
+                              config: { duration: durationSeconds, aspectRatio },
+                              label: 'Auto-render from wizard',
+                            }),
+                          })
+                          const versionData = await versionRes.json()
+                          if (!versionData.success) throw new Error(versionData.error || 'Failed to create version')
+
+                          // 3. Trigger render with template provider (free, instant)
+                          setVideoRenderState({ status: 'RENDERING', progress: 60 })
+                          const renderRes = await fetch(`/api/studio/versions/${versionData.data.id}/render`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               provider: 'template',
-                              durationSeconds: draft.contentType === 'reel' ? 15 : 30,
-                              aspectRatio: draft.contentType === 'reel' ? '9:16' : '16:9',
+                              durationSeconds,
+                              aspectRatio,
                             }),
                           })
-                          await res.json()
-                          // Template provider completes instantly — mark as ready
+                          const renderData = await renderRes.json()
+                          if (!renderData.success) throw new Error(renderData.error || 'Render failed')
+
+                          // Template completes instantly
                           setVideoRenderState({
                             status: 'READY',
                             previewUrl: undefined,

@@ -218,6 +218,7 @@ enum StudioAssetProvider {
   SORA          // OpenAI Sora video
   PIKA          // Pika Labs video
   INVIDEO       // InVideo generated
+  TEMPLATE      // Template/internal (zero-cost placeholder)
 }
 
 model StudioAsset {
