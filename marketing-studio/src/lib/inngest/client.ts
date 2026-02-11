@@ -43,10 +43,9 @@ export type StudioEvents = {
   // Video generation events
   'studio/video.generate': {
     data: {
-      script: string
-      style?: string
-      duration?: number
-      outputFormat?: string
+      jobId: string       // StudioVideoJob ID (pre-created by API)
+      versionId: string   // StudioContentVersion ID
+      workspaceId: string
     }
   }
   'studio/video.status': {

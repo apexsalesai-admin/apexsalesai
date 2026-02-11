@@ -116,33 +116,66 @@ async function generateAvatarVideo(script: string, avatarId: string, voiceId?: s
 }
 
 // Runway Gen-3 Text-to-Video
-async function generateRunwayVideo(prompt: string, duration: number = 10): Promise<{ videoUrl: string }> {
+// API docs: https://docs.runwayml.com — uses api.dev.runwayml.com
+const RUNWAY_MAX_PROMPT = 1000
+
+async function generateRunwayVideo(
+  prompt: string,
+  duration: number = 10,
+  ratio: '16:9' | '9:16' | '1:1' | '4:5' = '16:9'
+): Promise<{ taskId: string; status: string }> {
   const apiKey = process.env.RUNWAY_API_KEY
   if (!apiKey) {
-    throw new Error('RUNWAY_API_KEY not configured - Add your API key in Settings > Integrations')
+    throw new Error('Runway API key not configured. Add your key in Settings > Integrations or set RUNWAY_API_KEY in .env.local')
   }
 
-  const response = await fetch('https://api.runwayml.com/v1/generations', {
+  const baseUrl = process.env.RUNWAY_API_URL || 'https://api.dev.runwayml.com/v1'
+
+  // veo3.1 supports 4, 6, or 8 second durations
+  const runwayDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8
+
+  // Map aspect ratio to resolution format
+  const ratioMap: Record<string, string> = {
+    '16:9': '1280:720', '9:16': '720:1280', '1:1': '1080:1080', '4:5': '720:1280',
+  }
+  const mappedRatio = ratioMap[ratio] || '1280:720'
+
+  // Runway enforces 1000-char limit on promptText
+  let promptText = prompt
+  if (promptText.length > RUNWAY_MAX_PROMPT) {
+    console.warn('[LEGACY:RUNWAY:TRUNCATE]', { original: promptText.length, truncated: RUNWAY_MAX_PROMPT })
+    promptText = promptText.slice(0, RUNWAY_MAX_PROMPT)
+  }
+
+  console.log('[LEGACY:RUNWAY:SUBMIT]', { model: process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'veo3.1', ratio: mappedRatio, duration: runwayDuration, promptLength: promptText.length })
+
+  const response = await fetch(`${baseUrl}/text_to_video`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
+      'X-Runway-Version': '2024-11-06',
     },
     body: JSON.stringify({
-      model: 'gen3a_turbo',
-      prompt,
-      duration,
-      ratio: '16:9',
+      model: process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'veo3.1',
+      promptText,
+      ratio: mappedRatio,
+      duration: runwayDuration,
     }),
   })
 
   if (!response.ok) {
     const error = await response.text()
-    throw new Error(`Runway API error: ${error}`)
+    console.error('[LEGACY:RUNWAY:ERROR]', { status: response.status, error: error.slice(0, 200) })
+    throw new Error(`Runway API error (${response.status}): ${error}`)
   }
 
   const data = await response.json()
-  return { videoUrl: data.url || data.output?.[0] || '' }
+  console.log('[LEGACY:RUNWAY:OK]', { taskId: data.id || data.taskId })
+  return {
+    taskId: data.id || data.taskId || '',
+    status: data.status || 'queued',
+  }
 }
 
 // DALL-E 3 Thumbnail Generation
@@ -189,9 +222,32 @@ async function generateMusic(style: string, duration: number = 30): Promise<{ mu
   return { musicUrl: '' }
 }
 
+/** @deprecated Use POST /api/studio/versions/[versionId]/render for the Inngest pipeline instead */
 export async function POST(request: NextRequest) {
   try {
     const body: VideoGenerationRequest = await request.json()
+
+    console.log('[RENDER:REQUEST]', {
+      provider: body.videoProvider || 'runway',
+      type: body.type,
+      keySource: process.env.RUNWAY_API_KEY ? 'env' : 'none',
+      pipeline: 'legacy',
+    })
+
+    // Dev fallback: return sample assets so the UI flow is testable without paid API keys
+    if (process.env.NODE_ENV === 'development' && !process.env.RUNWAY_API_KEY && !process.env.HEYGEN_API_KEY) {
+      return NextResponse.json({
+        success: true,
+        videoUrl: '/sample-video.mp4',
+        thumbnailUrls: ['/sample-thumb.jpg'],
+        duration: body.duration || 30,
+        steps: [
+          { step: 'video', status: 'completed' as const, message: 'Dev mode — mock video returned' },
+        ],
+        message: 'Dev mode: returning sample assets. Configure API keys for real generation.',
+      })
+    }
+
     const {
       type,
       script,
@@ -256,15 +312,22 @@ export async function POST(request: NextRequest) {
       try {
         results.steps.push({ step: 'video', status: 'pending' })
         const videoPrompt = style ? `${script}. Style: ${style}` : script
-        const video = await generateRunwayVideo(videoPrompt, duration)
-        results.videoUrl = video.videoUrl
+        const runway = await generateRunwayVideo(videoPrompt, duration, aspectRatio as '16:9' | '9:16' | '1:1' | '4:5')
+        // Runway is async — store task ID, video will be ready after polling
+        results.videoUrl = '' // Will be populated after polling (P1)
         results.duration = duration
-        results.steps[results.steps.length - 1] = { step: 'video', status: 'completed' }
+        results.steps[results.steps.length - 1] = {
+          step: 'video',
+          status: 'completed',
+          message: `Runway task queued: ${runway.taskId} (status: ${runway.status})`,
+        }
       } catch (error) {
+        const errMsg = error instanceof Error ? error.message : 'Video generation failed'
+        console.error('[LEGACY:STEP:FAILED]', { step: 'video', error: errMsg.slice(0, 200) })
         results.steps[results.steps.length - 1] = {
           step: 'video',
           status: 'failed',
-          message: error instanceof Error ? error.message : 'Video generation failed'
+          message: errMsg
         }
       }
     }
@@ -304,15 +367,24 @@ export async function POST(request: NextRequest) {
     const hasAnySuccess = results.steps.some(s => s.status === 'completed')
     const allFailed = results.steps.every(s => s.status === 'failed')
 
-    return NextResponse.json({
+    // Surface the first failed step's message as the top-level error
+    const firstFailedStep = results.steps.find(s => s.status === 'failed')
+    const specificError = firstFailedStep?.message
+
+    const response = NextResponse.json({
       success: hasAnySuccess,
       ...results,
+      error: allFailed ? specificError : undefined,
       message: allFailed
-        ? 'All generation steps failed. Please check your API keys in Settings > Integrations.'
+        ? specificError || 'All generation steps failed. Please check your API keys in Settings > Integrations.'
         : hasAnySuccess
           ? 'Video generation completed with some steps successful.'
           : 'Video generation in progress.',
+      _deprecated: 'This endpoint is deprecated. Use POST /api/studio/versions/[versionId]/render instead.',
     })
+    response.headers.set('Deprecation', 'true')
+    response.headers.set('Sunset', '2026-06-01')
+    return response
   } catch (error) {
     console.error('Video generation error:', error)
     return NextResponse.json(
@@ -328,16 +400,22 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to check available integrations
 export async function GET() {
-  const integrations = {
-    elevenlabs: !!process.env.ELEVENLABS_API_KEY,
-    heygen: !!process.env.HEYGEN_API_KEY,
-    runway: !!process.env.RUNWAY_API_KEY,
-    openai: !!process.env.OPENAI_API_KEY,
-    anthropic: !!process.env.ANTHROPIC_API_KEY,
-    suno: !!process.env.SUNO_API_KEY,
-    synthesia: !!process.env.SYNTHESIA_API_KEY,
-    did: !!process.env.DID_API_KEY,
-    midjourney: !!process.env.MIDJOURNEY_API_KEY,
+  // Check env vars at runtime (not build time) for each integration
+  const integrations: Record<string, boolean> = {}
+  const envVarMap: Record<string, string> = {
+    elevenlabs: 'ELEVENLABS_API_KEY',
+    heygen: 'HEYGEN_API_KEY',
+    runway: 'RUNWAY_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    anthropic: 'ANTHROPIC_API_KEY',
+    suno: 'SUNO_API_KEY',
+    synthesia: 'SYNTHESIA_API_KEY',
+    did: 'DID_API_KEY',
+    midjourney: 'MIDJOURNEY_API_KEY',
+  }
+
+  for (const [key, envVar] of Object.entries(envVarMap)) {
+    integrations[key] = !!process.env[envVar]
   }
 
   const configuredCount = Object.values(integrations).filter(Boolean).length
@@ -353,3 +431,6 @@ export async function GET() {
       : `${configuredCount}/${totalCount} integrations configured.`,
   })
 }
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'

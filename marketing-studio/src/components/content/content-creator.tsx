@@ -68,6 +68,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IntegrationType } from '@/types'
+import { VideoPreviewPlayer } from '@/components/content/video-preview-player'
+import type { VideoRenderState } from '@/types/content-draft'
+import { createEmptyVideoRenderState } from '@/types/content-draft'
 
 type ContentType = 'post' | 'video' | 'article' | 'thread' | 'story' | 'reel'
 type ToneType = 'professional' | 'friendly' | 'bold' | 'educational' | 'witty' | 'inspirational' | 'urgent' | 'storytelling'
@@ -308,6 +311,13 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
 
   // Preview State
   const [activePreviewChannel, setActivePreviewChannel] = useState<string | null>(null)
+
+  // Video Render & Media Upload State
+  const [videoRenderState, setVideoRenderState] = useState<VideoRenderState>(createEmptyVideoRenderState())
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [textOnlyPublish, setTextOnlyPublish] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
   const [previewTheme, setPreviewTheme] = useState<'light' | 'dark'>('light')
 
@@ -472,12 +482,20 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   // Backward compatibility - primary tone for functions that expect single tone
   const aiTone = aiTones[0]
 
+  const isVideoContent = draft.contentType === 'video' || draft.contentType === 'reel'
+
   const canProceed = () => {
     switch (step) {
       case 1: return draft.channels.length > 0
       case 2: return draft.title.trim() !== '' && draft.body.trim() !== ''
       case 3: return true
-      case 4: return draft.publishImmediately || draft.scheduledFor !== null
+      case 4: {
+        const hasSchedule = draft.publishImmediately || draft.scheduledFor !== null
+        if (!hasSchedule) return false
+        // Video/reel must have render READY unless user opts for text-only
+        if (isVideoContent && !textOnlyPublish && videoRenderState.status !== 'READY') return false
+        return true
+      }
       default: return false
     }
   }
@@ -1912,13 +1930,80 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                     )}
 
                     {/* Media Upload */}
-                    <div className="p-5 border-2 border-dashed border-slate-200 rounded-2xl text-center hover:border-apex-primary/50 hover:bg-apex-primary/5 transition-all cursor-pointer group">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/*,audio/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        setIsUploading(true)
+                        setUploadError(null)
+                        try {
+                          const formData = new FormData()
+                          formData.append('file', file)
+                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                          const data = await res.json()
+                          if (!data.success) throw new Error(data.error || 'Upload failed')
+                          setDraft(prev => ({ ...prev, media: [...prev.media, data.url] }))
+                        } catch (err) {
+                          setUploadError(err instanceof Error ? err.message : 'Upload failed')
+                        } finally {
+                          setIsUploading(false)
+                          e.target.value = ''
+                        }
+                      }}
+                    />
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className={cn(
+                        'p-5 border-2 border-dashed rounded-2xl text-center transition-all cursor-pointer group',
+                        isUploading
+                          ? 'border-apex-primary/50 bg-apex-primary/5'
+                          : 'border-slate-200 hover:border-apex-primary/50 hover:bg-apex-primary/5'
+                      )}
+                    >
                       <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-apex-primary/10 flex items-center justify-center mx-auto mb-3 transition-colors">
-                        <ImageIcon className="w-6 h-6 text-slate-400 group-hover:text-apex-primary transition-colors" />
+                        {isUploading ? (
+                          <Loader2 className="w-6 h-6 text-apex-primary animate-spin" />
+                        ) : (
+                          <ImageIcon className="w-6 h-6 text-slate-400 group-hover:text-apex-primary transition-colors" />
+                        )}
                       </div>
-                      <p className="text-sm text-slate-600 font-medium">Add Media</p>
+                      <p className="text-sm text-slate-600 font-medium">
+                        {isUploading ? 'Uploading...' : 'Add Media'}
+                      </p>
                       <p className="text-xs text-slate-400 mt-1">PNG, JPG, GIF, MP4</p>
                     </div>
+
+                    {/* Upload Error */}
+                    {uploadError && (
+                      <div className="p-3 bg-red-50 rounded-xl border border-red-200 flex items-center space-x-2">
+                        <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                        <p className="text-sm text-red-600">{uploadError}</p>
+                        <button onClick={() => setUploadError(null)} className="ml-auto text-red-400 hover:text-red-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Media Thumbnails */}
+                    {draft.media.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {draft.media.map((url, idx) => (
+                          <div key={idx} className="relative group/thumb w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
+                            <img src={url} alt={`Media ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              onClick={() => setDraft(prev => ({ ...prev, media: prev.media.filter((_, i) => i !== idx) }))}
+                              className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Video Script Preview (for video content) */}
                     {(draft.contentType === 'video' || draft.contentType === 'reel') && draft.videoScript && (
@@ -2166,6 +2251,55 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                     )
                   })}
                 </div>
+
+                {/* Video Preview (Step 3 — video/reel only) */}
+                {(draft.contentType === 'video' || draft.contentType === 'reel') && (
+                  <div className="max-w-2xl mx-auto mt-8">
+                    <VideoPreviewPlayer
+                      status={videoRenderState.status}
+                      previewUrl={videoRenderState.previewUrl}
+                      errorMessage={videoRenderState.errorMessage}
+                      progress={videoRenderState.progress}
+                      onRequestRender={async () => {
+                        setVideoRenderState({ status: 'QUEUED' })
+                        try {
+                          setVideoRenderState({ status: 'RENDERING', progress: 10 })
+                          const res = await fetch('/api/video/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              type: 'text-to-video',
+                              script: draft.videoScript || draft.body,
+                              title: draft.title,
+                              duration: 30,
+                              aspectRatio: draft.contentType === 'reel' ? '9:16' : '16:9',
+                              includeCaptions: true,
+                            }),
+                          })
+                          const data = await res.json()
+                          if (!data.success) {
+                            setVideoRenderState({
+                              status: 'FAILED',
+                              errorMessage: data.error || data.message || 'Render failed',
+                            })
+                            return
+                          }
+                          setVideoRenderState({
+                            status: 'READY',
+                            previewUrl: data.videoUrl,
+                            thumbnailUrl: data.thumbnailUrls?.[0],
+                          })
+                        } catch (err) {
+                          setVideoRenderState({
+                            status: 'FAILED',
+                            errorMessage: err instanceof Error ? err.message : 'Network error',
+                          })
+                        }
+                      }}
+                      onRetry={() => setVideoRenderState(createEmptyVideoRenderState())}
+                    />
+                  </div>
+                )}
 
                 {/* SEO Score Summary (Step 3) */}
                 {seoAnalysis && (
@@ -2418,6 +2552,41 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             hour12: true
                           })}
                         </p>
+                      </div>
+                    )}
+
+                    {/* Video Publish Gate */}
+                    {isVideoContent && (
+                      <div className="space-y-3">
+                        {videoRenderState.status === 'READY' && !textOnlyPublish && (
+                          <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center space-x-3">
+                            <Check className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                            <span className="text-sm font-medium text-emerald-700">Video preview ready — good to publish</span>
+                          </div>
+                        )}
+                        {videoRenderState.status !== 'READY' && !textOnlyPublish && (
+                          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                              <span className="text-sm font-medium text-amber-700">Video preview required before publishing</span>
+                            </div>
+                            <button
+                              onClick={() => setStep(3)}
+                              className="text-sm font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2"
+                            >
+                              Go to Preview
+                            </button>
+                          </div>
+                        )}
+                        <label className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={textOnlyPublish}
+                            onChange={(e) => setTextOnlyPublish(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-300 text-apex-primary focus:ring-apex-primary"
+                          />
+                          <span className="text-sm text-slate-600">Publish as text-only (skip video preview requirement)</span>
+                        </label>
                       </div>
                     )}
                   </div>

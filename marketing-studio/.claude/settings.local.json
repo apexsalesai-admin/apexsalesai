@@ -23,7 +23,10 @@
       "Bash(echo:*)",
       "Bash(kill:*)",
       "Bash(npm run dev:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -26,6 +26,11 @@ import {
   Play,
   Volume2,
   Image as ImageIcon,
+  Star,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SeoToolkit } from '@/components/content/seo-toolkit'
@@ -48,7 +53,6 @@ interface ContentDetail {
   publishedAt: string | null
   createdAt: string
   updatedAt: string
-  // Video-specific fields
   videoScript?: string
   videoHook?: string
   thumbnailIdeas?: string[]
@@ -61,6 +65,40 @@ interface ContentDetail {
     suggestions: string[]
     metaDescription: string
   }
+}
+
+interface ContentVersion {
+  id: string
+  contentId: string
+  versionNumber: number
+  label: string | null
+  isFinal: boolean
+  script: string
+  visualPrompt: string | null
+  config: Record<string, unknown>
+  videoJobId: string | null
+  videoJob: {
+    id: string
+    status: string
+    progress: number
+    progressMessage: string | null
+    errorMessage: string | null
+    outputAssets: {
+      id: string
+      publicUrl: string | null
+      thumbnailUrl: string | null
+      status: string
+    }[]
+  } | null
+  createdAt: string
+}
+
+interface PublishEligibility {
+  eligible: boolean
+  reason?: string
+  finalVersionId?: string
+  videoUrl?: string
+  progress?: number
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
@@ -81,6 +119,13 @@ const CHANNEL_COLORS: Record<string, string> = {
   INSTAGRAM: 'bg-pink-100 text-pink-700',
 }
 
+const JOB_STATUS_PILLS: Record<string, { label: string; color: string; bgColor: string }> = {
+  QUEUED: { label: 'Queued', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+  PROCESSING: { label: 'Rendering', color: 'text-amber-700', bgColor: 'bg-amber-100' },
+  COMPLETED: { label: 'Ready', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
+  FAILED: { label: 'Failed', color: 'text-red-700', bgColor: 'bg-red-100' },
+}
+
 export default function ContentDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -91,8 +136,40 @@ export default function ContentDetailPage() {
   const [selectedVariation, setSelectedVariation] = useState<string | null>(null)
   const [seoKeywords, setSeoKeywords] = useState<string[]>([])
   const [isPublishing, setIsPublishing] = useState(false)
-  const [publishResults, setPublishResults] = useState<any[]>([])
+  const [publishResults, setPublishResults] = useState<unknown[]>([])
 
+  // Quick Action state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [editHashtags, setEditHashtags] = useState('')
+  const [editCallToAction, setEditCallToAction] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [isDuplicating, setIsDuplicating] = useState(false)
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+  const [isRescheduling, setIsRescheduling] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Video version state
+  const [versions, setVersions] = useState<ContentVersion[]>([])
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false)
+  const [isCreatingVersion, setIsCreatingVersion] = useState(false)
+  const [renderingVersionId, setRenderingVersionId] = useState<string | null>(null)
+  const [showNewVersionForm, setShowNewVersionForm] = useState(false)
+  const [newVersionScript, setNewVersionScript] = useState('')
+  const [newVersionPrompt, setNewVersionPrompt] = useState('')
+  const [newVersionAspect, setNewVersionAspect] = useState<'16:9' | '9:16' | '1:1'>('16:9')
+  const [newVersionDuration, setNewVersionDuration] = useState<4 | 6 | 8>(8)
+
+  // Publish eligibility for video content
+  const [publishEligibility, setPublishEligibility] = useState<PublishEligibility | null>(null)
+
+  // Worker health (dev only)
+  const [workerOffline, setWorkerOffline] = useState(false)
+
+  // Fetch content
   useEffect(() => {
     async function fetchContent() {
       try {
@@ -100,7 +177,6 @@ export default function ContentDetailPage() {
         const data = await response.json()
         if (data.success) {
           setContent(data.data)
-          // Extract keywords from hashtags
           if (data.data.hashtags) {
             setSeoKeywords(data.data.hashtags.map((h: string) => h.replace('#', '')))
           }
@@ -115,6 +191,131 @@ export default function ContentDetailPage() {
     }
     fetchContent()
   }, [params.id])
+
+  // Fetch versions when content loads and it's video type
+  const fetchVersions = useCallback(async () => {
+    if (!params.id) return
+    setIsLoadingVersions(true)
+    try {
+      const response = await fetch(`/api/studio/versions?contentId=${params.id}`)
+      const data = await response.json()
+      if (data.success) {
+        setVersions(data.data)
+      }
+    } catch (e) {
+      console.error('Failed to fetch versions:', e)
+    } finally {
+      setIsLoadingVersions(false)
+    }
+  }, [params.id])
+
+  const isVideo = content?.contentType === 'VIDEO' || content?.contentType === 'REEL'
+
+  useEffect(() => {
+    if (content && isVideo) {
+      fetchVersions()
+    }
+  }, [content, isVideo, fetchVersions])
+
+  // Check worker health (dev only) when video tab is active
+  useEffect(() => {
+    if (!isVideo || activeTab !== 'video') return
+    let cancelled = false
+    async function checkWorker() {
+      try {
+        const response = await fetch('/api/health/worker')
+        const data = await response.json()
+        if (!cancelled) setWorkerOffline(!data.ok)
+      } catch {
+        if (!cancelled) setWorkerOffline(true)
+      }
+    }
+    checkWorker()
+    return () => { cancelled = true }
+  }, [isVideo, activeTab])
+
+  // Fetch publish eligibility for video content
+  useEffect(() => {
+    if (!content || !isVideo) return
+    async function checkEligibility() {
+      try {
+        const response = await fetch(`/api/studio/content/${params.id}/publish-eligibility`)
+        const data = await response.json()
+        if (data.success) {
+          setPublishEligibility(data.data)
+        }
+      } catch (e) {
+        console.error('Failed to check eligibility:', e)
+      }
+    }
+    checkEligibility()
+  }, [content, isVideo, params.id, versions])
+
+  // Poll for active render jobs — in-place state updates, parallel requests
+  useEffect(() => {
+    const activeJobs = versions.filter(
+      v => v.videoJob && (v.videoJob.status === 'QUEUED' || v.videoJob.status === 'PROCESSING')
+    )
+    if (activeJobs.length === 0) return
+
+    let pollInterval = 5000 // start at 5s
+    let pollCount = 0
+    let cancelled = false
+
+    const poll = async () => {
+      if (cancelled) return
+      pollCount++
+
+      // Poll all active jobs in parallel
+      const results = await Promise.allSettled(
+        activeJobs.map(async (version) => {
+          if (!version.videoJob) return null
+          const response = await fetch(`/api/studio/render/${version.videoJob.id}/status`)
+          const data = await response.json()
+          if (!data.success) return null
+          return { versionId: version.id, status: data.data }
+        })
+      )
+
+      let needsFullRefetch = false
+
+      setVersions(prev => prev.map(v => {
+        const result = results.find((r, i) => r.status === 'fulfilled' && r.value?.versionId === v.id)
+        if (!result || result.status !== 'fulfilled' || !result.value) return v
+
+        const pollData = result.value.status
+        const isTerminal = pollData.status === 'COMPLETED' || pollData.status === 'FAILED'
+        if (isTerminal) needsFullRefetch = true
+
+        return {
+          ...v,
+          videoJob: v.videoJob ? {
+            ...v.videoJob,
+            status: pollData.status,
+            progress: pollData.progress ?? v.videoJob.progress,
+            progressMessage: pollData.progressMessage ?? v.videoJob.progressMessage,
+            errorMessage: pollData.errorMessage ?? v.videoJob.errorMessage,
+          } : v.videoJob,
+        }
+      }))
+
+      // Full refetch on terminal status to get output assets
+      if (needsFullRefetch) {
+        setTimeout(() => fetchVersions(), 500)
+        return // stop polling, the refetch will re-trigger the effect
+      }
+
+      // Client-side backoff: after 12 polls (~1 min), slow to 10s
+      if (pollCount > 12) pollInterval = 10000
+
+      if (!cancelled) {
+        setTimeout(poll, pollInterval)
+      }
+    }
+
+    const timer = setTimeout(poll, pollInterval)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [versions, fetchVersions])
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -181,6 +382,185 @@ export default function ContentDetailPage() {
     }
   }
 
+  const handleCreateVersion = async () => {
+    if (!newVersionScript.trim()) return
+    setIsCreatingVersion(true)
+    try {
+      const response = await fetch('/api/studio/versions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contentId: params.id,
+          script: newVersionScript,
+          visualPrompt: newVersionPrompt || undefined,
+          config: {
+            aspectRatio: newVersionAspect,
+            duration: newVersionDuration,
+          },
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setShowNewVersionForm(false)
+        setNewVersionScript('')
+        setNewVersionPrompt('')
+        fetchVersions()
+      }
+    } catch (e) {
+      console.error('Failed to create version:', e)
+    } finally {
+      setIsCreatingVersion(false)
+    }
+  }
+
+  const handleRender = async (versionId: string) => {
+    setRenderingVersionId(versionId)
+    try {
+      const response = await fetch(`/api/studio/versions/${versionId}/render`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (data.success) {
+        fetchVersions()
+      }
+    } catch (e) {
+      console.error('Failed to start render:', e)
+    } finally {
+      setRenderingVersionId(null)
+    }
+  }
+
+  const handleSetFinal = async (versionId: string) => {
+    try {
+      const response = await fetch(`/api/studio/versions/${versionId}/final`, {
+        method: 'PATCH',
+      })
+      const data = await response.json()
+      if (data.success) {
+        fetchVersions()
+      }
+    } catch (e) {
+      console.error('Failed to set final:', e)
+    }
+  }
+
+  // --- Quick Action Handlers ---
+
+  const handleOpenEdit = () => {
+    if (!content) return
+    setEditTitle(content.title)
+    setEditBody(content.body)
+    setEditHashtags(content.hashtags?.join(', ') || '')
+    setEditCallToAction(content.callToAction || '')
+    setShowEditModal(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!content) return
+    setIsSavingEdit(true)
+    try {
+      const hashtags = editHashtags
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean)
+        .map(t => t.startsWith('#') ? t : `#${t}`)
+
+      const response = await fetch(`/api/content/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          body: editBody,
+          hashtags,
+          callToAction: editCallToAction || null,
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setContent(data.data)
+        setShowEditModal(false)
+      }
+    } catch (e) {
+      console.error('Failed to save edits:', e)
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
+  const handleDuplicate = async () => {
+    setIsDuplicating(true)
+    try {
+      const response = await fetch(`/api/content/${params.id}/duplicate`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (data.success) {
+        router.push(`/studio/content/${data.data.id}`)
+      }
+    } catch (e) {
+      console.error('Failed to duplicate:', e)
+    } finally {
+      setIsDuplicating(false)
+    }
+  }
+
+  const handleReschedule = async () => {
+    if (!rescheduleDate) return
+    setIsRescheduling(true)
+    try {
+      const response = await fetch(`/api/content/${params.id}/reschedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledFor: new Date(rescheduleDate).toISOString() }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setContent(data.data)
+        setShowRescheduleModal(false)
+        setRescheduleDate('')
+      }
+    } catch (e) {
+      console.error('Failed to reschedule:', e)
+    } finally {
+      setIsRescheduling(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/content/${params.id}`, {
+        method: 'DELETE',
+      })
+      const data = await response.json()
+      if (data.success) {
+        router.push('/studio/content')
+      }
+    } catch (e) {
+      console.error('Failed to delete:', e)
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
+  const handleRetry = async (versionId: string) => {
+    setRenderingVersionId(versionId)
+    try {
+      const response = await fetch(`/api/studio/versions/${versionId}/retry`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (data.success) {
+        fetchVersions()
+      }
+    } catch (e) {
+      console.error('Failed to retry render:', e)
+    } finally {
+      setRenderingVersionId(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -201,7 +581,15 @@ export default function ContentDetailPage() {
   }
 
   const statusConfig = STATUS_CONFIG[content.status] || STATUS_CONFIG.DRAFT
-  const isVideo = content.contentType === 'VIDEO' || content.contentType === 'REEL'
+
+  // Get final version's video URL for the player
+  const finalVersion = versions.find(v => v.isFinal)
+  const finalVideoUrl = finalVersion?.videoJob?.status === 'COMPLETED'
+    ? finalVersion.videoJob.outputAssets.find(a => a.status === 'READY')?.publicUrl
+    : null
+
+  // Determine if publish button should be disabled for video content
+  const isPublishDisabledForVideo = isVideo && publishEligibility && !publishEligibility.eligible
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -267,23 +655,33 @@ export default function ContentDetailPage() {
             </>
           )}
           {(content.status === 'APPROVED' || content.status === 'SCHEDULED') && (
-            <button
-              onClick={handlePublish}
-              disabled={isPublishing}
-              className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg rounded-lg flex items-center space-x-2 disabled:opacity-50 transition-all"
-            >
-              {isPublishing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Publishing...</span>
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Publish Now</span>
-                </>
+            <div className="relative group">
+              <button
+                onClick={handlePublish}
+                disabled={isPublishing || !!isPublishDisabledForVideo}
+                className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg rounded-lg flex items-center space-x-2 disabled:opacity-50 transition-all"
+              >
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Publishing...</span>
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Publish Now</span>
+                  </>
+                )}
+              </button>
+              {isPublishDisabledForVideo && publishEligibility?.reason && (
+                <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-slate-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{publishEligibility.reason}</span>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           )}
           {content.status === 'PUBLISHED' && (
             <span className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg flex items-center space-x-2">
@@ -291,10 +689,18 @@ export default function ContentDetailPage() {
               <span>Published</span>
             </span>
           )}
-          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+          <button
+            onClick={handleOpenEdit}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Edit Content"
+          >
             <Edit className="w-5 h-5 text-slate-600" />
           </button>
-          <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+          <button
+            onClick={() => handleCopy(`${content.title}\n\n${content.body}`)}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Copy to Clipboard"
+          >
             <Share2 className="w-5 h-5 text-slate-600" />
           </button>
         </div>
@@ -445,76 +851,258 @@ export default function ContentDetailPage() {
 
           {activeTab === 'video' && isVideo && (
             <div className="space-y-6">
-              {/* Video Script */}
-              {content.videoScript && (
-                <div className="p-6 bg-white rounded-xl border border-slate-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-slate-900 flex items-center space-x-2">
-                      <FileText className="w-5 h-5 text-purple-600" />
-                      <span>Video Script</span>
-                    </h3>
+              {/* Worker offline banner (dev only) */}
+              {workerOffline && (
+                <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start space-x-2 text-sm">
+                  <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-amber-800 font-medium">Video rendering worker offline</p>
+                    <p className="text-amber-600 mt-0.5">Run <code className="bg-amber-100 px-1 rounded text-xs">npm run dev:inngest</code> in a separate terminal to enable background rendering.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Video Player */}
+              <div className="p-6 bg-white rounded-xl border border-slate-200">
+                <h3 className="font-bold text-slate-900 flex items-center space-x-2 mb-4">
+                  <Play className="w-5 h-5 text-purple-600" />
+                  <span>Video Preview</span>
+                </h3>
+                {finalVideoUrl ? (
+                  <video
+                    controls
+                    className="w-full rounded-lg bg-black"
+                    src={finalVideoUrl}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="aspect-video bg-slate-100 rounded-lg flex items-center justify-center">
+                    <div className="text-center text-slate-400">
+                      <Video className="w-12 h-12 mx-auto mb-2" />
+                      <p className="text-sm">No rendered video yet</p>
+                      <p className="text-xs mt-1">Create a version and render it to see a preview</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Version List */}
+              <div className="p-6 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+                    <FileText className="w-5 h-5 text-purple-600" />
+                    <span>Versions ({versions.length})</span>
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowNewVersionForm(!showNewVersionForm)
+                      if (!newVersionScript && content.body) {
+                        setNewVersionScript(content.body)
+                      }
+                    }}
+                    className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center space-x-1"
+                  >
+                    {showNewVersionForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    <span>{showNewVersionForm ? 'Close' : 'New Version'}</span>
+                  </button>
+                </div>
+
+                {/* New Version Form */}
+                {showNewVersionForm && (
+                  <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Script</label>
+                      <textarea
+                        value={newVersionScript}
+                        onChange={e => setNewVersionScript(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter your video script..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Visual Prompt (optional)</label>
+                      <textarea
+                        value={newVersionPrompt}
+                        onChange={e => setNewVersionPrompt(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[60px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Describe the visual style for the video generation..."
+                      />
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Aspect Ratio</label>
+                        <select
+                          value={newVersionAspect}
+                          onChange={e => setNewVersionAspect(e.target.value as '16:9' | '9:16' | '1:1')}
+                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="16:9">16:9 (Landscape)</option>
+                          <option value="9:16">9:16 (Portrait)</option>
+                          <option value="1:1">1:1 (Square)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
+                        <select
+                          value={newVersionDuration}
+                          onChange={e => setNewVersionDuration(Number(e.target.value) as 4 | 6 | 8)}
+                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value={4}>4 seconds</option>
+                          <option value={6}>6 seconds</option>
+                          <option value={8}>8 seconds</option>
+                        </select>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => handleCopy(content.videoScript || '')}
-                      className="text-sm text-slate-500 hover:text-slate-700 flex items-center space-x-1"
+                      onClick={handleCreateVersion}
+                      disabled={isCreatingVersion || !newVersionScript.trim()}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2 text-sm"
                     >
-                      <Copy className="w-4 h-4" />
-                      <span>Copy</span>
+                      {isCreatingVersion ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" />
+                          <span>Create Version</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                  <div className="prose prose-slate max-w-none">
-                    <p className="whitespace-pre-wrap">{content.videoScript}</p>
+                )}
+
+                {/* Versions */}
+                {isLoadingVersions ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
                   </div>
-                </div>
-              )}
-
-              {/* Video Hook */}
-              {content.videoHook && (
-                <div className="p-4 bg-red-50 rounded-xl border border-red-200">
-                  <p className="text-sm font-medium text-red-700 mb-1 flex items-center space-x-2">
-                    <Play className="w-4 h-4" />
-                    <span>Video Hook (First 3 Seconds)</span>
-                  </p>
-                  <p className="text-red-900">{content.videoHook}</p>
-                </div>
-              )}
-
-              {/* Thumbnail Ideas */}
-              {content.thumbnailIdeas && content.thumbnailIdeas.length > 0 && (
-                <div className="p-6 bg-white rounded-xl border border-slate-200">
-                  <h3 className="font-bold text-slate-900 flex items-center space-x-2 mb-4">
-                    <ImageIcon className="w-5 h-5 text-purple-600" />
-                    <span>Thumbnail Ideas</span>
-                  </h3>
+                ) : versions.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <Video className="w-10 h-10 mx-auto mb-2" />
+                    <p className="text-sm">No versions yet. Create one to get started.</p>
+                  </div>
+                ) : (
                   <div className="space-y-3">
-                    {content.thumbnailIdeas.map((idea, i) => (
-                      <div key={i} className="p-3 bg-slate-50 rounded-lg flex items-start space-x-3">
-                        <span className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-bold">
-                          {i + 1}
-                        </span>
-                        <p className="text-slate-700">{idea}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    {versions.map(version => {
+                      const jobStatus = version.videoJob?.status
+                      const statusPill = jobStatus
+                        ? JOB_STATUS_PILLS[jobStatus] || { label: jobStatus, color: 'text-slate-700', bgColor: 'bg-slate-100' }
+                        : { label: 'Not Rendered', color: 'text-slate-500', bgColor: 'bg-slate-100' }
+                      const isActive = jobStatus === 'QUEUED' || jobStatus === 'PROCESSING'
+                      const readyAsset = version.videoJob?.outputAssets.find(a => a.status === 'READY')
 
-              {/* Timestamps */}
-              {content.timestamps && content.timestamps.length > 0 && (
-                <div className="p-6 bg-white rounded-xl border border-slate-200">
-                  <h3 className="font-bold text-slate-900 flex items-center space-x-2 mb-4">
-                    <Clock className="w-5 h-5 text-purple-600" />
-                    <span>Video Chapters</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {content.timestamps.map((ts, i) => (
-                      <div key={i} className="flex items-center space-x-4 p-2 hover:bg-slate-50 rounded-lg">
-                        <span className="text-sm font-mono text-purple-600 w-16">{ts.time}</span>
-                        <span className="text-slate-700">{ts.label}</span>
-                      </div>
-                    ))}
+                      return (
+                        <div
+                          key={version.id}
+                          className={cn(
+                            'p-4 rounded-lg border-2 transition-all',
+                            version.isFinal
+                              ? 'border-amber-400 bg-amber-50/50'
+                              : 'border-slate-200 bg-white'
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-2">
+                              {version.isFinal && (
+                                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                              )}
+                              <span className="font-medium text-slate-900">
+                                {version.label || `Version ${version.versionNumber}`}
+                              </span>
+                              <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', statusPill.bgColor, statusPill.color)}>
+                                {statusPill.label}
+                                {jobStatus === 'PROCESSING' && version.videoJob?.progress != null && (
+                                  <span> {version.videoJob.progress}%</span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              {/* Render / Retry button */}
+                              {jobStatus === 'FAILED' ? (
+                                <button
+                                  onClick={() => handleRetry(version.id)}
+                                  disabled={renderingVersionId === version.id}
+                                  className="px-3 py-1 text-xs border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50 flex items-center space-x-1"
+                                >
+                                  {renderingVersionId === version.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Play className="w-3 h-3" />
+                                  )}
+                                  <span>Retry</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleRender(version.id)}
+                                  disabled={isActive || renderingVersionId === version.id}
+                                  className="px-3 py-1 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center space-x-1"
+                                >
+                                  {renderingVersionId === version.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Play className="w-3 h-3" />
+                                  )}
+                                  <span>Render</span>
+                                </button>
+                              )}
+                              {/* Set as Final button */}
+                              <button
+                                onClick={() => handleSetFinal(version.id)}
+                                className={cn(
+                                  'px-3 py-1 text-xs rounded-lg flex items-center space-x-1',
+                                  version.isFinal
+                                    ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                                    : 'border border-slate-200 hover:bg-slate-50 text-slate-600'
+                                )}
+                              >
+                                <Star className={cn('w-3 h-3', version.isFinal && 'fill-amber-500')} />
+                                <span>{version.isFinal ? 'Final' : 'Set Final'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Script excerpt */}
+                          <p className="text-sm text-slate-500 line-clamp-2 mb-1">
+                            {version.script}
+                          </p>
+
+                          {/* Progress bar for active renders */}
+                          {isActive && version.videoJob && (
+                            <div className="mt-2">
+                              <div className="w-full bg-slate-200 rounded-full h-1.5">
+                                <div
+                                  className="bg-purple-600 h-1.5 rounded-full transition-all"
+                                  style={{ width: `${version.videoJob.progress || 0}%` }}
+                                />
+                              </div>
+                              {version.videoJob.progressMessage && (
+                                <p className="text-xs text-slate-400 mt-1">{version.videoJob.progressMessage}</p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Error message */}
+                          {jobStatus === 'FAILED' && version.videoJob?.errorMessage && (
+                            <p className="text-xs text-red-500 mt-1 flex items-center space-x-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>{version.videoJob.errorMessage}</span>
+                            </p>
+                          )}
+
+                          {/* Timestamp */}
+                          <p className="text-xs text-slate-400 mt-1">
+                            Created {new Date(version.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -585,19 +1173,32 @@ export default function ContentDetailPage() {
           <div className="p-6 bg-white rounded-xl border border-slate-200">
             <h3 className="font-bold text-slate-900 mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              <button className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3">
+              <button
+                onClick={handleOpenEdit}
+                className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3"
+              >
                 <Edit className="w-5 h-5 text-slate-600" />
                 <span>Edit Content</span>
               </button>
-              <button className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3">
-                <Copy className="w-5 h-5 text-slate-600" />
-                <span>Duplicate</span>
+              <button
+                onClick={handleDuplicate}
+                disabled={isDuplicating}
+                className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3 disabled:opacity-50"
+              >
+                {isDuplicating ? <Loader2 className="w-5 h-5 text-slate-600 animate-spin" /> : <Copy className="w-5 h-5 text-slate-600" />}
+                <span>{isDuplicating ? 'Duplicating...' : 'Duplicate'}</span>
               </button>
-              <button className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3">
+              <button
+                onClick={() => setShowRescheduleModal(true)}
+                className="w-full p-3 text-left hover:bg-slate-50 rounded-lg transition-colors flex items-center space-x-3"
+              >
                 <Calendar className="w-5 h-5 text-slate-600" />
                 <span>Reschedule</span>
               </button>
-              <button className="w-full p-3 text-left hover:bg-red-50 rounded-lg transition-colors flex items-center space-x-3 text-red-600">
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full p-3 text-left hover:bg-red-50 rounded-lg transition-colors flex items-center space-x-3 text-red-600"
+              >
                 <Trash2 className="w-5 h-5" />
                 <span>Delete</span>
               </button>
@@ -605,12 +1206,156 @@ export default function ContentDetailPage() {
           </div>
         </div>
       </div>
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">Edit Content</h2>
+              <button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Body</label>
+                <textarea
+                  value={editBody}
+                  onChange={e => setEditBody(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[160px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hashtags (comma-separated)</label>
+                <input
+                  type="text"
+                  value={editHashtags}
+                  onChange={e => setEditHashtags(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="#marketing, #sales, #AI"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Call to Action</label>
+                <input
+                  type="text"
+                  value={editCallToAction}
+                  onChange={e => setEditCallToAction(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Learn more at..."
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-slate-200">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit || !editTitle.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                <span>{isSavingEdit ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">Reschedule Content</h2>
+              <button onClick={() => setShowRescheduleModal(false)} className="p-1 hover:bg-slate-100 rounded">
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">New Date & Time</label>
+              <input
+                type="datetime-local"
+                value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-slate-200">
+              <button
+                onClick={() => { setShowRescheduleModal(false); setRescheduleDate('') }}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReschedule}
+                disabled={isRescheduling || !rescheduleDate}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isRescheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                <span>{isRescheduling ? 'Saving...' : 'Reschedule'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Delete Content</h2>
+              </div>
+              <p className="text-sm text-slate-600 mb-2">
+                Are you sure you want to delete <strong>{content.title}</strong>?
+              </p>
+              <p className="text-sm text-slate-500">This action cannot be undone.</p>
+            </div>
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-slate-200">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Missing import
-function Layers(props: any) {
+// Inline SVG for Layers icon (not available in lucide-react at this version)
+function Layers(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

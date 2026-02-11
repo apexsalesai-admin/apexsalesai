@@ -21,6 +21,30 @@ import {
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
 
+/** Returns true when the error looks like a Prisma / DB connectivity failure */
+function isDbConnectionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const msg = err.message.toLowerCase()
+  return (
+    msg.includes('can\'t reach database') ||
+    msg.includes('connection refused') ||
+    msg.includes('prisma') ||
+    msg.includes('database') ||
+    msg.includes('econnrefused') ||
+    msg.includes('p1001') || // Prisma: Can't reach database server
+    msg.includes('p1002') || // Prisma: Database server timeout
+    msg.includes('p1003')    // Prisma: Database does not exist
+  )
+}
+
+/** Synthetic workspace returned when DB is unreachable in dev mode */
+const DEV_FALLBACK_WORKSPACE = {
+  id: 'dev-workspace-offline',
+  name: 'Dev Workspace (DB offline)',
+  slug: 'dev-workspace-offline',
+  createdAt: new Date(),
+}
+
 const CreateWorkspaceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
 })
@@ -73,10 +97,22 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('[API:Workspace:GET] Error:', error)
+
+    // Dev fallback: return synthetic workspace so the app doesn't crash-loop
+    if (process.env.NODE_ENV === 'development' && isDbConnectionError(error)) {
+      console.warn('[API:Workspace:GET] DB unreachable — returning dev fallback workspace')
+      return NextResponse.json(
+        { success: true, data: DEV_FALLBACK_WORKSPACE, _devFallback: true },
+        { headers: NO_CACHE_HEADERS }
+      )
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: isDbConnectionError(error)
+          ? 'Database unavailable. Check DATABASE_URL and that your database server is running.'
+          : error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500, headers: NO_CACHE_HEADERS }
     )
@@ -138,17 +174,6 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // Legacy DB backfill for existing ownerId column (non-fatal)
-      try {
-        await tx.$executeRaw`
-          UPDATE studio_workspaces
-          SET "ownerId" = ${session.user.id}
-          WHERE id = ${created.id} AND ("ownerId" IS NULL OR "ownerId" = '')
-        `
-      } catch {
-        // ignore — some environments may not have this column
-      }
-
       return created
     })
 
@@ -171,7 +196,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: isDbConnectionError(error)
+          ? 'Database unavailable. Check DATABASE_URL and that your database server is running.'
+          : error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500, headers: NO_CACHE_HEADERS }
     )
@@ -242,7 +269,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
+        error: isDbConnectionError(error)
+          ? 'Database unavailable. Check DATABASE_URL and that your database server is running.'
+          : error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500, headers: NO_CACHE_HEADERS }
     )

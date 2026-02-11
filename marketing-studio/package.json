@@ -14,6 +14,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "dev:inngest": "npx inngest-cli@latest dev -u http://localhost:3003/api/inngest",
+    "dev:all": "concurrently --names app,inngest --prefix-colors blue,magenta \"npm run dev\" \"npm run dev:inngest\"",
     "inngest": "inngest-cli dev -u http://localhost:3003/api/inngest"
   },
   "dependencies": {
@@ -51,6 +53,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.18",
     "inngest-cli": "^1.16.2",

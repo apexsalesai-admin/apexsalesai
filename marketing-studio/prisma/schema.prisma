@@ -338,10 +338,39 @@ model StudioVideoJob {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  // Content version relation
+  contentVersions StudioContentVersion[]
+
   @@index([workspaceId])
   @@index([status])
   @@index([contentId])
   @@map("studio_video_jobs")
+}
+
+model StudioContentVersion {
+  id              String              @id @default(cuid())
+  contentId       String              // References ScheduledContent.id
+  versionNumber   Int                 // Auto-increment per contentId (1, 2, 3...)
+  label           String?             // User-defined label (e.g. "Draft v1", "Final Cut")
+  isFinal         Boolean             @default(false)
+
+  // Recipe
+  script          String              @db.Text
+  visualPrompt    String?             @db.Text
+  config          Json                @default("{}")  // { aspectRatio, duration, style, voiceId, ... }
+
+  // Render tracking
+  videoJobId      String?
+  videoJob        StudioVideoJob?     @relation(fields: [videoJobId], references: [id])
+
+  createdById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([contentId, versionNumber])
+  @@index([contentId])
+  @@index([isFinal])
+  @@map("studio_content_versions")
 }
 
 // ============================================================================
