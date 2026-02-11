@@ -9,6 +9,8 @@ import { inngest } from '../../client'
 import { prisma } from '@/lib/db'
 import { getProvider } from '@/lib/render'
 import { resolveProviderKey } from '@/lib/integrations/resolveProviderKey'
+import { getVideoProvider } from '@/lib/providers/video/registry'
+import { recordRenderOutcome } from '@/lib/providers/video/budget'
 import type { JobResult, VideoJobOutput } from '../../types'
 
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000 // 10 minutes
@@ -20,7 +22,7 @@ export const generateVideoJob = inngest.createFunction(
   {
     id: 'generate-video',
     name: 'Generate Video Content',
-    retries: 2,
+    retries: 1,
     concurrency: {
       limit: 5,
     },
@@ -50,13 +52,23 @@ export const generateVideoJob = inngest.createFunction(
   { event: 'studio/video.generate' },
   async ({ event, step }): Promise<JobResult<VideoJobOutput>> => {
     const startTime = Date.now()
-    const { jobId, versionId, workspaceId } = event.data as {
+    const {
+      jobId, versionId, workspaceId,
+      provider: providerName = 'runway',
+      durationSeconds: eventDuration = 8,
+      aspectRatio: eventAspect = '16:9',
+      renderLogId,
+    } = event.data as {
       jobId: string
       versionId: string
       workspaceId: string
+      provider?: string
+      durationSeconds?: number
+      aspectRatio?: string
+      renderLogId?: string
     }
 
-    console.log('[INNGEST:RECEIVED]', { jobId, versionId, workspaceId })
+    console.log('[INNGEST:RECEIVED]', { jobId, versionId, workspaceId, provider: providerName })
 
     // Step 1: Load job and update to QUEUED
     const job = await step.run('load-job', async () => {
@@ -73,38 +85,59 @@ export const generateVideoJob = inngest.createFunction(
 
     // Step 2: Submit to render provider
     const submission = await step.run('submit-to-provider', async () => {
-      // Resolve API key from integrations or env
-      const keyResult = await resolveProviderKey(workspaceId, 'runway')
-      if (!keyResult.apiKey) {
-        throw new Error(
-          'Runway API key not configured. Add your key in Settings > Integrations or set RUNWAY_API_KEY in .env.local'
-        )
+      const newProvider = getVideoProvider(providerName)
+
+      // Resolve API key only for providers that need one
+      let apiKey: string | undefined
+      if (!newProvider || newProvider.config.requiresApiKey) {
+        const keyResult = await resolveProviderKey(workspaceId, providerName as Parameters<typeof resolveProviderKey>[1])
+        if (!keyResult.apiKey) {
+          throw new Error(
+            `${providerName} API key not configured. Add your key in Settings > Integrations or set the appropriate env var in .env.local`
+          )
+        }
+        apiKey = keyResult.apiKey
       }
 
-      const provider = getProvider('runway')
       const config = job.config
-      const duration = (config.duration === 4 ? 4 : config.duration === 6 ? 6 : 8) as 4 | 6 | 8
-      const aspectRatio = (config.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9'
       const model = config.model as string | undefined
 
-      console.log('[RUNWAY:SUBMIT]', { jobId, model: model || 'default', ratio: aspectRatio, duration, keySource: keyResult.source })
+      console.log(`[${providerName.toUpperCase()}:SUBMIT]`, { jobId, model: model || 'default', ratio: eventAspect, duration: eventDuration, provider: providerName })
 
-      const result = await provider.submit({
-        prompt: job.inputPrompt,
-        duration,
-        aspectRatio,
-        model,
-        apiKey: keyResult.apiKey,
-      })
+      let result: { providerJobId: string; status: string }
 
-      console.log('[RUNWAY:SUBMIT:OK]', { jobId, providerJobId: result.providerJobId })
+      if (newProvider) {
+        // Use new provider registry
+        const submitResult = await newProvider.submit({
+          prompt: job.inputPrompt,
+          durationSeconds: eventDuration,
+          aspectRatio: eventAspect,
+          model,
+          apiKey,
+        })
+        result = { providerJobId: submitResult.providerJobId, status: submitResult.status }
+      } else {
+        // Backward compat: use legacy provider
+        const legacyProvider = getProvider('runway')
+        const duration = (eventDuration <= 4 ? 4 : eventDuration <= 6 ? 6 : 8) as 4 | 6 | 8
+        const submitResult = await legacyProvider.submit({
+          prompt: job.inputPrompt,
+          duration,
+          aspectRatio: eventAspect as '16:9' | '9:16' | '1:1',
+          model,
+          apiKey,
+        })
+        result = { providerJobId: submitResult.providerJobId, status: submitResult.status }
+      }
+
+      console.log(`[${providerName.toUpperCase()}:SUBMIT:OK]`, { jobId, providerJobId: result.providerJobId })
 
       // Update job with provider info
       await prisma.studioVideoJob.update({
         where: { id: jobId },
         data: {
           status: 'PROCESSING',
-          provider: 'runway',
+          provider: providerName,
           providerJobId: result.providerJobId,
           providerStatus: result.status,
           startedAt: new Date(),
@@ -131,10 +164,17 @@ export const generateVideoJob = inngest.createFunction(
       await step.sleep(`poll-wait-${pollCount}`, sleepDuration)
 
       const pollResult = await step.run(`poll-provider-${pollCount}`, async () => {
-        const provider = getProvider('runway')
-        const result = await provider.poll(submission.providerJobId)
+        const newProvider = getVideoProvider(providerName)
+        let result: { status: string; progress?: number; outputUrl?: string; thumbnailUrl?: string; errorMessage?: string }
 
-        console.log('[RUNWAY:POLL]', { jobId, pollCount, status: result.status, progress: result.progress ?? 0 })
+        if (newProvider) {
+          result = await newProvider.poll(submission.providerJobId)
+        } else {
+          const legacyProvider = getProvider('runway')
+          result = await legacyProvider.poll(submission.providerJobId)
+        }
+
+        console.log(`[${providerName.toUpperCase()}:POLL]`, { jobId, pollCount, status: result.status, progress: result.progress ?? 0 })
 
         // Update progress in DB
         await prisma.studioVideoJob.update({
@@ -174,6 +214,10 @@ export const generateVideoJob = inngest.createFunction(
 
     // Step 4: Finalize
     await step.run('finalize', async () => {
+      // Map provider name → StudioAssetProvider enum value
+      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'INVIDEO' }
+      const assetProvider = assetProviderMap[providerName] || 'RUNWAY'
+
       if (finalStatus === 'completed' && outputUrl) {
         // Look up contentId from the job record
         const jobRecord = await prisma.studioVideoJob.findUnique({
@@ -194,7 +238,7 @@ export const generateVideoJob = inngest.createFunction(
             storageKey: outputUrl,
             publicUrl: outputUrl,
             thumbnailUrl: thumbnailUrl ?? null,
-            provider: 'RUNWAY',
+            provider: assetProvider as never,
             providerJobId: submission.providerJobId,
             videoJobId: jobId,
             contentId: jobRecord?.contentId ?? null,
@@ -211,6 +255,13 @@ export const generateVideoJob = inngest.createFunction(
             completedAt: new Date(),
           },
         })
+
+        // Record outcome in render ledger
+        if (renderLogId) {
+          await recordRenderOutcome(renderLogId, 'completed').catch(e =>
+            console.warn('[BUDGET:OUTCOME:ERR]', { renderLogId, error: e instanceof Error ? e.message : 'unknown' })
+          )
+        }
       } else {
         // Update job to FAILED
         await prisma.studioVideoJob.update({
@@ -221,23 +272,30 @@ export const generateVideoJob = inngest.createFunction(
             completedAt: new Date(),
           },
         })
+
+        // Record failure in render ledger
+        if (renderLogId) {
+          await recordRenderOutcome(renderLogId, 'failed', undefined, errorMessage).catch(e =>
+            console.warn('[BUDGET:OUTCOME:ERR]', { renderLogId, error: e instanceof Error ? e.message : 'unknown' })
+          )
+        }
       }
     })
 
     const durationMs = Date.now() - startTime
     if (finalStatus === 'completed' && outputUrl) {
-      console.log('[RUNWAY:COMPLETE]', { jobId, videoUrl: outputUrl.slice(0, 80) })
+      console.log(`[${providerName.toUpperCase()}:COMPLETE]`, { jobId, videoUrl: outputUrl.slice(0, 80) })
     } else {
-      console.log('[RUNWAY:FAILED]', { jobId, errorMessage: errorMessage?.slice(0, 120) })
+      console.log(`[${providerName.toUpperCase()}:FAILED]`, { jobId, errorMessage: errorMessage?.slice(0, 120) })
     }
-    console.log('[INNGEST:JOB:DONE]', { jobId, finalStatus, durationMs })
+    console.log('[INNGEST:JOB:DONE]', { jobId, finalStatus, provider: providerName, durationMs })
 
     return {
       success: finalStatus === 'completed',
       data: {
         jobId,
         status: finalStatus === 'completed' ? 'completed' : 'failed',
-        provider: 'runway',
+        provider: providerName,
         outputUrl,
       },
       durationMs,

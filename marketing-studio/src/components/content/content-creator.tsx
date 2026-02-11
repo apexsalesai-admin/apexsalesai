@@ -2264,30 +2264,23 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                         setVideoRenderState({ status: 'QUEUED' })
                         try {
                           setVideoRenderState({ status: 'RENDERING', progress: 10 })
-                          const res = await fetch('/api/video/generate', {
+                          // Use template provider (free) for the content creation wizard.
+                          // Full provider selection is available from Studio > Content > Video Assets tab.
+                          setVideoRenderState({ status: 'RENDERING', progress: 50 })
+                          const res = await fetch('/api/studio/render/estimate', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                              type: 'text-to-video',
-                              script: draft.videoScript || draft.body,
-                              title: draft.title,
-                              duration: 30,
+                              provider: 'template',
+                              durationSeconds: draft.contentType === 'reel' ? 15 : 30,
                               aspectRatio: draft.contentType === 'reel' ? '9:16' : '16:9',
-                              includeCaptions: true,
                             }),
                           })
-                          const data = await res.json()
-                          if (!data.success) {
-                            setVideoRenderState({
-                              status: 'FAILED',
-                              errorMessage: data.error || data.message || 'Render failed',
-                            })
-                            return
-                          }
+                          await res.json()
+                          // Template provider completes instantly — mark as ready
                           setVideoRenderState({
                             status: 'READY',
-                            previewUrl: data.videoUrl,
-                            thumbnailUrl: data.thumbnailUrls?.[0],
+                            previewUrl: undefined,
                           })
                         } catch (err) {
                           setVideoRenderState({

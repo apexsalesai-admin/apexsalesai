@@ -304,7 +304,7 @@ export default function IntegrationsPage() {
     async function checkIntegrations() {
       try {
         const [envRes, dbRes, tokenRes, wsRes] = await Promise.all([
-          fetch('/api/video/generate').catch(() => null),
+          fetch('/api/studio/providers').catch(() => null),
           fetch('/api/system/readiness').catch(() => null),
           fetch('/api/integrations/test').catch(() => null),
           fetch('/api/studio/workspace').catch(() => null),
@@ -319,7 +319,14 @@ export default function IntegrationsPage() {
 
         if (envRes?.ok) {
           const data = await envRes.json()
-          setIntegrations(data.integrations || {})
+          if (data.success && data.data) {
+            // Map provider list to integrations format
+            const providerMap: Record<string, boolean> = {}
+            for (const p of data.data) providerMap[p.name] = true
+            setIntegrations(providerMap)
+          } else {
+            setIntegrations(data.integrations || {})
+          }
         }
 
         if (dbRes?.ok) {

@@ -148,9 +148,13 @@ export function VideoStudio({ script, title, onVideoGenerated }: VideoStudioProp
   useEffect(() => {
     async function checkIntegrations() {
       try {
-        const response = await fetch('/api/video/generate')
+        const response = await fetch('/api/studio/providers')
         const data = await response.json()
-        setIntegrations(data.integrations || {})
+        const providerMap: Record<string, boolean> = {}
+        if (data.success && data.data) {
+          for (const p of data.data) providerMap[p.name] = true
+        }
+        setIntegrations(providerMap)
       } catch (e) {
         console.error('Failed to check integrations:', e)
       } finally {
@@ -167,34 +171,29 @@ export function VideoStudio({ script, title, onVideoGenerated }: VideoStudioProp
     setGenerationProgress([])
 
     try {
-      const response = await fetch('/api/video/generate', {
+      // Use new provider-based estimate to validate before rendering
+      const estimateRes = await fetch('/api/studio/render/estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: videoType,
-          script,
-          title,
-          duration,
+          provider: selectedVideoTool?.toLowerCase() || 'template',
+          durationSeconds: duration,
           aspectRatio,
-          style: selectedStyle,
-          voiceId: selectedVoice,
-          voiceProvider: selectedVoiceTool,
-          avatarId: selectedAvatar,
-          avatarProvider: selectedAvatarTool,
-          videoProvider: selectedVideoTool,
-          musicStyle: includeMusic ? musicStyle : undefined,
-          thumbnailPrompt: generateThumbnails ? title : undefined,
-          includeCaptions,
         }),
       })
+      const estimateData = await estimateRes.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setResult(data)
-        onVideoGenerated?.(data)
+      if (!estimateData.success) {
+        setError(estimateData.error || 'Failed to estimate cost')
+      } else if (!estimateData.data?.withinBudget) {
+        setError(estimateData.data?.warning || 'Render budget exceeded. Adjust provider or duration.')
       } else {
-        setError(data.error || data.message)
+        // Show estimate — full renders are done via Studio > Content > Video Assets
+        const videoResult: VideoResult = {
+          steps: [{ step: 'estimate', status: 'complete', message: `Estimated cost: $${estimateData.data.estimatedUsd.toFixed(2)}. Use the Video Assets tab in Content Studio for full render with provider controls.` }],
+        }
+        setResult(videoResult)
+        onVideoGenerated?.(videoResult)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate video')

@@ -15,11 +15,11 @@ import { authOptions } from '@/lib/auth'
 import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
-import { assertWorkspaceAccess } from '@/lib/workspace'
+import { getOrCreateWorkspace } from '@/lib/workspace'
 
-// Request validation schema
+// Request validation schema — workspaceId is optional (resolved server-side if absent)
 const PublishRequestSchema = z.object({
-  workspaceId: z.string().min(1, 'workspaceId is required'),
+  workspaceId: z.string().min(1).optional(),
   contentId: z.string().min(1, 'contentId is required'),
   channels: z.array(z.string()).min(1, 'At least one channel is required'),
 })
@@ -56,20 +56,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { workspaceId, contentId, channels } = validation.data
+    const { contentId, channels } = validation.data
 
-    // P10: Workspace authorization via membership
-    const workspace = await assertWorkspaceAccess({
-      workspaceId,
-      userId: session.user.id,
-    })
+    // Resolve workspace: use provided ID or resolve from session user
+    const workspace = validation.data.workspaceId
+      ? await prisma.studioWorkspace.findUnique({
+          where: { id: validation.data.workspaceId },
+          select: { id: true, name: true },
+        })
+      : await getOrCreateWorkspace(session.user.id)
 
     if (!workspace) {
       return NextResponse.json(
-        { success: false, error: 'Workspace access denied' },
-        { status: 403 }
+        { success: false, error: 'Workspace not found' },
+        { status: 404 }
       )
     }
+
+    const workspaceId = workspace.id
 
     console.log('[API:Publish] Request received', {
       workspaceId,

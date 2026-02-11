@@ -15,6 +15,8 @@ import { getOrCreateWorkspace } from '@/lib/workspace'
 import { inngest } from '@/lib/inngest/client'
 import { getProvider } from '@/lib/render'
 import { resolveProviderKey } from '@/lib/integrations/resolveProviderKey'
+import { getVideoProviderOrThrow } from '@/lib/providers/video/registry'
+import { checkRenderBudget, recordRenderSubmission } from '@/lib/providers/video/budget'
 
 export async function POST(
   request: NextRequest,
@@ -27,6 +29,16 @@ export async function POST(
     }
 
     const { versionId } = await params
+
+    // Parse optional body for provider params
+    let body: Record<string, unknown> = {}
+    try { body = await request.json() } catch { /* empty body is OK */ }
+    const requestedProvider = (body.provider as string) || 'template'
+    const requestedDuration = (body.durationSeconds as number) || undefined
+    const requestedAspect = (body.aspectRatio as string) || undefined
+
+    // Resolve provider from registry
+    const videoProvider = getVideoProviderOrThrow(requestedProvider)
 
     // Look up version with existing job
     const version = await prisma.studioContentVersion.findUnique({
@@ -41,24 +53,54 @@ export async function POST(
     const workspace = await getOrCreateWorkspace(session.user.id)
     const config = version.config as Record<string, unknown> || {}
 
-    // Early key validation — fail fast before creating a job
-    const keyResult = await resolveProviderKey(workspace.id, 'runway')
+    // Resolve duration and aspect from request body → version config → provider defaults
+    const durationSeconds = requestedDuration
+      || (config.duration as number)
+      || videoProvider.config.supportedDurations[0]
+    const aspectRatio = requestedAspect
+      || (config.aspectRatio as string)
+      || '16:9'
+
+    // Cost estimation + budget check
+    const costEstimate = videoProvider.estimateCost(durationSeconds)
+    const budgetCheck = await checkRenderBudget(workspace.id, costEstimate.usd)
+    if (!budgetCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: budgetCheck.reason,
+        budget: {
+          monthlySpent: budgetCheck.monthlySpent,
+          monthlyLimit: budgetCheck.monthlyLimit,
+          dailyAttempts: budgetCheck.dailyAttempts,
+          dailyLimit: budgetCheck.dailyLimit,
+        },
+      }, { status: 429 })
+    }
+
+    // Early key validation — only for providers that require an API key
+    let keyResult = { apiKey: null as string | null, source: 'none' as string }
+    if (videoProvider.config.requiresApiKey) {
+      keyResult = await resolveProviderKey(workspace.id, requestedProvider as Parameters<typeof resolveProviderKey>[1])
+
+      if (!keyResult.apiKey) {
+        return NextResponse.json({
+          success: false,
+          error: `${videoProvider.config.displayName} API key not configured for this workspace. Go to Settings > Integrations or set ${videoProvider.config.envKeyName} in .env.local`,
+        }, { status: 400 })
+      }
+    }
 
     console.log('[RENDER:REQUEST]', {
       workspaceId: workspace.id,
       versionId,
       contentId: version.contentId,
-      provider: 'runway',
+      provider: requestedProvider,
+      durationSeconds,
+      aspectRatio,
+      estimatedCostUsd: costEstimate.usd,
       keySource: keyResult.source,
       pipeline: 'inngest',
     })
-
-    if (!keyResult.apiKey) {
-      return NextResponse.json({
-        success: false,
-        error: 'Runway API key not configured for this workspace. Go to Settings > Integrations or set RUNWAY_API_KEY in .env.local',
-      }, { status: 400 })
-    }
 
     // Check for stuck job: QUEUED or PROCESSING for > 5 minutes
     const STUCK_THRESHOLD_MS = 5 * 60 * 1000
@@ -86,6 +128,7 @@ export async function POST(
           workspaceId: workspace.id,
           type: 'TEXT_TO_VIDEO',
           status: 'QUEUED',
+          provider: requestedProvider,
           contentId: version.contentId,
           inputScript: version.script,
           inputPrompt: version.visualPrompt || version.script,
@@ -114,6 +157,7 @@ export async function POST(
           workspaceId: workspace.id,
           type: 'TEXT_TO_VIDEO',
           status: 'QUEUED',
+          provider: requestedProvider,
           contentId: version.contentId,
           inputScript: version.script,
           inputPrompt: version.visualPrompt || version.script,
@@ -128,18 +172,29 @@ export async function POST(
       })
     }
 
+    // Record in render ledger
+    const renderLogId = await recordRenderSubmission({
+      workspaceId: workspace.id,
+      videoJobId: videoJob.id,
+      provider: requestedProvider,
+      durationSeconds,
+      aspectRatio,
+      promptLength: (version.visualPrompt || version.script || '').length,
+      estimatedCostUsd: costEstimate.usd,
+    })
+
     // Dev-mode synchronous fallback
     const isDev = process.env.NODE_ENV === 'development'
-    const hasRunwayKey = !!process.env.RUNWAY_API_KEY
+    const hasProviderKey = videoProvider.config.requiresApiKey ? !!keyResult.apiKey : true
 
-    if (isDev && !hasRunwayKey) {
+    if (isDev && !hasProviderKey) {
       // Mock: simulate a completed render with a sample video URL
       await prisma.studioVideoJob.update({
         where: { id: videoJob.id },
         data: {
           status: 'COMPLETED',
           progress: 100,
-          provider: 'runway',
+          provider: requestedProvider,
           providerJobId: `mock-${videoJob.id}`,
           progressMessage: 'Dev mode — mock render complete',
           startedAt: new Date(),
@@ -174,33 +229,37 @@ export async function POST(
 
     // Production: dispatch via Inngest
     try {
-      console.log('[INNGEST:DISPATCH]', { jobId: videoJob.id, versionId, event: 'studio/video.generate' })
+      console.log('[INNGEST:DISPATCH]', { jobId: videoJob.id, versionId, provider: requestedProvider, event: 'studio/video.generate' })
       await inngest.send({
         name: 'studio/video.generate',
         data: {
           jobId: videoJob.id,
           versionId,
           workspaceId: workspace.id,
+          provider: requestedProvider,
+          durationSeconds,
+          aspectRatio,
+          renderLogId,
         },
       })
       console.log('[INNGEST:DISPATCH:OK]', { jobId: videoJob.id })
     } catch (inngestErr) {
-      // If Inngest is unreachable in dev, fall back to direct Runway call
+      // If Inngest is unreachable in dev, fall back to direct provider call
       if (isDev) {
         console.warn('[INNGEST:DISPATCH:FAIL]', { jobId: videoJob.id, error: inngestErr instanceof Error ? inngestErr.message : 'unknown' })
         try {
-          const provider = getProvider('runway')
-          const submitResult = await provider.submit({
-            prompt: version.visualPrompt || version.script,
-            duration: (config.duration === 4 ? 4 : config.duration === 6 ? 6 : 8) as 4 | 6 | 8,
-            aspectRatio: (config.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9',
+          const submitResult = await videoProvider.submit({
+            prompt: version.visualPrompt || version.script || '',
+            durationSeconds,
+            aspectRatio,
+            apiKey: keyResult.apiKey || undefined,
           })
 
           await prisma.studioVideoJob.update({
             where: { id: videoJob.id },
             data: {
               status: 'PROCESSING',
-              provider: 'runway',
+              provider: requestedProvider,
               providerJobId: submitResult.providerJobId,
               startedAt: new Date(),
             },
@@ -211,8 +270,8 @@ export async function POST(
             data: { jobId: videoJob.id, status: 'PROCESSING', directSubmit: true },
           })
         } catch {
-          // If Runway also fails, return the job in QUEUED state
-          console.warn('[Render] Direct Runway call also failed, returning QUEUED state')
+          // If provider also fails, return the job in QUEUED state
+          console.warn('[Render] Direct provider call also failed, returning QUEUED state')
         }
       } else {
         throw inngestErr
@@ -221,7 +280,12 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: { jobId: videoJob.id, status: 'QUEUED' },
+      data: {
+        jobId: videoJob.id,
+        status: 'QUEUED',
+        provider: requestedProvider,
+        estimatedCostUsd: costEstimate.usd,
+      },
     })
   } catch (error) {
     console.error('[API:render] POST error:', error)

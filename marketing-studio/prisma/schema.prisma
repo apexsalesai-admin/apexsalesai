@@ -39,6 +39,7 @@ model StudioWorkspace {
   integrations  StudioIntegration[]
   assets        StudioAsset[]
   videoJobs     StudioVideoJob[]
+  renderLogs    StudioRenderLog[]
   publishJobs   StudioPublishJob[]
   auditLogs     StudioAuditLog[]
   brandGuardrails StudioBrandGuardrails?
@@ -126,6 +127,7 @@ enum StudioIntegrationType {
   HEYGEN
   RUNWAY
   MIDJOURNEY
+  INVIDEO
 }
 
 enum StudioIntegrationStatus {
@@ -215,6 +217,7 @@ enum StudioAssetProvider {
   ELEVENLABS    // ElevenLabs audio
   SORA          // OpenAI Sora video
   PIKA          // Pika Labs video
+  INVIDEO       // InVideo generated
 }
 
 model StudioAsset {
@@ -340,11 +343,49 @@ model StudioVideoJob {
 
   // Content version relation
   contentVersions StudioContentVersion[]
+  renderLogs      StudioRenderLog[]
 
   @@index([workspaceId])
   @@index([status])
   @@index([contentId])
   @@map("studio_video_jobs")
+}
+
+// ============================================================================
+// NEW: RENDER COST LEDGER
+// ============================================================================
+
+model StudioRenderLog {
+  id              String          @id @default(cuid())
+  workspaceId     String
+  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  videoJobId      String?
+  videoJob        StudioVideoJob? @relation(fields: [videoJobId], references: [id], onDelete: SetNull)
+
+  // Provider info
+  provider        String          // runway | heygen | template
+  providerJobId   String?
+
+  // Request params
+  durationSeconds Int
+  aspectRatio     String          @default("16:9")
+  promptLength    Int             @default(0)
+
+  // Cost tracking
+  estimatedCostUsd Float          @default(0)
+  actualCostUsd    Float?
+
+  // Status
+  status          String          @default("submitted") // submitted | completed | failed | blocked
+  errorMessage    String?
+
+  // Timing
+  submittedAt     DateTime        @default(now())
+  completedAt     DateTime?
+
+  @@index([workspaceId, submittedAt])
+  @@index([provider])
+  @@map("studio_render_logs")
 }
 
 model StudioContentVersion {

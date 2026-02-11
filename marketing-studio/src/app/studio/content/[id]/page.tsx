@@ -157,6 +157,13 @@ export default function ContentDetailPage() {
   const [isLoadingVersions, setIsLoadingVersions] = useState(false)
   const [isCreatingVersion, setIsCreatingVersion] = useState(false)
   const [renderingVersionId, setRenderingVersionId] = useState<string | null>(null)
+  const [selectedProvider, setSelectedProvider] = useState('template')
+  const [renderDuration, setRenderDuration] = useState(8)
+  const [renderAspect, setRenderAspect] = useState('16:9')
+  const [costEstimate, setCostEstimate] = useState<{ estimatedUsd: number; monthlySpent: number; monthlyLimit: number; withinBudget: boolean; warning?: string } | null>(null)
+  const [showRenderConfirm, setShowRenderConfirm] = useState(false)
+  const [pendingRenderVersionId, setPendingRenderVersionId] = useState<string | null>(null)
+  const [availableProviders, setAvailableProviders] = useState<{ name: string; displayName: string; category: string; supportedDurations: number[]; supportedAspectRatios: string[]; costPerSecond: number; requiresApiKey: boolean }[]>([])
   const [showNewVersionForm, setShowNewVersionForm] = useState(false)
   const [newVersionScript, setNewVersionScript] = useState('')
   const [newVersionPrompt, setNewVersionPrompt] = useState('')
@@ -317,6 +324,34 @@ export default function ContentDetailPage() {
     return () => { cancelled = true; clearTimeout(timer) }
   }, [versions, fetchVersions])
 
+  // Fetch available providers on mount
+  useEffect(() => {
+    fetch('/api/studio/providers')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) setAvailableProviders(data.data)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Fetch cost estimate when provider/duration/aspect changes
+  useEffect(() => {
+    if (!selectedProvider) return
+    const controller = new AbortController()
+    fetch('/api/studio/render/estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: selectedProvider, durationSeconds: renderDuration, aspectRatio: renderAspect }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) setCostEstimate(data.data)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [selectedProvider, renderDuration, renderAspect])
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text)
   }
@@ -359,7 +394,7 @@ export default function ContentDetailPage() {
     setPublishResults([])
 
     try {
-      const response = await fetch('/api/publish', {
+      const response = await fetch('/api/studio/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -369,8 +404,8 @@ export default function ContentDetailPage() {
       })
       const data = await response.json()
       if (data.success) {
-        setContent(prev => prev ? { ...prev, status: data.data.status, publishedAt: data.data.publishedAt } : null)
-        setPublishResults(data.data.results || [])
+        setContent(prev => prev ? { ...prev, status: 'PUBLISHING' } : null)
+        setPublishResults([])
       } else {
         alert(data.error || 'Publishing failed')
       }
@@ -414,14 +449,34 @@ export default function ContentDetailPage() {
   }
 
   const handleRender = async (versionId: string) => {
+    // For expensive renders (> $1), show confirmation dialog
+    if (costEstimate && costEstimate.estimatedUsd > 1 && selectedProvider !== 'template') {
+      setPendingRenderVersionId(versionId)
+      setShowRenderConfirm(true)
+      return
+    }
+    await executeRender(versionId)
+  }
+
+  const executeRender = async (versionId: string) => {
+    setShowRenderConfirm(false)
+    setPendingRenderVersionId(null)
     setRenderingVersionId(versionId)
     try {
       const response = await fetch(`/api/studio/versions/${versionId}/render`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          durationSeconds: renderDuration,
+          aspectRatio: renderAspect,
+        }),
       })
       const data = await response.json()
       if (data.success) {
         fetchVersions()
+      } else if (response.status === 429) {
+        alert(data.error || 'Render budget exceeded')
       }
     } catch (e) {
       console.error('Failed to start render:', e)
@@ -972,6 +1027,104 @@ export default function ContentDetailPage() {
                         </>
                       )}
                     </button>
+                  </div>
+                )}
+
+                {/* Render Settings */}
+                {availableProviders.length > 0 && (
+                  <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <h4 className="text-sm font-medium text-slate-700 mb-3">Render Settings</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Provider</label>
+                        <select
+                          value={selectedProvider}
+                          onChange={e => setSelectedProvider(e.target.value)}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {availableProviders.map(p => (
+                            <option key={p.name} value={p.name}>
+                              {p.displayName} {p.costPerSecond > 0 ? `(~$${(p.costPerSecond * 8).toFixed(2)}/8s)` : '(Free)'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Duration</label>
+                        <select
+                          value={renderDuration}
+                          onChange={e => setRenderDuration(Number(e.target.value))}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedDurations || [4, 6, 8]).map(d => (
+                            <option key={d} value={d}>{d}s</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Aspect Ratio</label>
+                        <select
+                          value={renderAspect}
+                          onChange={e => setRenderAspect(e.target.value)}
+                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedAspectRatios || ['16:9', '9:16', '1:1']).map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {costEstimate && (
+                      <div className={cn(
+                        'mt-3 px-3 py-2 rounded-md text-sm flex items-center justify-between',
+                        costEstimate.estimatedUsd === 0 ? 'bg-green-50 text-green-700' :
+                        costEstimate.withinBudget ? 'bg-blue-50 text-blue-700' :
+                        'bg-red-50 text-red-700'
+                      )}>
+                        <span>
+                          Est. cost: <strong>${costEstimate.estimatedUsd.toFixed(2)}</strong>
+                          {costEstimate.monthlyLimit > 0 && (
+                            <span className="ml-2 text-xs opacity-75">
+                              (${costEstimate.monthlySpent.toFixed(2)} / ${costEstimate.monthlyLimit.toFixed(2)} this month)
+                            </span>
+                          )}
+                        </span>
+                        {!costEstimate.withinBudget && (
+                          <span className="flex items-center space-x-1">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="text-xs">Over budget</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Render Confirmation Dialog */}
+                {showRenderConfirm && pendingRenderVersionId && costEstimate && (
+                  <div className="mb-4 p-4 bg-amber-50 rounded-lg border-2 border-amber-300">
+                    <h4 className="text-sm font-medium text-amber-800 mb-2 flex items-center space-x-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Confirm Render</span>
+                    </h4>
+                    <p className="text-sm text-amber-700 mb-3">
+                      This render will cost approximately <strong>${costEstimate.estimatedUsd.toFixed(2)}</strong> using{' '}
+                      <strong>{availableProviders.find(p => p.name === selectedProvider)?.displayName || selectedProvider}</strong> ({renderDuration}s, {renderAspect}).
+                    </p>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => executeRender(pendingRenderVersionId)}
+                        className="px-4 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-medium"
+                      >
+                        Render (${costEstimate.estimatedUsd.toFixed(2)})
+                      </button>
+                      <button
+                        onClick={() => { setShowRenderConfirm(false); setPendingRenderVersionId(null) }}
+                        className="px-4 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-sm text-slate-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
 
