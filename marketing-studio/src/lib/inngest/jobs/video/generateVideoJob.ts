@@ -12,6 +12,8 @@ import { resolveProviderKey } from '@/lib/integrations/resolveProviderKey'
 import { getVideoProvider } from '@/lib/providers/video/registry'
 import { recordRenderOutcome } from '@/lib/providers/video/budget'
 import type { JobResult, VideoJobOutput } from '../../types'
+import fs from 'fs/promises'
+import path from 'path'
 
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000 // 10 minutes
 const FAST_POLL_INTERVAL = '15s'
@@ -129,10 +131,9 @@ export const generateVideoJob = inngest.createFunction(
       } else {
         // Backward compat: use legacy provider
         const legacyProvider = getProvider('runway')
-        const duration = (eventDuration <= 4 ? 4 : eventDuration <= 6 ? 6 : 8) as 4 | 6 | 8
         const submitResult = await legacyProvider.submit({
           prompt: job.inputPrompt,
-          duration,
+          duration: eventDuration,
           aspectRatio: eventAspect as '16:9' | '9:16' | '1:1',
           model,
           apiKey,
@@ -206,7 +207,7 @@ export const generateVideoJob = inngest.createFunction(
 
       const pollResult = await step.run(`poll-provider-${pollCount}`, async () => {
         const newProvider = getVideoProvider(providerName)
-        let result: { status: string; progress?: number; outputUrl?: string; thumbnailUrl?: string; errorMessage?: string }
+        let result: { status: string; progress?: number; outputUrl?: string; thumbnailUrl?: string; errorMessage?: string; requiresDownload?: boolean }
 
         // Re-resolve API key for providers that need it (Inngest steps are independent)
         let pollApiKey: string | undefined
@@ -260,10 +261,47 @@ export const generateVideoJob = inngest.createFunction(
       errorMessage = 'Video rendering timed out after 10 minutes'
     }
 
+    // Step 3b: Authenticated download (for providers like Sora that stream binary with auth)
+    if (finalStatus === 'completed' && outputUrl) {
+      const needsDownload = outputUrl.includes('/content') && providerName === 'sora'
+      if (needsDownload) {
+        outputUrl = await step.run('download-video', async () => {
+          // Re-resolve API key for download
+          const keyResult = await resolveProviderKey(workspaceId, providerName as Parameters<typeof resolveProviderKey>[1])
+          const dlKey = keyResult.apiKey
+          if (!dlKey) throw new Error(`[${providerName.toUpperCase()}:DOWNLOAD:FAILED] No API key for download`)
+
+          console.log(`[${providerName.toUpperCase()}:DOWNLOAD]`, { providerJobId: submission.providerJobId })
+
+          const videoResponse = await fetch(outputUrl!, {
+            headers: { 'Authorization': `Bearer ${dlKey}` },
+          })
+          if (!videoResponse.ok) {
+            throw new Error(`[${providerName.toUpperCase()}:DOWNLOAD:FAILED] HTTP ${videoResponse.status}`)
+          }
+
+          const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
+          const filename = `${providerName}-${jobId}-${Date.now()}.mp4`
+          const renderDir = path.join(process.cwd(), 'public', 'studio', 'renders')
+
+          // Ensure directory exists
+          await fs.mkdir(renderDir, { recursive: true })
+          const filePath = path.join(renderDir, filename)
+          await fs.writeFile(filePath, videoBuffer)
+
+          const sizeMb = (videoBuffer.length / (1024 * 1024)).toFixed(1)
+          const publicUrl = `/studio/renders/${filename}`
+          console.log(`[${providerName.toUpperCase()}:DOWNLOAD:OK]`, { filename, sizeMb })
+
+          return publicUrl
+        })
+      }
+    }
+
     // Step 4: Finalize
     await step.run('finalize', async () => {
       // Map provider name → StudioAssetProvider enum value
-      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'TEMPLATE' }
+      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'TEMPLATE', sora: 'SORA' }
       const assetProvider = assetProviderMap[providerName] || 'RUNWAY'
 
       if (finalStatus === 'completed' && outputUrl) {

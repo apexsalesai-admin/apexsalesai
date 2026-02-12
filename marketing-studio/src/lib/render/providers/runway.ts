@@ -7,7 +7,7 @@
  * Config via env vars:
  *   RUNWAY_API_KEY              — required
  *   RUNWAY_API_URL              — default https://api.dev.runwayml.com/v1
- *   RUNWAY_TEXT_TO_VIDEO_MODEL  — default veo3.1
+ *   RUNWAY_TEXT_TO_VIDEO_MODEL  — default gen4.5
  */
 
 import type { RenderProvider, RenderRequest, RenderSubmitResult, RenderPollResult } from '../types'
@@ -17,7 +17,7 @@ const API_VERSION = '2024-11-06'
 const MAX_PROMPT_LENGTH = 1000
 
 function getModel(): string {
-  return process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'veo3.1'
+  return process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'gen4.5'
 }
 
 /** Map user-friendly aspect ratios to Runway's resolution format */
@@ -25,10 +25,15 @@ function mapAspectRatio(ratio: string): string {
   const mapping: Record<string, string> = {
     '16:9': '1280:720',
     '9:16': '720:1280',
-    '1:1': '1080:1080',
+    '1:1': '960:960',
+    '4:3': '1104:832',
+    '3:4': '832:1104',
     '1280:720': '1280:720',
     '720:1280': '720:1280',
-    '1080:1080': '1080:1080',
+    '1080:1080': '960:960',
+    '960:960': '960:960',
+    '1104:832': '1104:832',
+    '832:1104': '832:1104',
   }
   const mapped = mapping[ratio]
   if (!mapped) {
@@ -37,11 +42,9 @@ function mapAspectRatio(ratio: string): string {
   return mapped || '1280:720'
 }
 
-/** Clamp duration to valid values: 4, 6, or 8 seconds */
-function clampDuration(d: number): 4 | 6 | 8 {
-  if (d <= 4) return 4
-  if (d <= 6) return 6
-  return 8
+/** Clamp duration to valid Runway range: 2-10 seconds (integer) */
+function clampDuration(d: number): number {
+  return Math.max(2, Math.min(10, Math.round(d)))
 }
 
 function getApiKey(): string {
@@ -101,13 +104,13 @@ export class RunwayProvider implements RenderProvider {
     }
   }
 
-  async poll(providerJobId: string): Promise<RenderPollResult> {
-    const apiKey = getApiKey()
+  async poll(providerJobId: string, apiKey?: string): Promise<RenderPollResult> {
+    const resolvedKey = apiKey || getApiKey()
 
     const response = await fetch(`${BASE_URL}/tasks/${providerJobId}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${resolvedKey}`,
         'X-Runway-Version': API_VERSION,
       },
     })

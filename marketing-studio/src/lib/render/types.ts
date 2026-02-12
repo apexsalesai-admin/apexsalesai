@@ -6,7 +6,7 @@
 
 export interface RenderRequest {
   prompt: string
-  duration: 4 | 6 | 8
+  duration: number
   aspectRatio: '16:9' | '9:16' | '1:1'
   model?: string
   apiKey?: string  // Pre-resolved key (from integrations or env)
@@ -28,5 +28,5 @@ export interface RenderPollResult {
 export interface RenderProvider {
   name: string
   submit(req: RenderRequest): Promise<RenderSubmitResult>
-  poll(providerJobId: string): Promise<RenderPollResult>
+  poll(providerJobId: string, apiKey?: string): Promise<RenderPollResult>
 }

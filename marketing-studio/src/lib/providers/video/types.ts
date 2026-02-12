@@ -5,7 +5,7 @@
  * Supersedes the Runway-specific types in src/lib/render/types.ts.
  */
 
-export type VideoProviderName = 'runway' | 'heygen' | 'template'
+export type VideoProviderName = 'runway' | 'heygen' | 'template' | 'sora'
 
 export type VideoProviderCategory = 'cinematic' | 'avatar' | 'marketing'
 
@@ -42,6 +42,8 @@ export interface VideoPollResult {
   outputUrl?: string
   thumbnailUrl?: string
   errorMessage?: string
+  /** If true, outputUrl requires authenticated download (e.g. Sora /content endpoint) */
+  requiresDownload?: boolean
 }
 
 export interface CostEstimate {

@@ -12,10 +12,9 @@ import type { VideoProvider, VideoProviderConfig, VideoSubmitRequest, VideoSubmi
 const CREDITS_PER_SECOND = 40
 const USD_PER_CREDIT = 0.0085
 
-function clampDuration(seconds: number): 4 | 6 | 8 {
-  if (seconds <= 4) return 4
-  if (seconds <= 6) return 6
-  return 8
+/** Clamp duration to Runway's valid range: 2-10 seconds */
+function clampDuration(seconds: number): number {
+  return Math.max(2, Math.min(10, Math.round(seconds)))
 }
 
 export class RunwayAdapter implements VideoProvider {
@@ -23,9 +22,9 @@ export class RunwayAdapter implements VideoProvider {
 
   readonly config: VideoProviderConfig = {
     name: 'runway',
-    displayName: 'Runway Gen-3 (Cinematic)',
+    displayName: 'Runway Gen-4.5',
     category: 'cinematic',
-    supportedDurations: [4, 6, 8],
+    supportedDurations: [4, 5, 6, 8, 10],
     supportedAspectRatios: ['16:9', '9:16', '1:1'],
     maxPromptLength: 1000,
     costPerSecond: CREDITS_PER_SECOND * USD_PER_CREDIT,
@@ -54,9 +53,8 @@ export class RunwayAdapter implements VideoProvider {
     }
   }
 
-  async poll(providerJobId: string, _apiKey?: string): Promise<VideoPollResult> {
-    // Legacy RunwayProvider reads API key from process.env.RUNWAY_API_KEY directly
-    const result = await this.legacy.poll(providerJobId)
+  async poll(providerJobId: string, apiKey?: string): Promise<VideoPollResult> {
+    const result = await this.legacy.poll(providerJobId, apiKey)
     return {
       status: result.status,
       progress: result.progress,

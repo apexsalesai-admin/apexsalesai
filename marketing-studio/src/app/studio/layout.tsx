@@ -17,6 +17,7 @@ import {
   FlaskConical,
   CheckCircle,
   LogOut,
+  Plug,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StudioStatusBanner } from '@/components/ui/studio-status-banner'
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: '/studio/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/studio/labs', label: 'Labs', icon: FlaskConical, badge: 'New' },
   { href: '/studio/integrations', label: 'Integrations', icon: Zap },
+  { href: '/studio/settings/providers', label: 'Video Providers', icon: Plug },
   { href: '/studio/settings', label: 'Settings', icon: Settings },
 ]
 

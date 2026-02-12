@@ -130,6 +130,7 @@ export async function recordRenderSubmission(params: {
     },
   })
   console.log('[BUDGET:RECORDED]', { renderLogId: log.id, provider: params.provider, estimatedCostUsd: params.estimatedCostUsd })
+  console.log('[LEDGER:RECORD]', `provider=${params.provider} cost=$${params.estimatedCostUsd.toFixed(2)} duration=${params.durationSeconds}s`)
   return log.id
 }
 

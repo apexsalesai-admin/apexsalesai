@@ -173,6 +173,13 @@ export default function ContentDetailPage() {
   const [newVersionAspect, setNewVersionAspect] = useState<'16:9' | '9:16' | '1:1'>('16:9')
   const [newVersionDuration, setNewVersionDuration] = useState<4 | 6 | 8>(8)
 
+  // Mia recommendation
+  const [miaRec, setMiaRec] = useState<{
+    provider: string; model?: string; confidence: string; reason: string
+    estimatedCost: number; estimatedDuration: string
+    alternatives: { provider: string; reason: string; estimatedCost: number }[]
+  } | null>(null)
+
   // Publish eligibility for video content
   const [publishEligibility, setPublishEligibility] = useState<PublishEligibility | null>(null)
 
@@ -367,6 +374,24 @@ export default function ContentDetailPage() {
       })
       .catch(() => {})
   }, [])
+
+  // Fetch Mia recommendation when content loads
+  useEffect(() => {
+    if (!content?.id) return
+    const channel = content.channels?.[0]?.toLowerCase() || 'general'
+    const platformMap: Record<string, string> = {
+      youtube: 'youtube', linkedin: 'linkedin', tiktok: 'tiktok',
+      instagram: 'instagram', x_twitter: 'general', facebook: 'general',
+    }
+    fetch('/api/studio/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId: content.id, targetPlatform: platformMap[channel] || 'general' }),
+    })
+      .then(r => r.json())
+      .then(data => { if (data.success && data.data) setMiaRec(data.data) })
+      .catch(() => {})
+  }, [content?.id, content?.channels])
 
   // Fetch cost estimate when provider/duration/aspect changes
   useEffect(() => {
@@ -1123,6 +1148,84 @@ export default function ContentDetailPage() {
                         </>
                       )}
                     </button>
+                  </div>
+                )}
+
+                {/* Mia Recommendation */}
+                {miaRec && (
+                  <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <Sparkles className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-medium text-purple-900">Mia Recommends</span>
+                        <span className={cn(
+                          'text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider',
+                          miaRec.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
+                          miaRec.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
+                          'bg-slate-100 text-slate-600'
+                        )}>
+                          {miaRec.confidence}
+                        </span>
+                      </div>
+                      {miaRec.provider !== selectedProvider && (
+                        <button
+                          onClick={() => {
+                            setSelectedProvider(miaRec.provider)
+                            const providerConfig = availableProviders.find(p => p.name === miaRec.provider)
+                            if (providerConfig?.supportedDurations?.length) {
+                              const best = providerConfig.supportedDurations.includes(renderDuration)
+                                ? renderDuration
+                                : providerConfig.supportedDurations[Math.floor(providerConfig.supportedDurations.length / 2)]
+                              setRenderDuration(best)
+                            }
+                          }}
+                          className="text-xs font-medium text-purple-700 hover:text-purple-900 px-2.5 py-1 rounded-md bg-purple-100 hover:bg-purple-200 transition-colors"
+                        >
+                          Use This
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-sm text-purple-800">
+                      <strong>{availableProviders.find(p => p.name === miaRec.provider)?.displayName || miaRec.provider}</strong>
+                      {miaRec.model ? ` (${miaRec.model})` : ''} — {miaRec.reason}
+                    </p>
+                    <div className="flex items-center space-x-4 mt-2 text-xs text-purple-600">
+                      <span>~${miaRec.estimatedCost.toFixed(2)}</span>
+                      <span>{miaRec.estimatedDuration}</span>
+                      {miaRec.provider === selectedProvider && (
+                        <span className="flex items-center space-x-1 text-emerald-600">
+                          <Check className="w-3 h-3" />
+                          <span>Selected</span>
+                        </span>
+                      )}
+                    </div>
+                    {miaRec.alternatives.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-purple-200">
+                        <span className="text-[10px] uppercase tracking-wider text-purple-500">Alternatives:</span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {miaRec.alternatives.map(alt => (
+                            <button
+                              key={alt.provider}
+                              onClick={() => {
+                                setSelectedProvider(alt.provider)
+                                const providerConfig = availableProviders.find(p => p.name === alt.provider)
+                                if (providerConfig?.supportedDurations?.length) {
+                                  const best = providerConfig.supportedDurations.includes(renderDuration)
+                                    ? renderDuration
+                                    : providerConfig.supportedDurations[Math.floor(providerConfig.supportedDurations.length / 2)]
+                                  setRenderDuration(best)
+                                }
+                              }}
+                              className="text-xs px-2 py-1 rounded-md bg-white/60 border border-purple-200 text-purple-700 hover:bg-white transition-colors"
+                              title={alt.reason}
+                            >
+                              {availableProviders.find(p => p.name === alt.provider)?.displayName || alt.provider}
+                              {alt.estimatedCost > 0 ? ` ~$${alt.estimatedCost.toFixed(2)}` : ' (Free)'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

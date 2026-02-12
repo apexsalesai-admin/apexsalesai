@@ -11,7 +11,7 @@
 import { prisma } from '@/lib/db'
 import { safeDecrypt } from '@/lib/encryption'
 
-export type ProviderName = 'runway' | 'elevenlabs' | 'heygen' | 'openai' | 'anthropic'
+export type ProviderName = 'runway' | 'elevenlabs' | 'heygen' | 'openai' | 'anthropic' | 'sora' | 'template'
 
 const PROVIDER_TO_INTEGRATION_TYPE: Record<ProviderName, string> = {
   runway: 'RUNWAY',
@@ -19,6 +19,8 @@ const PROVIDER_TO_INTEGRATION_TYPE: Record<ProviderName, string> = {
   heygen: 'HEYGEN',
   openai: 'OPENAI',
   anthropic: 'ANTHROPIC',
+  sora: 'OPENAI',        // Sora uses OpenAI API key
+  template: 'INVIDEO',   // Template placeholder — no key needed
 }
 
 const PROVIDER_TO_ENV_VAR: Record<ProviderName, string> = {
@@ -27,6 +29,8 @@ const PROVIDER_TO_ENV_VAR: Record<ProviderName, string> = {
   heygen: 'HEYGEN_API_KEY',
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
+  sora: 'OPENAI_API_KEY',      // Sora uses OpenAI API key
+  template: '',                 // Template needs no key
 }
 
 export interface KeyResolution {
