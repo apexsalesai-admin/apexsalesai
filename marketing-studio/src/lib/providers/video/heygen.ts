@@ -126,7 +126,7 @@ export class HeyGenProvider implements VideoProvider {
           errorMessage: data.data.error || 'HeyGen render failed',
         }
       case 'processing':
-        return { status: 'processing', progress: 50 }
+        return { status: 'processing', progress: undefined }
       default:
         return { status: 'queued', progress: 0 }
     }

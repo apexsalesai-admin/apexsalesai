@@ -34,6 +34,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SeoToolkit } from '@/components/content/seo-toolkit'
+import { RenderArtifactPanel } from '@/components/studio/video/RenderArtifactPanel'
+import type { RenderResult } from '@/lib/video/types/render-result'
 
 interface ContentDetail {
   id: string
@@ -164,6 +166,7 @@ export default function ContentDetailPage() {
   const [showRenderConfirm, setShowRenderConfirm] = useState(false)
   const [pendingRenderVersionId, setPendingRenderVersionId] = useState<string | null>(null)
   const [availableProviders, setAvailableProviders] = useState<{ name: string; displayName: string; category: string; supportedDurations: number[]; supportedAspectRatios: string[]; costPerSecond: number; requiresApiKey: boolean }[]>([])
+  const [renderResults, setRenderResults] = useState<Record<string, RenderResult>>({})
   const [showNewVersionForm, setShowNewVersionForm] = useState(false)
   const [newVersionScript, setNewVersionScript] = useState('')
   const [newVersionPrompt, setNewVersionPrompt] = useState('')
@@ -223,6 +226,37 @@ export default function ContentDetailPage() {
       fetchVersions()
     }
   }, [content, isVideo, fetchVersions])
+
+  // Hydrate renderResults from existing version data (returning to page)
+  useEffect(() => {
+    if (!versions.length) return
+    const hydrated: Record<string, RenderResult> = {}
+    for (const v of versions) {
+      if (!v.videoJob) continue
+      // Don't overwrite if we already have a result with frames (from a fresh render)
+      if (renderResults[v.id]?.frames?.length) continue
+      const readyAsset = v.videoJob.outputAssets.find(a => a.status === 'READY')
+      hydrated[v.id] = {
+        jobId: v.videoJob.id,
+        provider: 'unknown', // DB doesn't expose provider in the version query
+        status: v.videoJob.status === 'COMPLETED' ? 'completed'
+          : v.videoJob.status === 'FAILED' ? 'failed'
+          : v.videoJob.status === 'QUEUED' ? 'queued' : 'processing',
+        previewUrl: readyAsset?.publicUrl ?? null,
+        outputUrl: readyAsset?.publicUrl ?? null,
+        thumbnailUrl: readyAsset?.thumbnailUrl ?? null,
+        frames: null, // Will be populated by the panel's own polling via video-jobs endpoint
+        progress: v.videoJob.progress,
+        error: v.videoJob.errorMessage ?? null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+    }
+    if (Object.keys(hydrated).length) {
+      setRenderResults(prev => ({ ...hydrated, ...prev }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versions])
 
   // Check worker health (dev only) when video tab is active
   useEffect(() => {
@@ -473,10 +507,61 @@ export default function ContentDetailPage() {
         }),
       })
       const data = await response.json()
-      if (data.success) {
+      if (data.success && data.data) {
+        const d = data.data as { jobId: string; status: string; provider?: string; frames?: unknown[]; estimatedCostUsd?: number }
+        // Build initial RenderResult for the artifact panel
+        const initial: RenderResult = {
+          jobId: d.jobId,
+          provider: d.provider || selectedProvider,
+          status: d.status === 'COMPLETED' ? 'completed' : d.status === 'QUEUED' ? 'queued' : 'processing',
+          previewUrl: null,
+          outputUrl: null,
+          thumbnailUrl: null,
+          frames: (d.frames as RenderResult['frames']) ?? null,
+          progress: d.status === 'COMPLETED' ? 100 : 0,
+          error: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        setRenderResults(prev => ({ ...prev, [versionId]: initial }))
         fetchVersions()
+      } else if (data.data?.status) {
+        // Server returned a RenderResult-shaped error (awaiting_provider, budget_exceeded, etc.)
+        const errResult = data.data as RenderResult
+        setRenderResults(prev => ({
+          ...prev,
+          [versionId]: {
+            ...errResult,
+            jobId: errResult.jobId || '',
+            provider: errResult.provider || selectedProvider,
+            createdAt: errResult.createdAt || new Date().toISOString(),
+            updatedAt: errResult.updatedAt || new Date().toISOString(),
+          },
+        }))
       } else if (response.status === 429) {
-        alert(data.error || 'Render budget exceeded')
+        setRenderResults(prev => ({
+          ...prev,
+          [versionId]: {
+            jobId: '',
+            provider: selectedProvider,
+            status: 'budget_exceeded',
+            error: data.error || 'Render budget exceeded',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }))
+      } else if (!data.success) {
+        setRenderResults(prev => ({
+          ...prev,
+          [versionId]: {
+            jobId: '',
+            provider: selectedProvider,
+            status: 'failed',
+            error: data.error || 'Failed to start render',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }))
       }
     } catch (e) {
       console.error('Failed to start render:', e)
@@ -637,8 +722,9 @@ export default function ContentDetailPage() {
 
   const statusConfig = STATUS_CONFIG[content.status] || STATUS_CONFIG.DRAFT
 
-  // Get final version's video URL for the player
+  // Get final version's render result for the top-level preview
   const finalVersion = versions.find(v => v.isFinal)
+  const finalRenderResult = finalVersion ? renderResults[finalVersion.id] : null
   const finalVideoUrl = finalVersion?.videoJob?.status === 'COMPLETED'
     ? finalVersion.videoJob.outputAssets.find(a => a.status === 'READY')?.publicUrl
     : null
@@ -917,11 +1003,16 @@ export default function ContentDetailPage() {
                 </div>
               )}
 
-              {/* Video Player */}
+              {/* Video Preview — shows artifact panel for final version, or placeholder */}
               <div className="p-6 bg-white rounded-xl border border-slate-200">
                 <h3 className="font-bold text-slate-900 flex items-center space-x-2 mb-4">
                   <Play className="w-5 h-5 text-purple-600" />
                   <span>Video Preview</span>
+                  {finalVersion && (
+                    <span className="text-xs text-slate-400 font-normal">
+                      ({finalVersion.label || `Version ${finalVersion.versionNumber}`})
+                    </span>
+                  )}
                 </h3>
                 {finalVideoUrl ? (
                   <video
@@ -931,6 +1022,11 @@ export default function ContentDetailPage() {
                   >
                     Your browser does not support the video tag.
                   </video>
+                ) : finalRenderResult ? (
+                  <RenderArtifactPanel
+                    initial={finalRenderResult}
+                    onRetry={finalVersion ? () => handleRender(finalVersion.id) : undefined}
+                  />
                 ) : (
                   <div className="aspect-video bg-slate-100 rounded-lg flex items-center justify-center">
                     <div className="text-center text-slate-400">
@@ -1223,27 +1319,15 @@ export default function ContentDetailPage() {
                             {version.script}
                           </p>
 
-                          {/* Progress bar for active renders */}
-                          {isActive && version.videoJob && (
+                          {/* Render Artifact — shows storyboard, video, progress, or error */}
+                          {renderResults[version.id] && (
                             <div className="mt-2">
-                              <div className="w-full bg-slate-200 rounded-full h-1.5">
-                                <div
-                                  className="bg-purple-600 h-1.5 rounded-full transition-all"
-                                  style={{ width: `${version.videoJob.progress || 0}%` }}
-                                />
-                              </div>
-                              {version.videoJob.progressMessage && (
-                                <p className="text-xs text-slate-400 mt-1">{version.videoJob.progressMessage}</p>
-                              )}
+                              <RenderArtifactPanel
+                                initial={renderResults[version.id]}
+                                onRetry={() => handleRender(version.id)}
+                                compact
+                              />
                             </div>
-                          )}
-
-                          {/* Error message */}
-                          {jobStatus === 'FAILED' && version.videoJob?.errorMessage && (
-                            <p className="text-xs text-red-500 mt-1 flex items-center space-x-1">
-                              <AlertCircle className="w-3 h-3" />
-                              <span>{version.videoJob.errorMessage}</span>
-                            </p>
                           )}
 
                           {/* Timestamp */}

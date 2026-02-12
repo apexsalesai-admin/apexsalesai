@@ -129,7 +129,7 @@ export class RunwayProvider implements RenderProvider {
         return { status: 'queued', progress: 0 }
 
       case 'RUNNING':
-        return { status: 'processing', progress: data.progress ?? 50 }
+        return { status: 'processing', progress: data.progress ?? undefined }
 
       case 'SUCCEEDED':
         return {
@@ -147,7 +147,7 @@ export class RunwayProvider implements RenderProvider {
         }
 
       default:
-        return { status: 'processing', progress: data.progress ?? 25 }
+        return { status: 'processing', progress: data.progress ?? undefined }
     }
   }
 }

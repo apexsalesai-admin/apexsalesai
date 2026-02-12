@@ -86,6 +86,18 @@ export async function POST(
         return NextResponse.json({
           success: false,
           error: `${videoProvider.config.displayName} API key not configured for this workspace. Go to Settings > Integrations or set ${videoProvider.config.envKeyName} in .env.local`,
+          data: {
+            jobId: '',
+            provider: requestedProvider,
+            status: 'awaiting_provider',
+            error: `${videoProvider.config.displayName} API key not configured.`,
+            errorCode: 'MISSING_API_KEY',
+            nextAction: {
+              label: `Connect ${videoProvider.config.displayName}`,
+              href: '/studio/integrations',
+              action: 'connect_provider',
+            },
+          },
         }, { status: 400 })
       }
     }
@@ -182,6 +194,49 @@ export async function POST(
       promptLength: (version.visualPrompt || version.script || '').length,
       estimatedCostUsd: costEstimate.usd,
     })
+
+    // Template fast-path: synchronous, no Inngest, < 2 seconds
+    if (requestedProvider === 'template') {
+      const submitResult = await videoProvider.submit({
+        prompt: version.visualPrompt || version.script || '',
+        durationSeconds,
+        aspectRatio,
+      })
+
+      await prisma.studioVideoJob.update({
+        where: { id: videoJob.id },
+        data: {
+          status: 'COMPLETED',
+          progress: 100,
+          provider: 'template',
+          providerJobId: submitResult.providerJobId,
+          providerMeta: (submitResult.metadata ?? {}) as Record<string, never>,
+          progressMessage: 'Storyboard complete',
+          startedAt: new Date(),
+          completedAt: new Date(),
+        },
+      })
+
+      if (renderLogId) {
+        const { recordRenderOutcome } = await import('@/lib/providers/video/budget')
+        await recordRenderOutcome(renderLogId, 'completed').catch(e =>
+          console.warn('[BUDGET:OUTCOME:ERR]', { renderLogId, error: e instanceof Error ? e.message : 'unknown' })
+        )
+      }
+
+      console.log('[TEMPLATE:FAST-PATH]', { jobId: videoJob.id, scenes: (submitResult.metadata?.frames as unknown[])?.length ?? 0 })
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          jobId: videoJob.id,
+          status: 'COMPLETED',
+          provider: 'template',
+          estimatedCostUsd: 0,
+          frames: submitResult.metadata?.frames ?? [],
+        },
+      })
+    }
 
     // Dev-mode synchronous fallback
     const isDev = process.env.NODE_ENV === 'development'

@@ -54,7 +54,8 @@ export class RunwayAdapter implements VideoProvider {
     }
   }
 
-  async poll(providerJobId: string): Promise<VideoPollResult> {
+  async poll(providerJobId: string, _apiKey?: string): Promise<VideoPollResult> {
+    // Legacy RunwayProvider reads API key from process.env.RUNWAY_API_KEY directly
     const result = await this.legacy.poll(providerJobId)
     return {
       status: result.status,

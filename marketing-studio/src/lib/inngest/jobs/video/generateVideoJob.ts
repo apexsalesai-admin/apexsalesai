@@ -92,6 +92,16 @@ export const generateVideoJob = inngest.createFunction(
       if (!newProvider || newProvider.config.requiresApiKey) {
         const keyResult = await resolveProviderKey(workspaceId, providerName as Parameters<typeof resolveProviderKey>[1])
         if (!keyResult.apiKey) {
+          // Mark job with specific error code so UI can show "Connect API Key" guidance
+          await prisma.studioVideoJob.update({
+            where: { id: jobId },
+            data: {
+              status: 'FAILED',
+              errorCode: 'MISSING_API_KEY',
+              errorMessage: `${providerName} API key not configured. Add your key in Settings > Integrations or set the appropriate env var in .env.local`,
+              completedAt: new Date(),
+            },
+          })
           throw new Error(
             `${providerName} API key not configured. Add your key in Settings > Integrations or set the appropriate env var in .env.local`
           )
@@ -104,7 +114,7 @@ export const generateVideoJob = inngest.createFunction(
 
       console.log(`[${providerName.toUpperCase()}:SUBMIT]`, { jobId, model: model || 'default', ratio: eventAspect, duration: eventDuration, provider: providerName })
 
-      let result: { providerJobId: string; status: string }
+      let result: { providerJobId: string; status: string; metadata?: Record<string, unknown> }
 
       if (newProvider) {
         // Use new provider registry
@@ -115,7 +125,7 @@ export const generateVideoJob = inngest.createFunction(
           model,
           apiKey,
         })
-        result = { providerJobId: submitResult.providerJobId, status: submitResult.status }
+        result = { providerJobId: submitResult.providerJobId, status: submitResult.status, metadata: submitResult.metadata }
       } else {
         // Backward compat: use legacy provider
         const legacyProvider = getProvider('runway')
@@ -155,7 +165,8 @@ export const generateVideoJob = inngest.createFunction(
           data: {
             status: 'COMPLETED',
             progress: 100,
-            progressMessage: 'Render complete (instant)',
+            progressMessage: 'Storyboard complete',
+            providerMeta: (submission.metadata ?? {}) as Record<string, never>,
             completedAt: new Date(),
           },
         })
@@ -197,8 +208,15 @@ export const generateVideoJob = inngest.createFunction(
         const newProvider = getVideoProvider(providerName)
         let result: { status: string; progress?: number; outputUrl?: string; thumbnailUrl?: string; errorMessage?: string }
 
+        // Re-resolve API key for providers that need it (Inngest steps are independent)
+        let pollApiKey: string | undefined
+        if (!newProvider || newProvider.config.requiresApiKey) {
+          const keyResult = await resolveProviderKey(workspaceId, providerName as Parameters<typeof resolveProviderKey>[1])
+          pollApiKey = keyResult.apiKey || undefined
+        }
+
         if (newProvider) {
-          result = await newProvider.poll(submission.providerJobId)
+          result = await newProvider.poll(submission.providerJobId, pollApiKey)
         } else {
           const legacyProvider = getProvider('runway')
           result = await legacyProvider.poll(submission.providerJobId)

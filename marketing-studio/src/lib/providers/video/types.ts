@@ -32,6 +32,8 @@ export interface VideoSubmitRequest {
 export interface VideoSubmitResult {
   providerJobId: string
   status: 'queued' | 'processing' | 'completed'
+  /** Provider-specific metadata returned on submit (e.g. storyboard frames from template) */
+  metadata?: Record<string, unknown>
 }
 
 export interface VideoPollResult {
