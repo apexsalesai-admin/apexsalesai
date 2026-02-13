@@ -59,7 +59,7 @@ const TEST_HANDLERS: Record<string, (apiKey: string) => Promise<boolean>> = {
     return r.ok
   },
   heygen: async (key) => {
-    const r = await fetch('https://api.heygen.com/v1/user/remaining_quota', {
+    const r = await fetch('https://api.heygen.com/v2/user/remaining_quota', {
       headers: { 'X-Api-Key': key },
     })
     return r.ok
