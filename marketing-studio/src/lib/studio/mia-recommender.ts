@@ -91,12 +91,20 @@ const PREFERENCE_MATRIX: Record<string, Record<string, string[]>> = {
 
 const PROVIDER_REASONS: Record<string, Record<string, string>> = {
   sora: {
-    youtube: 'Cinematic quality with synchronized audio — ideal for YouTube',
+    youtube: 'Cinematic quality with synchronized audio — ideal for YouTube (4-12s)',
     linkedin: 'Professional cinematic video that stands out in the LinkedIn feed',
-    tiktok: 'Fast, engaging clips optimized for social',
+    tiktok: 'Fast, engaging clips optimized for social (4-12s)',
     instagram: 'Stunning visual quality for Instagram Reels',
     email: 'Eye-catching video thumbnail to boost open rates',
-    general: 'Cinematic AI video with synchronized audio by OpenAI',
+    general: 'Cinematic AI video with synchronized audio by OpenAI (4-12s)',
+  },
+  'sora-pro': {
+    youtube: 'Premium cinematic quality — longer durations up to 25s for YouTube',
+    linkedin: 'Extended professional video for in-depth LinkedIn content',
+    tiktok: 'Higher quality, longer-form TikTok content (10-25s)',
+    instagram: 'Premium Reels with extended duration',
+    email: 'High-end video content for premium email campaigns',
+    general: 'Sora 2 Pro — higher quality, 10-25s durations',
   },
   runway: {
     youtube: 'Hollywood-grade visual fidelity, perfect for long-form YouTube content',
@@ -125,14 +133,16 @@ const PROVIDER_REASONS: Record<string, Record<string, string>> = {
 }
 
 const COST_ESTIMATES: Record<string, number> = {
-  sora: 0.80,      // ~$0.80 for 8s clip
-  runway: 2.72,    // ~$2.72 for 8s clip
-  heygen: 0.50,    // ~$0.50 for 30s
+  sora: 0.80,          // ~$0.80 for 8s clip (sora-2)
+  'sora-pro': 3.00,    // ~$3.00 for 10s clip (sora-2-pro)
+  runway: 2.72,        // ~$2.72 for 8s clip
+  heygen: 0.50,        // ~$0.50 for 30s
   template: 0,
 }
 
 const DURATION_ESTIMATES: Record<string, string> = {
   sora: '~90 seconds',
+  'sora-pro': '~120 seconds',
   runway: '~60 seconds',
   heygen: '~120 seconds',
   template: 'instant',
@@ -170,7 +180,7 @@ export function getRecommendation(ctx: RecommendationContext): MiaRecommendation
 
     return {
       provider,
-      model: provider === 'sora' ? 'sora-2' : undefined,
+      model: provider === 'sora' ? 'sora-2' : provider === 'sora-pro' ? 'sora-2-pro' : undefined,
       score,
       reason,
       cost,

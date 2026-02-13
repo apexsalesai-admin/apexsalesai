@@ -5,7 +5,7 @@
  * Supersedes the Runway-specific types in src/lib/render/types.ts.
  */
 
-export type VideoProviderName = 'runway' | 'heygen' | 'template' | 'sora'
+export type VideoProviderName = 'runway' | 'heygen' | 'template' | 'sora' | 'sora-pro'
 
 export type VideoProviderCategory = 'cinematic' | 'avatar' | 'marketing'
 

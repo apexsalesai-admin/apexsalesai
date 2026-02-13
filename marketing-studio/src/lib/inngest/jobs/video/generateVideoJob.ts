@@ -301,7 +301,7 @@ export const generateVideoJob = inngest.createFunction(
     // Step 4: Finalize
     await step.run('finalize', async () => {
       // Map provider name → StudioAssetProvider enum value
-      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'TEMPLATE', sora: 'SORA' }
+      const assetProviderMap: Record<string, string> = { runway: 'RUNWAY', heygen: 'HEYGEN', template: 'TEMPLATE', sora: 'SORA', 'sora-pro': 'SORA' }
       const assetProvider = assetProviderMap[providerName] || 'RUNWAY'
 
       if (finalStatus === 'completed' && outputUrl) {

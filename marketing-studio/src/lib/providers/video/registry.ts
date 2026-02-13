@@ -9,7 +9,7 @@ import type { VideoProvider, VideoProviderName, VideoProviderConfig } from './ty
 import { RunwayAdapter } from './runway-adapter'
 import { HeyGenProvider } from './heygen'
 import { TemplateProvider } from './template'
-import { SoraProvider } from './sora'
+import { SoraProvider, SoraProProvider } from './sora'
 
 const providers = new Map<VideoProviderName, VideoProvider>()
 
@@ -22,6 +22,7 @@ register(new TemplateProvider())
 register(new RunwayAdapter())
 register(new HeyGenProvider())
 register(new SoraProvider())
+register(new SoraProProvider())
 
 export function getVideoProvider(name: string): VideoProvider | null {
   return providers.get(name as VideoProviderName) || null

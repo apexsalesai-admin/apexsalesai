@@ -171,7 +171,7 @@ export default function ContentDetailPage() {
   const [newVersionScript, setNewVersionScript] = useState('')
   const [newVersionPrompt, setNewVersionPrompt] = useState('')
   const [newVersionAspect, setNewVersionAspect] = useState<'16:9' | '9:16' | '1:1'>('16:9')
-  const [newVersionDuration, setNewVersionDuration] = useState<4 | 6 | 8>(8)
+  const [newVersionDuration, setNewVersionDuration] = useState(8)
 
   // Mia recommendation
   const [miaRec, setMiaRec] = useState<{
@@ -1122,12 +1122,12 @@ export default function ContentDetailPage() {
                         <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
                         <select
                           value={newVersionDuration}
-                          onChange={e => setNewVersionDuration(Number(e.target.value) as 4 | 6 | 8)}
+                          onChange={e => setNewVersionDuration(Number(e.target.value))}
                           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                         >
-                          <option value={4}>4 seconds</option>
-                          <option value={6}>6 seconds</option>
-                          <option value={8}>8 seconds</option>
+                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedDurations || [4, 6, 8]).map(d => (
+                            <option key={d} value={d}>{d} seconds</option>
+                          ))}
                         </select>
                       </div>
                     </div>
