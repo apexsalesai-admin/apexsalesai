@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
 import { ContentCreator } from '@/components/content/content-creator'
+import { MiaContextHint } from '@/components/studio/MiaContextHint'
 
 interface ContentDraft {
   channels: string[]
@@ -81,6 +82,11 @@ function ContentCreatorWrapper() {
           Create, preview, and schedule content for your channels
         </p>
       </div>
+
+      <MiaContextHint
+        hintKey="content-create-tips"
+        message="Start by choosing your channel and content type, then let AI generate a draft for you. You can always refine it before publishing!"
+      />
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">

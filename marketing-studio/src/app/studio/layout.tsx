@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
@@ -181,25 +182,7 @@ export default function StudioLayout({
           </div>
 
           {/* Quick Stats */}
-          <div className="p-4 border-t border-slate-200">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
-              This Month
-            </h4>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-500">Content Created</p>
-                <p className="text-lg font-bold text-slate-900">42</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-500">Videos Generated</p>
-                <p className="text-lg font-bold text-purple-600">8</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-500">Engagement</p>
-                <p className="text-lg font-bold text-emerald-600">+24%</p>
-              </div>
-            </div>
-          </div>
+          <SidebarStats />
         </aside>
 
         {/* Main content */}
@@ -209,5 +192,62 @@ export default function StudioLayout({
       </div>
     </div>
     </MiaProvider>
+  )
+}
+
+function SidebarStats() {
+  const [stats, setStats] = useState<{
+    postsCreated: number
+    totalRenders: number
+    integrationsConnected: number
+  } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/studio/dashboard/stats')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setStats({
+            postsCreated: data.data.kpi.postsCreated,
+            totalRenders: data.data.kpi.totalRenders,
+            integrationsConnected: data.data.kpi.integrationsConnected,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  return (
+    <div className="p-4 border-t border-slate-200">
+      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">
+        This Month
+      </h4>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Content Created</p>
+          {stats ? (
+            <p className="text-lg font-bold text-slate-900">{stats.postsCreated}</p>
+          ) : (
+            <div className="h-7 w-8 animate-pulse bg-slate-200 rounded" />
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Videos Rendered</p>
+          {stats ? (
+            <p className="text-lg font-bold text-purple-600">{stats.totalRenders}</p>
+          ) : (
+            <div className="h-7 w-8 animate-pulse bg-slate-200 rounded" />
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-slate-500">Integrations</p>
+          {stats ? (
+            <p className="text-lg font-bold text-emerald-600">{stats.integrationsConnected}</p>
+          ) : (
+            <div className="h-7 w-8 animate-pulse bg-slate-200 rounded" />
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

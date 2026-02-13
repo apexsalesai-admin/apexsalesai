@@ -37,6 +37,7 @@ import { SeoToolkit } from '@/components/content/seo-toolkit'
 import { RenderArtifactPanel } from '@/components/studio/video/RenderArtifactPanel'
 import { MiaCopilotPanel } from '@/components/studio/MiaCopilotPanel'
 import { useMiaCopilot } from '@/hooks/useMiaCopilot'
+import { MiaContextHint } from '@/components/studio/MiaContextHint'
 import type { RenderResult } from '@/lib/video/types/render-result'
 
 interface ContentDetail {
@@ -955,6 +956,10 @@ export default function ContentDetailPage() {
         <div className="col-span-2">
           {activeTab === 'preview' && (
             <div className="space-y-6">
+              <MiaContextHint
+                hintKey="content-editor-tips"
+                message="Tip: Use the Edit button to refine your content. For video posts, switch to the Video Assets tab to manage renders and scenes."
+              />
               {/* Content Body */}
               <div className="p-6 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
@@ -1044,12 +1049,19 @@ export default function ContentDetailPage() {
           )}
 
           {activeTab === 'seo' && (
-            <SeoToolkit
-              title={content.title}
-              content={content.body}
-              keywords={seoKeywords}
-              onKeywordsChange={setSeoKeywords}
-            />
+            <div className="space-y-4">
+              <MiaContextHint
+                hintKey="content-seo-tips"
+                message="Use the Optimize tab to generate SEO titles, suggest keywords, and improve readability — all powered by AI. Check your score in the Analysis tab first!"
+                action={{ label: 'Learn about SEO', href: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide' }}
+              />
+              <SeoToolkit
+                title={content.title}
+                content={content.body}
+                keywords={seoKeywords}
+                onKeywordsChange={setSeoKeywords}
+              />
+            </div>
           )}
 
           {activeTab === 'video' && isVideo && (

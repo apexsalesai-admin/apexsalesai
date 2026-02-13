@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw } from 'lucide-react'
+import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ScheduledContent {
@@ -39,6 +39,64 @@ function ContentPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sortField, setSortField] = useState<'title' | 'status' | 'scheduledFor' | 'createdAt'>('createdAt')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Toggle sort: click same column flips direction, new column defaults desc
+  const toggleSort = (field: typeof sortField) => {
+    if (field === sortField) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
+
+  // Client-side filter + sort
+  const displayContent = useMemo(() => {
+    let items = [...content]
+
+    // Search filter
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase()
+      items = items.filter(c =>
+        c.title.toLowerCase().includes(q) ||
+        c.contentType.toLowerCase().includes(q) ||
+        c.channels.some(ch => ch.toLowerCase().includes(q))
+      )
+    }
+
+    // Sort
+    items.sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'title':
+          cmp = a.title.localeCompare(b.title)
+          break
+        case 'status':
+          cmp = a.status.localeCompare(b.status)
+          break
+        case 'scheduledFor':
+          cmp = (a.scheduledFor ?? '').localeCompare(b.scheduledFor ?? '')
+          break
+        case 'createdAt':
+          cmp = a.createdAt.localeCompare(b.createdAt)
+          break
+      }
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+
+    return items
+  }, [content, debouncedSearch, sortField, sortDirection])
 
   // Check for success message
   useEffect(() => {
@@ -189,22 +247,43 @@ function ContentPageInner() {
         />
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center space-x-2">
-        {['all', 'DRAFT', 'SCHEDULED', 'PENDING_APPROVAL', 'PUBLISHED', 'FAILED'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-              filter === status
-                ? 'bg-apex-primary text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            )}
-          >
-            {status === 'all' ? 'All' : STATUS_CONFIG[status]?.label || status}
-          </button>
-        ))}
+      {/* Filters + Search */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center space-x-2">
+          {['all', 'DRAFT', 'SCHEDULED', 'PENDING_APPROVAL', 'PUBLISHED', 'FAILED'].map((status) => (
+            <button
+              key={status}
+              onClick={() => setFilter(status)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                filter === status
+                  ? 'bg-apex-primary text-white'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              )}
+            >
+              {status === 'all' ? 'All' : STATUS_CONFIG[status]?.label || status}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search content..."
+            className="pl-9 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-apex-primary/30 focus:border-apex-primary w-64"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(''); searchInputRef.current?.focus() }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              &times;
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error State */}
@@ -227,35 +306,53 @@ function ContentPageInner() {
             <Loader2 className="w-8 h-8 animate-spin text-apex-primary mx-auto mb-4" />
             <p className="text-slate-500">Loading content...</p>
           </div>
-        ) : content.length === 0 ? (
+        ) : displayContent.length === 0 ? (
           <div className="p-12 text-center">
-            <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No content yet</h3>
-            <p className="text-slate-500 mb-4">
-              Create your first piece of content to get started
-            </p>
-            <Link
-              href="/studio/content/new"
-              className="btn-primary inline-flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Content</span>
-            </Link>
+            {debouncedSearch.trim() ? (
+              <>
+                <Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">No results found</h3>
+                <p className="text-slate-500 mb-4">
+                  No content matches &ldquo;{debouncedSearch}&rdquo;
+                </p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="btn-secondary"
+                >
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <>
+                <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">No content yet</h3>
+                <p className="text-slate-500 mb-4">
+                  Create your first piece of content to get started
+                </p>
+                <Link
+                  href="/studio/content/new"
+                  className="btn-primary inline-flex items-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Content</span>
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr className="text-left text-sm text-slate-500">
-                <th className="px-4 py-3 font-medium">Content</th>
+                <SortableHeader field="title" label="Content" sortField={sortField} sortDirection={sortDirection} onToggle={toggleSort} />
                 <th className="px-4 py-3 font-medium">Channels</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Scheduled</th>
-                <th className="px-4 py-3 font-medium">Created</th>
+                <SortableHeader field="status" label="Status" sortField={sortField} sortDirection={sortDirection} onToggle={toggleSort} />
+                <SortableHeader field="scheduledFor" label="Scheduled" sortField={sortField} sortDirection={sortDirection} onToggle={toggleSort} />
+                <SortableHeader field="createdAt" label="Created" sortField={sortField} sortDirection={sortDirection} onToggle={toggleSort} />
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {content.map((item) => {
+              {displayContent.map((item) => {
                 const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.DRAFT
                 const StatusIcon = statusConfig.icon
 
@@ -425,4 +522,44 @@ function formatDate(date: Date): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+type SortField = 'title' | 'status' | 'scheduledFor' | 'createdAt'
+
+function SortableHeader({
+  field,
+  label,
+  sortField,
+  sortDirection,
+  onToggle,
+}: {
+  field: SortField
+  label: string
+  sortField: SortField
+  sortDirection: 'asc' | 'desc'
+  onToggle: (field: SortField) => void
+}) {
+  const isActive = sortField === field
+  return (
+    <th className="px-4 py-3 font-medium">
+      <button
+        onClick={() => onToggle(field)}
+        className={cn(
+          'inline-flex items-center gap-1 hover:text-slate-900 transition-colors',
+          isActive ? 'text-slate-900' : 'text-slate-500'
+        )}
+      >
+        {label}
+        {isActive ? (
+          sortDirection === 'asc' ? (
+            <ChevronUp className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
+          )
+        ) : (
+          <ArrowUpDown className="w-3.5 h-3.5 opacity-40" />
+        )}
+      </button>
+    </th>
+  )
 }

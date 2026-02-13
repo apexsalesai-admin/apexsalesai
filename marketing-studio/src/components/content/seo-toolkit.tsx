@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Search,
   TrendingUp,
@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Copy,
   RefreshCw,
+  Loader2,
   Sparkles,
   Zap,
   Eye,
@@ -120,6 +121,19 @@ export function SeoToolkit({
   const [searchResults, setSearchResults] = useState<Array<{ title: string; url: string; description: string }>>([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+
+  // SEO Optimize actions state
+  type OptimizeData = {
+    titles?: string[]
+    keywords?: Array<{ keyword: string; type?: string }>
+    improved?: string
+    changes?: string[]
+    links?: Array<{ anchorText: string; targetTopic: string; reason: string }>
+  }
+  const [optimizeLoading, setOptimizeLoading] = useState<string | null>(null)
+  const [optimizeResults, setOptimizeResults] = useState<Record<string, OptimizeData>>({})
+  const [optimizeError, setOptimizeError] = useState<string | null>(null)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
 
   // Calculate content analysis
   const contentAnalysis: ContentAnalysis = {
@@ -251,6 +265,34 @@ export function SeoToolkit({
     } finally {
       setIsGeneratingMeta(false)
     }
+  }
+
+  const runOptimizeAction = useCallback(async (action: string) => {
+    setOptimizeLoading(action)
+    setOptimizeError(null)
+    try {
+      const res = await fetch('/api/studio/seo/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, title, content, keywords }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setOptimizeResults(prev => ({ ...prev, [action]: data.data as OptimizeData }))
+      } else {
+        setOptimizeError(data.error || 'Optimization failed')
+      }
+    } catch {
+      setOptimizeError('AI provider not available. Check your API keys in Integrations.')
+    } finally {
+      setOptimizeLoading(null)
+    }
+  }, [title, content, keywords])
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
   }
 
   const toggleSection = (section: string) => {
@@ -663,35 +705,171 @@ export function SeoToolkit({
                   <Zap className="w-5 h-5 text-purple-500" />
                   <span>Quick Actions</span>
                 </h4>
+                {optimizeError && (
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center space-x-1">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>{optimizeError}</span>
+                  </div>
+                )}
                 <div className="space-y-3">
-                  <button className="w-full p-4 bg-purple-50 hover:bg-purple-100 rounded-xl text-left transition-colors flex items-center space-x-3">
-                    <Sparkles className="w-5 h-5 text-purple-600" />
+                  <button
+                    onClick={() => runOptimizeAction('generate-title')}
+                    disabled={optimizeLoading !== null}
+                    className="w-full p-4 bg-purple-50 hover:bg-purple-100 rounded-xl text-left transition-colors flex items-center space-x-3 disabled:opacity-50"
+                  >
+                    {optimizeLoading === 'generate-title' ? (
+                      <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                    )}
                     <div>
                       <p className="font-medium text-slate-900">Generate SEO Title</p>
                       <p className="text-xs text-slate-500">Create an optimized title with AI</p>
                     </div>
                   </button>
-                  <button className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl text-left transition-colors flex items-center space-x-3">
-                    <Hash className="w-5 h-5 text-blue-600" />
+                  {/* Generate Title Results */}
+                  {optimizeResults['generate-title'] && (
+                    <div className="ml-2 p-3 bg-purple-50 border border-purple-200 rounded-lg space-y-2">
+                      {(optimizeResults['generate-title'].titles ?? []).map((t, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2">
+                          <p className="text-sm text-slate-800 flex-1">{t}</p>
+                          <button
+                            onClick={() => copyToClipboard(t, `title-${i}`)}
+                            className="p-1 text-purple-500 hover:text-purple-700 flex-shrink-0"
+                            title="Copy"
+                          >
+                            {copiedField === `title-${i}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => runOptimizeAction('suggest-keywords')}
+                    disabled={optimizeLoading !== null}
+                    className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl text-left transition-colors flex items-center space-x-3 disabled:opacity-50"
+                  >
+                    {optimizeLoading === 'suggest-keywords' ? (
+                      <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                    ) : (
+                      <Hash className="w-5 h-5 text-blue-600" />
+                    )}
                     <div>
                       <p className="font-medium text-slate-900">Suggest Keywords</p>
                       <p className="text-xs text-slate-500">Find related keywords to target</p>
                     </div>
                   </button>
-                  <button className="w-full p-4 bg-emerald-50 hover:bg-emerald-100 rounded-xl text-left transition-colors flex items-center space-x-3">
-                    <BookOpen className="w-5 h-5 text-emerald-600" />
+                  {/* Keyword Suggestions Results */}
+                  {optimizeResults['suggest-keywords'] && (
+                    <div className="ml-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex flex-wrap gap-1.5">
+                        {(optimizeResults['suggest-keywords'].keywords ?? []).map((k, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (!keywords.includes(k.keyword)) {
+                                onKeywordsChange?.([...keywords, k.keyword])
+                              }
+                            }}
+                            className={cn(
+                              'text-xs px-2 py-1 rounded-full border transition-colors',
+                              keywords.includes(k.keyword)
+                                ? 'bg-blue-200 border-blue-300 text-blue-800 cursor-default'
+                                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                            )}
+                            title={keywords.includes(k.keyword) ? 'Already added' : 'Click to add'}
+                          >
+                            {keywords.includes(k.keyword) ? <Check className="w-3 h-3 inline mr-0.5" /> : '+ '}
+                            {k.keyword}
+                            {k.type && <span className="ml-1 opacity-60">({k.type})</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => runOptimizeAction('improve-readability')}
+                    disabled={optimizeLoading !== null}
+                    className="w-full p-4 bg-emerald-50 hover:bg-emerald-100 rounded-xl text-left transition-colors flex items-center space-x-3 disabled:opacity-50"
+                  >
+                    {optimizeLoading === 'improve-readability' ? (
+                      <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+                    ) : (
+                      <BookOpen className="w-5 h-5 text-emerald-600" />
+                    )}
                     <div>
                       <p className="font-medium text-slate-900">Improve Readability</p>
                       <p className="text-xs text-slate-500">Simplify complex sentences</p>
                     </div>
                   </button>
-                  <button className="w-full p-4 bg-amber-50 hover:bg-amber-100 rounded-xl text-left transition-colors flex items-center space-x-3">
-                    <LinkIcon className="w-5 h-5 text-amber-600" />
+                  {/* Readability Results */}
+                  {optimizeResults['improve-readability'] && (
+                    <div className="ml-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-emerald-700">Improved Version</p>
+                        <button
+                          onClick={() => copyToClipboard(
+                            optimizeResults['improve-readability'].improved ?? '',
+                            'readability'
+                          )}
+                          className="text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
+                        >
+                          {copiedField === 'readability' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          {copiedField === 'readability' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {optimizeResults['improve-readability'].improved}
+                      </p>
+                      {(optimizeResults['improve-readability'].changes ?? []).length > 0 && (
+                        <div className="pt-2 border-t border-emerald-200">
+                          <p className="text-xs font-medium text-emerald-700 mb-1">Changes made:</p>
+                          <ul className="text-xs text-slate-600 space-y-0.5">
+                            {(optimizeResults['improve-readability'].changes ?? []).map((c, i) => (
+                              <li key={i} className="flex items-start gap-1">
+                                <Check className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>{c}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => runOptimizeAction('suggest-links')}
+                    disabled={optimizeLoading !== null}
+                    className="w-full p-4 bg-amber-50 hover:bg-amber-100 rounded-xl text-left transition-colors flex items-center space-x-3 disabled:opacity-50"
+                  >
+                    {optimizeLoading === 'suggest-links' ? (
+                      <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                    ) : (
+                      <LinkIcon className="w-5 h-5 text-amber-600" />
+                    )}
                     <div>
-                      <p className="font-medium text-slate-900">Add Internal Links</p>
-                      <p className="text-xs text-slate-500">Suggest relevant internal links</p>
+                      <p className="font-medium text-slate-900">Suggest Internal Links</p>
+                      <p className="text-xs text-slate-500">Find relevant internal link opportunities</p>
                     </div>
                   </button>
+                  {/* Link Suggestions Results */}
+                  {optimizeResults['suggest-links'] && (
+                    <div className="ml-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                      {(optimizeResults['suggest-links'].links ?? []).map((link, i) => (
+                        <div key={i} className="text-sm border-b border-amber-100 pb-2 last:border-0 last:pb-0">
+                          <div className="flex items-center gap-1">
+                            <LinkIcon className="w-3 h-3 text-amber-600" />
+                            <span className="font-medium text-slate-900">&ldquo;{link.anchorText}&rdquo;</span>
+                            <span className="text-slate-400">&rarr;</span>
+                            <span className="text-amber-700">{link.targetTopic}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5 ml-4">{link.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

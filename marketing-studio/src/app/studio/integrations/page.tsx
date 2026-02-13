@@ -332,9 +332,19 @@ function IntegrationCard({
 
             {/* Test result */}
             {testResult && (
-              <p className={cn('text-xs mt-2', testResult.success ? 'text-emerald-600' : 'text-red-600')}>
-                {testResult.success ? `Test passed (${testResult.latency}ms)` : 'Test failed'}
-              </p>
+              <div className={cn(
+                'inline-flex items-center space-x-1.5 text-xs mt-2 px-2 py-1 rounded-full',
+                testResult.success
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              )}>
+                {testResult.success ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <AlertCircle className="w-3 h-3" />
+                )}
+                <span>{testResult.success ? `Test passed (${testResult.latency}ms)` : 'Test failed — check API key'}</span>
+              </div>
             )}
           </div>
         </div>
@@ -441,7 +451,7 @@ function ConnectProviderModal({
             )}
             <button
               onClick={() => {
-                window.location.href = `/api/studio/integrations/youtube/authorize`
+                window.location.href = `/api/studio/youtube/authorize`
               }}
               className="w-full px-4 py-3 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center space-x-2"
             >
