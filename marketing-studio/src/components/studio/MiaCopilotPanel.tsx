@@ -29,6 +29,8 @@ import {
   Lightbulb,
   RefreshCw,
   Brain,
+  Check,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
@@ -293,7 +295,7 @@ function MiaMessageBubble({
 
       {/* Scene Breakdown (for script-analysis messages) */}
       {message.type === 'script-analysis' && message.metadata?.scenes && (
-        <SceneBreakdown scenes={message.metadata.scenes} />
+        <SceneBreakdown scenes={message.metadata.scenes} onAction={onAction} />
       )}
 
       {/* Suggested Rewrites (AI-powered) */}
@@ -379,7 +381,15 @@ function MessageContent({ text }: { text: string }) {
   )
 }
 
-function SceneBreakdown({ scenes }: { scenes: MiaSceneAnalysis[] }) {
+function SceneBreakdown({
+  scenes,
+  onAction,
+}: {
+  scenes: MiaSceneAnalysis[]
+  onAction: (action: string, data?: Record<string, unknown>) => void
+}) {
+  const [sceneStatus, setSceneStatus] = useState<Record<number, 'accepted' | 'rejected'>>({})
+
   const PROVIDER_NAMES: Record<string, string> = {
     sora: 'Sora 2',
     'sora-2': 'Sora 2 Standard',
@@ -395,61 +405,123 @@ function SceneBreakdown({ scenes }: { scenes: MiaSceneAnalysis[] }) {
     'needs-work': { bg: 'bg-red-100', text: 'text-red-700', label: 'Needs Work' },
   }
 
+  const handleAccept = (sceneNumber: number) => {
+    setSceneStatus(prev => ({ ...prev, [sceneNumber]: 'accepted' }))
+    onAction('accept-scene', { sceneNumber })
+  }
+
+  const handleReject = (sceneNumber: number) => {
+    setSceneStatus(prev => ({ ...prev, [sceneNumber]: 'rejected' }))
+    onAction('reject-scene', { sceneNumber })
+  }
+
   return (
     <div className="mt-3 space-y-2">
-      {scenes.map(scene => (
-        <div
-          key={scene.sceneNumber}
-          className="p-2.5 bg-purple-50/50 rounded-lg space-y-1.5"
-        >
-          {/* Header row */}
-          <div className="flex items-start space-x-3">
-            <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-bold text-purple-700">{scene.sceneNumber}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-xs font-medium text-slate-800">{scene.label} ({scene.estimatedDuration}s)</span>
-                  {scene.strengthRating && STRENGTH_STYLES[scene.strengthRating] && (
-                    <span className={cn(
-                      'text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider',
-                      STRENGTH_STYLES[scene.strengthRating].bg,
-                      STRENGTH_STYLES[scene.strengthRating].text,
-                    )}>
-                      {STRENGTH_STYLES[scene.strengthRating].label}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] text-purple-600">
-                  {scene.estimatedCost > 0 ? `$${scene.estimatedCost.toFixed(2)}` : 'Free'}
-                </span>
+      {scenes.map(scene => {
+        const status = sceneStatus[scene.sceneNumber]
+        return (
+          <div
+            key={scene.sceneNumber}
+            className={cn(
+              'p-2.5 rounded-lg space-y-1.5 transition-colors',
+              status === 'accepted'
+                ? 'bg-emerald-50/60 border border-emerald-200'
+                : status === 'rejected'
+                  ? 'bg-red-50/40 border border-red-200 opacity-60'
+                  : 'bg-purple-50/50',
+            )}
+          >
+            {/* Header row */}
+            <div className="flex items-start space-x-3">
+              <div className={cn(
+                'w-6 h-6 rounded-full flex items-center justify-center shrink-0',
+                status === 'accepted' ? 'bg-emerald-200' :
+                status === 'rejected' ? 'bg-red-200' : 'bg-purple-200',
+              )}>
+                {status === 'accepted' ? (
+                  <Check className="w-3 h-3 text-emerald-700" />
+                ) : status === 'rejected' ? (
+                  <X className="w-3 h-3 text-red-700" />
+                ) : (
+                  <span className="text-[10px] font-bold text-purple-700">{scene.sceneNumber}</span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                {PROVIDER_NAMES[scene.recommendedModel || scene.recommendedProvider] || scene.recommendedProvider}
-                {' \u00B7 '}
-                &ldquo;{scene.scriptExcerpt}&rdquo;
-              </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-xs font-medium text-slate-800">{scene.label} ({scene.estimatedDuration}s)</span>
+                    {scene.strengthRating && STRENGTH_STYLES[scene.strengthRating] && (
+                      <span className={cn(
+                        'text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider',
+                        STRENGTH_STYLES[scene.strengthRating].bg,
+                        STRENGTH_STYLES[scene.strengthRating].text,
+                      )}>
+                        {STRENGTH_STYLES[scene.strengthRating].label}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-purple-600">
+                    {scene.estimatedCost > 0 ? `$${scene.estimatedCost.toFixed(2)}` : 'Free'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                  {PROVIDER_NAMES[scene.recommendedModel || scene.recommendedProvider] || scene.recommendedProvider}
+                  {' \u00B7 '}
+                  &ldquo;{scene.scriptExcerpt}&rdquo;
+                </p>
+              </div>
             </div>
+
+            {/* AI Visual Direction */}
+            {scene.visualDirection && (
+              <div className="ml-9 flex items-start space-x-1.5">
+                <Eye className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-indigo-600 leading-snug">{scene.visualDirection}</p>
+              </div>
+            )}
+
+            {/* AI Creative Feedback */}
+            {scene.creativeFeedback && (
+              <div className="ml-9 flex items-start space-x-1.5">
+                <Lightbulb className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-amber-700 leading-snug">{scene.creativeFeedback}</p>
+              </div>
+            )}
+
+            {/* Accept / Reject buttons */}
+            {!status && (
+              <div className="ml-9 flex items-center space-x-2 pt-1">
+                <button
+                  onClick={() => handleAccept(scene.sceneNumber)}
+                  className="flex items-center space-x-1 px-2 py-1 text-[10px] font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors"
+                >
+                  <Check className="w-3 h-3" />
+                  <span>Accept</span>
+                </button>
+                <button
+                  onClick={() => handleReject(scene.sceneNumber)}
+                  className="flex items-center space-x-1 px-2 py-1 text-[10px] font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Reject</span>
+                </button>
+              </div>
+            )}
+
+            {/* Status indicators */}
+            {status === 'accepted' && (
+              <div className="ml-9">
+                <span className="text-[10px] font-medium text-emerald-600">Scene approved</span>
+              </div>
+            )}
+            {status === 'rejected' && (
+              <div className="ml-9">
+                <span className="text-[10px] font-medium text-red-500">Requesting alternative...</span>
+              </div>
+            )}
           </div>
-
-          {/* AI Visual Direction */}
-          {scene.visualDirection && (
-            <div className="ml-9 flex items-start space-x-1.5">
-              <Eye className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-indigo-600 leading-snug">{scene.visualDirection}</p>
-            </div>
-          )}
-
-          {/* AI Creative Feedback */}
-          {scene.creativeFeedback && (
-            <div className="ml-9 flex items-start space-x-1.5">
-              <Lightbulb className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-amber-700 leading-snug">{scene.creativeFeedback}</p>
-            </div>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

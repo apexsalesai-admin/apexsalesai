@@ -157,6 +157,15 @@ export default function ContentDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // YouTube publish modal state
+  const [showYouTubeModal, setShowYouTubeModal] = useState(false)
+  const [ytTitle, setYtTitle] = useState('')
+  const [ytDescription, setYtDescription] = useState('')
+  const [ytTags, setYtTags] = useState('')
+  const [ytPrivacy, setYtPrivacy] = useState<'private' | 'unlisted' | 'public'>('private')
+  const [isYtPublishing, setIsYtPublishing] = useState(false)
+  const [ytResult, setYtResult] = useState<{ videoId?: string; permalink?: string; error?: string } | null>(null)
+
   // Video version state
   const [versions, setVersions] = useState<ContentVersion[]>([])
   const [isLoadingVersions, setIsLoadingVersions] = useState(false)
@@ -510,6 +519,50 @@ export default function ContentDetailPage() {
       alert('Publishing failed. Please try again.')
     } finally {
       setIsPublishing(false)
+    }
+  }
+
+  // YouTube publish modal helpers
+  const openYouTubeModal = () => {
+    if (!content) return
+    setYtTitle(content.title)
+    setYtDescription(content.body?.slice(0, 5000) || '')
+    setYtTags(content.hashtags?.map(h => h.replace('#', '')).join(', ') || '')
+    setYtPrivacy('private')
+    setYtResult(null)
+    setShowYouTubeModal(true)
+  }
+
+  const handleYouTubePublish = async () => {
+    const videoUrl = publishEligibility?.videoUrl || finalVideoUrl
+    if (!videoUrl) return
+
+    setIsYtPublishing(true)
+    setYtResult(null)
+    try {
+      const response = await fetch('/api/studio/youtube/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: ytTitle,
+          description: ytDescription,
+          tags: ytTags.split(',').map(t => t.trim()).filter(Boolean),
+          privacyStatus: ytPrivacy,
+          videoUrl,
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setYtResult({ videoId: data.data.videoId, permalink: data.data.permalink })
+        setContent(prev => prev ? { ...prev, status: 'PUBLISHED' } : null)
+      } else {
+        setYtResult({ error: data.error || 'YouTube publish failed' })
+      }
+    } catch (e) {
+      console.error('YouTube publish failed:', e)
+      setYtResult({ error: 'YouTube publish failed. Please try again.' })
+    } finally {
+      setIsYtPublishing(false)
     }
   }
 
@@ -886,6 +939,19 @@ export default function ContentDetailPage() {
                 </div>
               )}
             </div>
+          )}
+          {/* YouTube publish button — shown when content is video + has YOUTUBE channel + video is ready */}
+          {(content.status === 'APPROVED' || content.status === 'SCHEDULED') &&
+            isVideo &&
+            content.channels.includes('YOUTUBE') &&
+            (publishEligibility?.videoUrl || finalVideoUrl) && (
+            <button
+              onClick={openYouTubeModal}
+              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg flex items-center space-x-2 transition-colors"
+            >
+              <Play className="w-4 h-4" />
+              <span>YouTube</span>
+            </button>
           )}
           {content.status === 'PUBLISHED' && (
             <span className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg flex items-center space-x-2">
@@ -1735,6 +1801,130 @@ export default function ContentDetailPage() {
                 {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YouTube Publish Modal */}
+      {showYouTubeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-5">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <Play className="w-5 h-5 text-red-600" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Publish to YouTube</h2>
+              </div>
+
+              {ytResult?.permalink ? (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                    <p className="text-sm font-medium text-emerald-700">Video published successfully!</p>
+                    <a
+                      href={ytResult.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-emerald-600 hover:underline flex items-center space-x-1 mt-1"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>{ytResult.permalink}</span>
+                    </a>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setShowYouTubeModal(false)}
+                      className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {ytResult?.error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                      {ytResult.error}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+                    <input
+                      type="text"
+                      value={ytTitle}
+                      onChange={e => setYtTitle(e.target.value)}
+                      maxLength={100}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">{ytTitle.length}/100</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                    <textarea
+                      value={ytDescription}
+                      onChange={e => setYtDescription(e.target.value)}
+                      rows={4}
+                      maxLength={5000}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">{ytDescription.length}/5000</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={ytTags}
+                      onChange={e => setYtTags(e.target.value)}
+                      placeholder="marketing, ai, content"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
+                    <select
+                      value={ytPrivacy}
+                      onChange={e => setYtPrivacy(e.target.value as 'private' | 'unlisted' | 'public')}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                    >
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                      <option value="public">Public</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-3 pt-2">
+                    <button
+                      onClick={() => setShowYouTubeModal(false)}
+                      disabled={isYtPublishing}
+                      className="px-4 py-2 border border-slate-200 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleYouTubePublish}
+                      disabled={isYtPublishing || !ytTitle.trim()}
+                      className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+                    >
+                      {isYtPublishing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          <span>Publish to YouTube</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
