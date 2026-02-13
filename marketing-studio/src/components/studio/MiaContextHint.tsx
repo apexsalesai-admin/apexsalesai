@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -28,12 +28,17 @@ interface MiaContextHintProps {
 
 export function MiaContextHint({ hintKey, message, action, variant = 'default' }: MiaContextHintProps) {
   const storageKey = `mia-hint-dismissed:${hintKey}`
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem(storageKey) === 'true'
-  })
+  const [mounted, setMounted] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
 
-  if (dismissed) return null
+  useEffect(() => {
+    setMounted(true)
+    const wasDismissed = localStorage.getItem(storageKey) === 'true'
+    if (wasDismissed) setDismissed(true)
+  }, [storageKey])
+
+  // Return null before mount to avoid hydration mismatch
+  if (!mounted || dismissed) return null
 
   const dismiss = () => {
     setDismissed(true)
