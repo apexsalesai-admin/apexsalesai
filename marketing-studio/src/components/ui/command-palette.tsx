@@ -315,7 +315,7 @@ export function CommandPalette({ onOpenMia }: CommandPaletteProps) {
               <div className="max-h-80 overflow-y-auto p-2">
                 {allFiltered.length === 0 ? (
                   <div className="py-8 text-center text-slate-500">
-                    No commands found for "{query}"
+                    No commands found for &quot;{query}&quot;
                   </div>
                 ) : (
                   <>

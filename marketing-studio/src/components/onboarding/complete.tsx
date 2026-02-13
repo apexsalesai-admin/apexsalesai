@@ -22,7 +22,7 @@ export function OnboardingComplete() {
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Setup Complete!</h1>
         <p className="text-lg text-slate-600 mt-2">
-          Your Marketing Studio is ready to go. Here's what you've configured:
+          Your Marketing Studio is ready to go. Here&apos;s what you&apos;ve configured:
         </p>
       </div>
 
@@ -90,7 +90,7 @@ export function OnboardingComplete() {
 
       {/* What's Next */}
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 text-left">
-        <h3 className="font-semibold text-slate-900 mb-4">What's Next?</h3>
+        <h3 className="font-semibold text-slate-900 mb-4">What&apos;s Next?</h3>
         <ul className="space-y-3">
           <li className="flex items-start space-x-3">
             <span className="flex-shrink-0 w-6 h-6 bg-apex-primary text-white rounded-full flex items-center justify-center text-sm font-medium">

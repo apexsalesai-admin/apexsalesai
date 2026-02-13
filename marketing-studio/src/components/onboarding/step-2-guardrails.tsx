@@ -127,7 +127,7 @@ export function Step2Guardrails() {
               }`}
             >
               <p className="font-medium text-slate-900">{option.label}</p>
-              <p className="text-sm text-slate-500 mt-1">e.g., "{option.example}"</p>
+              <p className="text-sm text-slate-500 mt-1">e.g., &quot;{option.example}&quot;</p>
             </button>
           ))}
         </div>
@@ -140,7 +140,7 @@ export function Step2Guardrails() {
           <span>Banned Claims</span>
         </label>
         <p className="text-sm text-slate-500">
-          Claims that should never be made in content (e.g., "guaranteed results", "100% success rate")
+          Claims that should never be made in content (e.g., &quot;guaranteed results&quot;, &quot;100% success rate&quot;)
         </p>
         <div className="flex space-x-2">
           <input
@@ -177,7 +177,7 @@ export function Step2Guardrails() {
       <div className="space-y-3">
         <label className="label">Compliance Rules</label>
         <p className="text-sm text-slate-500">
-          Regulatory or legal requirements (e.g., "Must include disclaimer for financial advice")
+          Regulatory or legal requirements (e.g., &quot;Must include disclaimer for financial advice&quot;)
         </p>
         <div className="flex space-x-2">
           <input

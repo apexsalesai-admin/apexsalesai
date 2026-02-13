@@ -116,7 +116,7 @@ export default function SettingsPage() {
                 Brand Voice
               </h2>
               <p className="text-sm text-slate-600 mt-1">
-                Define your brand's tone, target audience, and content preferences for AI generation
+                Define your brand&apos;s tone, target audience, and content preferences for AI generation
               </p>
             </div>
           </div>

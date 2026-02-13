@@ -240,7 +240,7 @@ export default function AnalyticsPage() {
         <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-200">
           <div className="flex items-center space-x-2 mb-6">
             <Sparkles className="w-5 h-5 text-purple-600" />
-            <h3 className="font-bold text-purple-900">Mia's Insights</h3>
+            <h3 className="font-bold text-purple-900">Mia&apos;s Insights</h3>
           </div>
           <div className="space-y-4">
             <InsightCard

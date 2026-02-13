@@ -252,7 +252,7 @@ export default function BrandVoiceSettingsPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Brand Voice</h1>
             <p className="text-slate-600 mt-1">
-              Define your brand's tone and style for AI-generated content
+              Define your brand&apos;s tone and style for AI-generated content
             </p>
           </div>
           <button

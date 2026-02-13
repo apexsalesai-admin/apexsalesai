@@ -237,7 +237,7 @@ export default function AuthDiagnosticsPage() {
       <section className="bg-blue-50 border border-blue-200 rounded-xl p-6">
         <h2 className="font-semibold text-blue-900 mb-2">Need Help?</h2>
         <p className="text-sm text-blue-700 mb-4">
-          If authentication isn't working, check these common issues:
+          If authentication isn&apos;t working, check these common issues:
         </p>
         <ul className="text-sm text-blue-700 space-y-2">
           <li className="flex items-start gap-2">

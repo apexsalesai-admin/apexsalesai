@@ -893,7 +893,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                 {/* Content Goal Selection */}
                 {draft.channels.length > 0 && (
                   <div className="pt-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-                    <label className="block text-lg font-bold text-slate-900 mb-4">What's your goal?</label>
+                    <label className="block text-lg font-bold text-slate-900 mb-4">What&apos;s your goal?</label>
                     <div className="grid grid-cols-3 gap-3">
                       {CONTENT_GOALS.map(goal => {
                         const Icon = goal.icon
@@ -934,7 +934,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                           <Lightbulb className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-900">Mia's Strategy Recommendation</h4>
+                          <h4 className="font-bold text-slate-900">Mia&apos;s Strategy Recommendation</h4>
                           <p className="text-xs text-slate-500">Based on your selected channels & goal</p>
                         </div>
                       </div>
@@ -947,7 +947,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             <div>
                               <p className="text-sm font-medium text-slate-900">Multi-Platform Strategy</p>
                               <p className="text-xs text-slate-600 mt-1">
-                                I'll create unique variations for each platform while keeping your core message consistent. Cross-posting identical content reduces engagement by up to 40%.
+                                I&apos;ll create unique variations for each platform while keeping your core message consistent. Cross-posting identical content reduces engagement by up to 40%.
                               </p>
                             </div>
                           </div>
@@ -975,7 +975,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             <div>
                               <p className="text-sm font-medium text-slate-900">YouTube Optimization</p>
                               <p className="text-xs text-slate-600 mt-1">
-                                I'll optimize your title for CTR (curiosity + clarity), create a keyword-rich description, and suggest timestamps for better watch time.
+                                I&apos;ll optimize your title for CTR (curiosity + clarity), create a keyword-rich description, and suggest timestamps for better watch time.
                               </p>
                             </div>
                           </div>
@@ -1002,7 +1002,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             <div>
                               <p className="text-sm font-medium text-slate-900">TikTok Hook Formula</p>
                               <p className="text-xs text-slate-600 mt-1">
-                                First 1-2 seconds = 90% of your success. Use pattern interrupts, controversial statements, or "Wait for it" setups.
+                                First 1-2 seconds = 90% of your success. Use pattern interrupts, controversial statements, or &quot;Wait for it&quot; setups.
                               </p>
                             </div>
                           </div>
@@ -1108,7 +1108,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                       {/* Topic Input with Suggestions */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-semibold text-slate-700">What's the topic?</label>
+                          <label className="text-sm font-semibold text-slate-700">What&apos;s the topic?</label>
                           {aiTopic.length > 0 && (
                             <span className="text-xs text-emerald-600 flex items-center space-x-1">
                               <Check className="w-3 h-3" />
