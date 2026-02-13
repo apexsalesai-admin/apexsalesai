@@ -52,7 +52,6 @@ const TIER_ICONS: Record<string, React.ReactNode> = {
 const PROVIDER_COLORS: Record<string, string> = {
   runway: 'from-purple-500 to-indigo-600',
   sora: 'from-emerald-500 to-teal-600',
-  'sora-pro': 'from-emerald-600 to-green-700',
   heygen: 'from-blue-500 to-cyan-600',
   template: 'from-slate-400 to-slate-500',
 }
@@ -60,7 +59,6 @@ const PROVIDER_COLORS: Record<string, string> = {
 const PROVIDER_HELP_URLS: Record<string, string> = {
   runway: 'https://app.runwayml.com/settings/api-keys',
   sora: 'https://platform.openai.com/api-keys',
-  'sora-pro': 'https://platform.openai.com/api-keys',
   heygen: 'https://app.heygen.com/settings/api',
 }
 

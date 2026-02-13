@@ -12,11 +12,10 @@ import { getOrCreateWorkspace } from '@/lib/workspace'
 import { getRecommendation } from '@/lib/studio/mia-recommender'
 import { checkRenderBudget } from '@/lib/providers/video/budget'
 
-/** Map integration type to provider name */
-/** Map integration type to provider names (OPENAI key enables both sora variants) */
+/** Map integration type to provider names */
 const TYPE_TO_PROVIDERS: Record<string, string[]> = {
   RUNWAY: ['runway'],
-  OPENAI: ['sora', 'sora-pro'],
+  OPENAI: ['sora'],
   HEYGEN: ['heygen'],
 }
 
@@ -62,9 +61,8 @@ export async function POST(request: NextRequest) {
       if (process.env.RUNWAY_API_KEY && !connectedProviders.includes('runway')) {
         connectedProviders.push('runway')
       }
-      if (process.env.OPENAI_API_KEY) {
-        if (!connectedProviders.includes('sora')) connectedProviders.push('sora')
-        if (!connectedProviders.includes('sora-pro')) connectedProviders.push('sora-pro')
+      if (process.env.OPENAI_API_KEY && !connectedProviders.includes('sora')) {
+        connectedProviders.push('sora')
       }
       if (process.env.HEYGEN_API_KEY && !connectedProviders.includes('heygen')) {
         connectedProviders.push('heygen')

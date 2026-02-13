@@ -30,6 +30,9 @@ export class RunwayAdapter implements VideoProvider {
     costPerSecond: CREDITS_PER_SECOND * USD_PER_CREDIT,
     requiresApiKey: true,
     envKeyName: 'RUNWAY_API_KEY',
+    models: [
+      { id: 'gen4.5', displayName: 'Gen-4.5', supportedDurations: [4, 5, 6, 8, 10], costPerSecond: CREDITS_PER_SECOND * USD_PER_CREDIT },
+    ],
   }
 
   estimateCost(durationSeconds: number): CostEstimate {

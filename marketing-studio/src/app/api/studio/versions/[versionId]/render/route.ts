@@ -36,6 +36,7 @@ export async function POST(
     const requestedProvider = (body.provider as string) || 'template'
     const requestedDuration = (body.durationSeconds as number) || undefined
     const requestedAspect = (body.aspectRatio as string) || undefined
+    const requestedModel = (body.model as string) || undefined
 
     // Resolve provider from registry
     const videoProvider = getVideoProviderOrThrow(requestedProvider)
@@ -62,7 +63,7 @@ export async function POST(
       || '16:9'
 
     // Cost estimation + budget check
-    const costEstimate = videoProvider.estimateCost(durationSeconds)
+    let costEstimate = videoProvider.estimateCost(durationSeconds)
     const budgetCheck = await checkRenderBudget(workspace.id, costEstimate.usd)
     if (!budgetCheck.allowed) {
       return NextResponse.json({
@@ -102,11 +103,22 @@ export async function POST(
       }
     }
 
+    // Use model-specific cost if applicable
+    if (requestedModel && videoProvider.config.models?.length) {
+      const modelConfig = videoProvider.config.models.find(m => m.id === requestedModel)
+      if (modelConfig) {
+        costEstimate = videoProvider.estimateCost(durationSeconds)
+        // Override with model-specific pricing
+        costEstimate = { credits: 0, usd: Math.round(modelConfig.costPerSecond * durationSeconds * 100) / 100 }
+      }
+    }
+
     console.log('[RENDER:REQUEST]', {
       workspaceId: workspace.id,
       versionId,
       contentId: version.contentId,
       provider: requestedProvider,
+      model: requestedModel || 'default',
       durationSeconds,
       aspectRatio,
       estimatedCostUsd: costEstimate.usd,
@@ -144,7 +156,7 @@ export async function POST(
           contentId: version.contentId,
           inputScript: version.script,
           inputPrompt: version.visualPrompt || version.script,
-          config: version.config || {},
+          config: { ...(version.config as Record<string, unknown> || {}), ...(requestedModel ? { model: requestedModel } : {}) },
         },
       })
 
@@ -173,7 +185,7 @@ export async function POST(
           contentId: version.contentId,
           inputScript: version.script,
           inputPrompt: version.visualPrompt || version.script,
-          config: version.config || {},
+          config: { ...(version.config as Record<string, unknown> || {}), ...(requestedModel ? { model: requestedModel } : {}) },
         },
       })
 

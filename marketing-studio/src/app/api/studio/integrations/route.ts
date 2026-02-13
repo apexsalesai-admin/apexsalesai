@@ -34,18 +34,10 @@ const PROVIDER_META: Record<string, {
   sora: {
     displayName: 'OpenAI Sora 2',
     tier: 'cinematic',
-    description: 'Cinematic AI video with synchronized audio. 4-12s clips.',
+    description: 'Cinematic AI video with synchronized audio. Standard (4-12s) and Pro (10-25s) models.',
     capabilities: ['text-to-video', 'audio'],
     costModel: 'per-second',
     estimatedCostPer10s: 1.00,
-  },
-  'sora-pro': {
-    displayName: 'OpenAI Sora 2 Pro',
-    tier: 'cinematic',
-    description: 'Higher quality, longer durations (10-25s). By OpenAI.',
-    capabilities: ['text-to-video', 'audio'],
-    costModel: 'per-second',
-    estimatedCostPer10s: 3.00,
   },
   heygen: {
     displayName: 'HeyGen',
@@ -69,7 +61,6 @@ const PROVIDER_META: Record<string, {
 const PROVIDER_TO_TYPE: Record<string, string> = {
   runway: 'RUNWAY',
   sora: 'OPENAI',
-  'sora-pro': 'OPENAI',
   heygen: 'HEYGEN',
 }
 

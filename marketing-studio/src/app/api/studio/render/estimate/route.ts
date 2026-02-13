@@ -24,9 +24,18 @@ export async function POST(request: NextRequest) {
     const providerName = body.provider || 'template'
     const durationSeconds = body.durationSeconds || 8
     const aspectRatio = body.aspectRatio || '16:9'
+    const modelId = body.model as string | undefined
 
     const provider = getVideoProviderOrThrow(providerName)
-    const estimate = provider.estimateCost(durationSeconds)
+
+    // Use model-specific costPerSecond if a model is selected
+    let costPerSecond = provider.config.costPerSecond
+    if (modelId && provider.config.models?.length) {
+      const model = provider.config.models.find(m => m.id === modelId)
+      if (model) costPerSecond = model.costPerSecond
+    }
+    const estimatedUsd = Math.round(costPerSecond * durationSeconds * 100) / 100
+    const estimate = { credits: 0, usd: estimatedUsd }
 
     const workspace = await getOrCreateWorkspace(session.user.id)
     const budget = await checkRenderBudget(workspace.id, estimate.usd)

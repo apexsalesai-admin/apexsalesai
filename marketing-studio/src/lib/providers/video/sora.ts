@@ -1,7 +1,9 @@
 /**
  * OpenAI Sora 2 Video Provider
  *
- * Real API integration for Sora text-to-video generation.
+ * Single provider with two models: sora-2 (Standard) and sora-2-pro (Pro).
+ * Model selection determines duration range and pricing.
+ *
  * Endpoints: POST /v1/videos, GET /v1/videos/{id}, GET /v1/videos/{id}/content
  *
  * Note: Sora's download endpoint streams binary MP4 with auth header.
@@ -50,22 +52,25 @@ function clampDuration(d: number, model: string): number {
   return 12
 }
 
-function isHdSize(size: string): boolean {
-  return size.includes('1792') || size.includes('1024x1024')
-}
-
-/** Base class for Sora providers — shared submit/poll logic */
-class BaseSoraProvider implements VideoProvider {
-  readonly config: VideoProviderConfig
-  protected readonly defaultModel: string
-
-  constructor(config: VideoProviderConfig, defaultModel: string) {
-    this.config = config
-    this.defaultModel = defaultModel
+export class SoraProvider implements VideoProvider {
+  readonly config: VideoProviderConfig = {
+    name: 'sora',
+    displayName: 'OpenAI Sora 2',
+    category: 'cinematic',
+    supportedDurations: [4, 8, 12],  // Default model (sora-2) durations
+    supportedAspectRatios: ['16:9', '9:16', '1:1', '21:9'],
+    maxPromptLength: 5000,
+    costPerSecond: 0.10,             // Default model pricing
+    requiresApiKey: true,
+    envKeyName: 'OPENAI_API_KEY',
+    models: [
+      { id: 'sora-2', displayName: 'Standard (4-12s)', supportedDurations: [4, 8, 12], costPerSecond: 0.10 },
+      { id: 'sora-2-pro', displayName: 'Pro (10-25s)', supportedDurations: [10, 15, 25], costPerSecond: 0.30 },
+    ],
   }
 
   estimateCost(durationSeconds: number): CostEstimate {
-    const usd = Math.round(PRICING[this.defaultModel] * durationSeconds * 100) / 100
+    const usd = Math.round(PRICING['sora-2'] * durationSeconds * 100) / 100
     return { credits: 0, usd }
   }
 
@@ -75,7 +80,7 @@ class BaseSoraProvider implements VideoProvider {
       throw new Error('OpenAI API key not configured. Add your key in Settings > Providers or set OPENAI_API_KEY in .env.local')
     }
 
-    const model = req.model || this.defaultModel
+    const model = req.model || 'sora-2'
     const size = mapSize(req.aspectRatio)
     const duration = clampDuration(req.durationSeconds, model)
 
@@ -167,45 +172,5 @@ class BaseSoraProvider implements VideoProvider {
       default:
         return { status: 'processing', progress: data.progress ?? undefined }
     }
-  }
-}
-
-/** Sora 2 Standard — fast, affordable, 4/8/12s */
-export class SoraProvider extends BaseSoraProvider {
-  constructor() {
-    super(
-      {
-        name: 'sora',
-        displayName: 'OpenAI Sora 2',
-        category: 'cinematic',
-        supportedDurations: [4, 8, 12],
-        supportedAspectRatios: ['16:9', '9:16', '1:1', '21:9'],
-        maxPromptLength: 5000,
-        costPerSecond: 0.10,
-        requiresApiKey: true,
-        envKeyName: 'OPENAI_API_KEY',
-      },
-      'sora-2',
-    )
-  }
-}
-
-/** Sora 2 Pro — higher quality, longer durations, 10/15/25s */
-export class SoraProProvider extends BaseSoraProvider {
-  constructor() {
-    super(
-      {
-        name: 'sora-pro',
-        displayName: 'OpenAI Sora 2 Pro',
-        category: 'cinematic',
-        supportedDurations: [10, 15, 25],
-        supportedAspectRatios: ['16:9', '9:16', '1:1', '21:9'],
-        maxPromptLength: 5000,
-        costPerSecond: 0.30,
-        requiresApiKey: true,
-        envKeyName: 'OPENAI_API_KEY',
-      },
-      'sora-2-pro',
-    )
   }
 }

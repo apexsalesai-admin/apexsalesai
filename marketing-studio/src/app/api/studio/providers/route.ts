@@ -17,6 +17,12 @@ export async function GET() {
     maxPromptLength: p.maxPromptLength,
     costPerSecond: p.costPerSecond,
     requiresApiKey: p.requiresApiKey,
+    models: p.models?.map(m => ({
+      id: m.id,
+      displayName: m.displayName,
+      supportedDurations: m.supportedDurations,
+      costPerSecond: m.costPerSecond,
+    })),
   }))
 
   return NextResponse.json({ success: true, data: providers })

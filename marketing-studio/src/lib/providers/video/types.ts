@@ -5,20 +5,28 @@
  * Supersedes the Runway-specific types in src/lib/render/types.ts.
  */
 
-export type VideoProviderName = 'runway' | 'heygen' | 'template' | 'sora' | 'sora-pro'
+export type VideoProviderName = 'runway' | 'heygen' | 'template' | 'sora'
 
 export type VideoProviderCategory = 'cinematic' | 'avatar' | 'marketing'
+
+export interface VideoModelConfig {
+  id: string
+  displayName: string
+  supportedDurations: number[]
+  costPerSecond: number
+}
 
 export interface VideoProviderConfig {
   name: VideoProviderName
   displayName: string
   category: VideoProviderCategory
-  supportedDurations: number[]   // seconds
+  supportedDurations: number[]   // seconds (union of all models, or provider default)
   supportedAspectRatios: string[]
   maxPromptLength: number
-  costPerSecond: number          // estimated USD (0 for template)
+  costPerSecond: number          // estimated USD (default model, 0 for template)
   requiresApiKey: boolean
   envKeyName: string             // e.g. 'RUNWAY_API_KEY'
+  models?: VideoModelConfig[]    // optional per-model config for two-tier selection
 }
 
 export interface VideoSubmitRequest {

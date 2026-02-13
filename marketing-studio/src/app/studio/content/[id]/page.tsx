@@ -160,12 +160,13 @@ export default function ContentDetailPage() {
   const [isCreatingVersion, setIsCreatingVersion] = useState(false)
   const [renderingVersionId, setRenderingVersionId] = useState<string | null>(null)
   const [selectedProvider, setSelectedProvider] = useState('template')
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [renderDuration, setRenderDuration] = useState(8)
   const [renderAspect, setRenderAspect] = useState('16:9')
   const [costEstimate, setCostEstimate] = useState<{ estimatedUsd: number; monthlySpent: number; monthlyLimit: number; withinBudget: boolean; warning?: string } | null>(null)
   const [showRenderConfirm, setShowRenderConfirm] = useState(false)
   const [pendingRenderVersionId, setPendingRenderVersionId] = useState<string | null>(null)
-  const [availableProviders, setAvailableProviders] = useState<{ name: string; displayName: string; category: string; supportedDurations: number[]; supportedAspectRatios: string[]; costPerSecond: number; requiresApiKey: boolean }[]>([])
+  const [availableProviders, setAvailableProviders] = useState<{ name: string; displayName: string; category: string; supportedDurations: number[]; supportedAspectRatios: string[]; costPerSecond: number; requiresApiKey: boolean; models?: { id: string; displayName: string; supportedDurations: number[]; costPerSecond: number }[] }[]>([])
   const [renderResults, setRenderResults] = useState<Record<string, RenderResult>>({})
   const [showNewVersionForm, setShowNewVersionForm] = useState(false)
   const [newVersionScript, setNewVersionScript] = useState('')
@@ -393,14 +394,14 @@ export default function ContentDetailPage() {
       .catch(() => {})
   }, [content?.id, content?.channels])
 
-  // Fetch cost estimate when provider/duration/aspect changes
+  // Fetch cost estimate when provider/model/duration/aspect changes
   useEffect(() => {
     if (!selectedProvider) return
     const controller = new AbortController()
     fetch('/api/studio/render/estimate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: selectedProvider, durationSeconds: renderDuration, aspectRatio: renderAspect }),
+      body: JSON.stringify({ provider: selectedProvider, model: selectedModel || undefined, durationSeconds: renderDuration, aspectRatio: renderAspect }),
       signal: controller.signal,
     })
       .then(r => r.json())
@@ -409,7 +410,7 @@ export default function ContentDetailPage() {
       })
       .catch(() => {})
     return () => controller.abort()
-  }, [selectedProvider, renderDuration, renderAspect])
+  }, [selectedProvider, selectedModel, renderDuration, renderAspect])
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -527,6 +528,7 @@ export default function ContentDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: selectedProvider,
+          model: selectedModel || undefined,
           durationSeconds: renderDuration,
           aspectRatio: renderAspect,
         }),
@@ -1125,9 +1127,13 @@ export default function ContentDetailPage() {
                           onChange={e => setNewVersionDuration(Number(e.target.value))}
                           className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                         >
-                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedDurations || [4, 6, 8]).map(d => (
-                            <option key={d} value={d}>{d} seconds</option>
-                          ))}
+                          {(() => {
+                            const prov = availableProviders.find(p => p.name === selectedProvider)
+                            const model = selectedModel && prov?.models?.find(m => m.id === selectedModel)
+                            return (model ? model.supportedDurations : prov?.supportedDurations || [4, 6, 8]).map(d => (
+                              <option key={d} value={d}>{d} seconds</option>
+                            ))
+                          })()}
                         </select>
                       </div>
                     </div>
@@ -1233,45 +1239,93 @@ export default function ContentDetailPage() {
                 {availableProviders.length > 0 && (
                   <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                     <h4 className="text-sm font-medium text-slate-700 mb-3">Render Settings</h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Provider</label>
-                        <select
-                          value={selectedProvider}
-                          onChange={e => setSelectedProvider(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                          {availableProviders.map(p => (
-                            <option key={p.name} value={p.name}>
-                              {p.displayName} {p.costPerSecond > 0 ? `(~$${(p.costPerSecond * 8).toFixed(2)}/8s)` : '(Free)'}
-                            </option>
-                          ))}
-                        </select>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Provider</label>
+                          <select
+                            value={selectedProvider}
+                            onChange={e => {
+                              const name = e.target.value
+                              setSelectedProvider(name)
+                              const prov = availableProviders.find(p => p.name === name)
+                              // Reset model when provider changes
+                              if (prov?.models?.length) {
+                                setSelectedModel(prov.models[0].id)
+                                const durations = prov.models[0].supportedDurations
+                                if (!durations.includes(renderDuration)) setRenderDuration(durations[0])
+                              } else {
+                                setSelectedModel(null)
+                                if (prov && !prov.supportedDurations.includes(renderDuration)) setRenderDuration(prov.supportedDurations[0])
+                              }
+                            }}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            {availableProviders.map(p => (
+                              <option key={p.name} value={p.name}>
+                                {p.displayName} {p.costPerSecond > 0 ? `(~$${(p.costPerSecond * 8).toFixed(2)}/8s)` : '(Free)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Duration</label>
+                          <select
+                            value={renderDuration}
+                            onChange={e => setRenderDuration(Number(e.target.value))}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            {(() => {
+                              const prov = availableProviders.find(p => p.name === selectedProvider)
+                              const model = selectedModel && prov?.models?.find(m => m.id === selectedModel)
+                              const durations = model ? model.supportedDurations : prov?.supportedDurations || [4, 6, 8]
+                              return durations.map(d => (
+                                <option key={d} value={d}>{d}s</option>
+                              ))
+                            })()}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Aspect Ratio</label>
+                          <select
+                            value={renderAspect}
+                            onChange={e => setRenderAspect(e.target.value)}
+                            className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            {(availableProviders.find(p => p.name === selectedProvider)?.supportedAspectRatios || ['16:9', '9:16', '1:1']).map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Duration</label>
-                        <select
-                          value={renderDuration}
-                          onChange={e => setRenderDuration(Number(e.target.value))}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedDurations || [4, 6, 8]).map(d => (
-                            <option key={d} value={d}>{d}s</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-slate-500 mb-1">Aspect Ratio</label>
-                        <select
-                          value={renderAspect}
-                          onChange={e => setRenderAspect(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        >
-                          {(availableProviders.find(p => p.name === selectedProvider)?.supportedAspectRatios || ['16:9', '9:16', '1:1']).map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {/* Model dropdown — conditional on provider having models */}
+                      {(() => {
+                        const prov = availableProviders.find(p => p.name === selectedProvider)
+                        if (!prov?.models || prov.models.length <= 1) return null
+                        return (
+                          <div>
+                            <label className="block text-xs text-slate-500 mb-1">Model</label>
+                            <select
+                              value={selectedModel || prov.models[0].id}
+                              onChange={e => {
+                                const modelId = e.target.value
+                                setSelectedModel(modelId)
+                                const model = prov.models!.find(m => m.id === modelId)
+                                if (model && !model.supportedDurations.includes(renderDuration)) {
+                                  setRenderDuration(model.supportedDurations[0])
+                                }
+                              }}
+                              className="w-full px-2 py-1.5 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            >
+                              {prov.models.map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.displayName} {m.costPerSecond > 0 ? `($${m.costPerSecond.toFixed(2)}/s)` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      })()}
                     </div>
                     {costEstimate && (
                       <div className={cn(
