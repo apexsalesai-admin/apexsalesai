@@ -2,63 +2,46 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { BarChart3, TrendingUp, Users, DollarSign, FileText, CheckCircle, Clock, AlertTriangle, ChevronRight, Eye, ThumbsUp, ThumbsDown, MessageSquare, Activity, Loader2, RefreshCw } from 'lucide-react'
+import { BarChart3, FileText, CheckCircle, Clock, AlertTriangle, Activity, Loader2, RefreshCw, Plug, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
+import { MiaContextHint } from '@/components/studio/MiaContextHint'
 
-// Mock data - in production, this would come from the telemetry API
-const KPI_DATA = {
-  postsCreated: 127,
-  postsPublished: 118,
-  approvalsPending: 3,
-  leadsAttributed: 45,
-  meetingsBooked: 22,
-  revenueAttributed: 125000,
+interface DashboardStats {
+  kpi: {
+    postsCreated: number
+    postsPublished: number
+    approvalsPending: number
+    integrationsConnected: number
+    totalRenders: number
+  }
+  recentActivity: Array<{
+    id: string
+    type: string
+    message: string
+    status: string
+    time: string
+    permalink?: string
+  }>
 }
 
-const RECENT_ACTIVITY = [
-  { id: 1, type: 'publish', message: 'TikTok video published successfully', time: '5 min ago', status: 'success' },
-  { id: 2, type: 'approval', message: 'YouTube video awaiting approval', time: '12 min ago', status: 'pending' },
-  { id: 3, type: 'publish', message: 'LinkedIn post published', time: '1 hour ago', status: 'success' },
-  { id: 4, type: 'error', message: 'X post failed - rate limit exceeded', time: '2 hours ago', status: 'error' },
-  { id: 5, type: 'approval', message: 'Blog article approved by Sarah', time: '3 hours ago', status: 'success' },
-]
-
-// Mock pending approvals - in production from StudioContentApproval table
-const PENDING_APPROVALS = [
-  {
-    id: 'content_1',
-    title: 'Q1 Product Launch Announcement',
-    contentType: 'VIDEO',
-    channels: ['YOUTUBE', 'LINKEDIN'],
-    createdBy: 'Alex Rivera',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 30 * 60 * 1000),
-    priority: 'high',
-  },
-  {
-    id: 'content_2',
-    title: 'Weekly Tips: Productivity Hacks',
-    contentType: 'POST',
-    channels: ['X_TWITTER', 'LINKEDIN'],
-    createdBy: 'Sarah Chen',
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    priority: 'medium',
-  },
-  {
-    id: 'content_3',
-    title: 'Behind the Scenes: Team Culture',
-    contentType: 'VIDEO',
-    channels: ['TIKTOK', 'INSTAGRAM'],
-    createdBy: 'Mike Johnson',
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    priority: 'low',
-  },
-]
-
 export default function StudioDashboard() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/studio/dashboard/stats')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setStats(data.data)
+      })
+      .catch(err => console.error('[Dashboard] Stats fetch error:', err))
+      .finally(() => setStatsLoading(false))
+  }, [])
+
+  const kpi = stats?.kpi
+  const activity = stats?.recentActivity ?? []
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -68,6 +51,13 @@ export default function StudioDashboard() {
           Overview of your marketing performance and activity
         </p>
       </div>
+
+      {/* Mia Context Hint — Dashboard */}
+      <MiaContextHint
+        hintKey="dashboard-welcome"
+        message="Welcome to your command center! I'll show you real-time stats from your content pipeline. Connect more integrations to unlock full publishing."
+        action={{ label: 'Go to Integrations', href: '/studio/integrations' }}
+      />
 
       {/* Onboarding Checklist (shown until setup complete) */}
       <OnboardingChecklist />
@@ -79,116 +69,49 @@ export default function StudioDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="Posts Created"
-          value={KPI_DATA.postsCreated}
+          value={statsLoading ? '...' : kpi?.postsCreated ?? 0}
           icon={FileText}
           color="teal"
-          trend="+12% from last month"
+          trend={kpi ? `${kpi.postsPublished} published` : ''}
+          loading={statsLoading}
         />
         <KPICard
-          title="Revenue Generated"
-          value={`$${KPI_DATA.revenueAttributed.toLocaleString()}`}
-          icon={DollarSign}
+          title="Integrations"
+          value={statsLoading ? '...' : kpi?.integrationsConnected ?? 0}
+          icon={Plug}
           color="green"
-          trend="+23% from last month"
+          trend="connected"
+          loading={statsLoading}
         />
         <KPICard
-          title="Meetings Booked"
-          value={KPI_DATA.meetingsBooked}
-          icon={Users}
+          title="Video Renders"
+          value={statsLoading ? '...' : kpi?.totalRenders ?? 0}
+          icon={Video}
           color="purple"
-          trend="+8% from last month"
+          trend="total renders"
+          loading={statsLoading}
         />
         <Link href="/studio/approvals">
           <KPICard
             title="Approvals Pending"
-            value={KPI_DATA.approvalsPending}
+            value={statsLoading ? '...' : kpi?.approvalsPending ?? 0}
             icon={Clock}
             color="amber"
-            trend="3 items need review"
+            trend={kpi?.approvalsPending ? `${kpi.approvalsPending} items need review` : 'All clear'}
             clickable
+            loading={statsLoading}
           />
         </Link>
       </div>
 
-      {/* Pending Approvals Widget */}
-      {PENDING_APPROVALS.length > 0 && (
-        <div className="card border-l-4 border-l-amber-400">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Pending Approvals</h2>
-                <p className="text-sm text-slate-500">{PENDING_APPROVALS.length} items need your review</p>
-              </div>
-            </div>
-            <Link
-              href="/studio/approvals"
-              className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
-            >
-              <span>View all</span>
-              <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="space-y-3">
-            {PENDING_APPROVALS.slice(0, 3).map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className={cn(
-                    'w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm',
-                    item.contentType === 'VIDEO' ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-blue-500 to-cyan-500'
-                  )}>
-                    {item.contentType === 'VIDEO' ? 'V' : 'P'}
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{item.title}</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="text-xs text-slate-500">by {item.createdBy}</span>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-xs text-slate-500">
-                        {item.channels.join(', ')}
-                      </span>
-                      <span className="text-slate-300">•</span>
-                      <span className={cn(
-                        'text-xs font-medium px-1.5 py-0.5 rounded',
-                        item.priority === 'high' && 'bg-red-100 text-red-700',
-                        item.priority === 'medium' && 'bg-amber-100 text-amber-700',
-                        item.priority === 'low' && 'bg-slate-100 text-slate-700'
-                      )}>
-                        {item.priority}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Link
-                    href={`/studio/content/${item.id}`}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                    title="View content"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                  <button
-                    className="p-2 text-green-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    title="Approve"
-                  >
-                    <ThumbsUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Reject"
-                  >
-                    <ThumbsDown className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Mia hint when no integrations connected */}
+      {!statsLoading && (kpi?.integrationsConnected ?? 0) === 0 && (
+        <MiaContextHint
+          hintKey="dashboard-no-integrations"
+          message="You don't have any integrations connected yet. Connect your AI providers and video tools to start creating and publishing content."
+          action={{ label: 'Connect Integrations', href: '/studio/integrations' }}
+          variant="warning"
+        />
       )}
 
       {/* Charts and Activity */}
@@ -216,24 +139,32 @@ export default function StudioDashboard() {
         <div className="card">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Recent Activity</h2>
           <div className="space-y-4">
-            {RECENT_ACTIVITY.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3">
+            {activity.length > 0 ? activity.map((item) => (
+              <div key={item.id} className="flex items-start space-x-3">
                 <div className={cn(
                   'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
-                  activity.status === 'success' && 'bg-green-100',
-                  activity.status === 'pending' && 'bg-amber-100',
-                  activity.status === 'error' && 'bg-red-100'
+                  item.status === 'success' && 'bg-green-100',
+                  item.status === 'pending' && 'bg-amber-100',
+                  item.status === 'error' && 'bg-red-100'
                 )}>
-                  {activity.status === 'success' && <CheckCircle className="w-4 h-4 text-green-600" />}
-                  {activity.status === 'pending' && <Clock className="w-4 h-4 text-amber-600" />}
-                  {activity.status === 'error' && <AlertTriangle className="w-4 h-4 text-red-600" />}
+                  {item.status === 'success' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                  {item.status === 'pending' && <Clock className="w-4 h-4 text-amber-600" />}
+                  {item.status === 'error' && <AlertTriangle className="w-4 h-4 text-red-600" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-900">{activity.message}</p>
-                  <p className="text-xs text-slate-500">{activity.time}</p>
+                  <p className="text-sm text-slate-900">{item.message}</p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(item.time).toLocaleString()}
+                  </p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-8 text-slate-400">
+                <Activity className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm">No recent activity yet</p>
+                <p className="text-xs mt-1">Publish content to see activity here</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -294,6 +225,7 @@ function KPICard({
   color,
   trend,
   clickable,
+  loading,
 }: {
   title: string
   value: string | number
@@ -301,6 +233,7 @@ function KPICard({
   color: 'teal' | 'green' | 'purple' | 'amber'
   trend: string
   clickable?: boolean
+  loading?: boolean
 }) {
   const colorClasses = {
     teal: 'bg-apex-primary/10 text-apex-primary',
@@ -308,8 +241,6 @@ function KPICard({
     purple: 'bg-purple-100 text-purple-600',
     amber: 'bg-amber-100 text-amber-600',
   }
-
-  const trendPositive = trend.includes('+')
 
   return (
     <div className={cn(
@@ -320,20 +251,12 @@ function KPICard({
         <div className={cn('p-2.5 rounded-xl', colorClasses[color])}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className={cn(
-          'flex items-center space-x-1 text-xs font-medium',
-          trendPositive ? 'text-green-600' : 'text-slate-400'
-        )}>
-          <TrendingUp className={cn('w-3 h-3', !trendPositive && 'rotate-90')} />
-        </div>
+        {loading && <Loader2 className="w-4 h-4 text-slate-300 animate-spin" />}
       </div>
       <div className="mt-4">
         <p className="text-sm text-slate-500 font-medium">{title}</p>
         <p className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">{value}</p>
-        <p className={cn(
-          'text-xs mt-2',
-          trendPositive ? 'text-green-600' : 'text-slate-400'
-        )}>{trend}</p>
+        {trend && <p className="text-xs mt-2 text-slate-400">{trend}</p>}
       </div>
     </div>
   )

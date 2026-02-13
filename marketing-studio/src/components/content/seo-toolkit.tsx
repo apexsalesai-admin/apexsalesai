@@ -117,6 +117,9 @@ export function SeoToolkit({
     readability: false,
     structure: false,
   })
+  const [searchResults, setSearchResults] = useState<Array<{ title: string; url: string; description: string }>>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   // Calculate content analysis
   const contentAnalysis: ContentAnalysis = {
@@ -196,6 +199,30 @@ export function SeoToolkit({
 
   const removeKeyword = (keyword: string) => {
     onKeywordsChange?.(keywords.filter(k => k !== keyword))
+  }
+
+  const runCompetitiveResearch = async () => {
+    if (!title.trim() && keywords.length === 0) return
+    setIsSearching(true)
+    setSearchError(null)
+    try {
+      const query = keywords.length > 0 ? keywords.slice(0, 3).join(' ') : title
+      const res = await fetch('/api/studio/integrations/brave/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, count: 8, freshness: 'month' }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setSearchResults(data.data.results)
+      } else {
+        setSearchError(data.error || 'Search failed')
+      }
+    } catch {
+      setSearchError('Brave Search not available. Add your API key in Integrations.')
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   const generateMetaDescription = async () => {
@@ -510,6 +537,58 @@ export function SeoToolkit({
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Competitive Research via Brave Search */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between p-4 bg-slate-50">
+                <div className="flex items-center space-x-2">
+                  <Globe className="w-5 h-5 text-orange-500" />
+                  <span className="font-medium text-sm">Competitive Research</span>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full font-medium">Brave Search</span>
+                </div>
+                <button
+                  onClick={runCompetitiveResearch}
+                  disabled={isSearching || (!title.trim() && keywords.length === 0)}
+                  className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center space-x-1"
+                >
+                  {isSearching ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Search className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isSearching ? 'Searching...' : 'Research'}</span>
+                </button>
+              </div>
+              {searchError && (
+                <div className="px-4 py-2 bg-amber-50 text-amber-700 text-xs flex items-center space-x-1">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{searchError}</span>
+                </div>
+              )}
+              {searchResults.length > 0 && (
+                <div className="divide-y divide-slate-100">
+                  {searchResults.map((r, i) => (
+                    <div key={i} className="p-3 hover:bg-slate-50 transition-colors">
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-700 hover:underline line-clamp-1 flex items-center space-x-1"
+                      >
+                        <span>{r.title}</span>
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      </a>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{r.description}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.length === 0 && !searchError && (
+                <div className="px-4 py-3 text-xs text-slate-500">
+                  Click &quot;Research&quot; to find competitor content for your keywords.
+                </div>
+              )}
             </div>
 
             {keywords.length === 0 && (
