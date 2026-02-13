@@ -17,6 +17,11 @@ export interface ScriptAnalysisResult {
   totalEstimatedCost: number
   warnings: string[]
   platform: string
+  // AI-enriched fields (P20-B)
+  overallFeedback?: string
+  suggestedRewrites?: Array<{ sceneNumber: number; original: string; rewrite: string; reason: string }>
+  narrativeArc?: string
+  aiGenerated?: boolean
 }
 
 interface DetectedScene {

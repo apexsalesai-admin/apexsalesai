@@ -86,9 +86,16 @@ export function generateScriptAnalysis(
         { label: 'Review Plan', action: 'review-plan', variant: 'ghost' },
       ]
 
-  const content = mode === 'guided'
-    ? `Your script has **${sceneCount} scene${sceneCount > 1 ? 's' : ''}** (~${totalEstimatedDuration} seconds total). Here's my recommended render plan:`
-    : `**${sceneCount} scene${sceneCount > 1 ? 's' : ''}** detected. Ready to render. **${costStr}** estimated.`
+  // Use AI overallFeedback when available, otherwise fall back to structural summary
+  let content: string
+  if (analysis.aiGenerated && analysis.overallFeedback) {
+    const arc = analysis.narrativeArc ? ` Arc: **${analysis.narrativeArc}**.` : ''
+    content = `${analysis.overallFeedback}${arc}\n\n**${sceneCount} scene${sceneCount > 1 ? 's' : ''}** \u00B7 ~${totalEstimatedDuration}s \u00B7 **${costStr}** estimated.`
+  } else {
+    content = mode === 'guided'
+      ? `Your script has **${sceneCount} scene${sceneCount > 1 ? 's' : ''}** (~${totalEstimatedDuration} seconds total). Here's my recommended render plan:`
+      : `**${sceneCount} scene${sceneCount > 1 ? 's' : ''}** detected. Ready to render. **${costStr}** estimated.`
+  }
 
   return {
     id: nextId(),
@@ -102,6 +109,9 @@ export function generateScriptAnalysis(
       estimatedDuration: totalEstimatedDuration,
       estimatedCost: totalEstimatedCost,
       scenes,
+      suggestedRewrites: analysis.suggestedRewrites,
+      narrativeArc: analysis.narrativeArc,
+      aiGenerated: analysis.aiGenerated,
     },
   }
 }

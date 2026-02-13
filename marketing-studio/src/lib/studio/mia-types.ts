@@ -39,6 +39,9 @@ export interface MiaMessage {
     provider?: string
     model?: string
     scenes?: MiaSceneAnalysis[]
+    suggestedRewrites?: Array<{ sceneNumber: number; original: string; rewrite: string; reason: string }>
+    narrativeArc?: string
+    aiGenerated?: boolean
   }
 }
 
@@ -53,6 +56,10 @@ export interface MiaSceneAnalysis {
   aspectRatio: string
   hasDialogue: boolean
   hasBRoll: boolean
+  // AI-enriched fields (P20-B)
+  visualDirection?: string
+  creativeFeedback?: string
+  strengthRating?: 'strong' | 'adequate' | 'needs-work'
 }
 
 export type MiaCopilotMode = 'guided' | 'autopilot'
@@ -89,4 +96,13 @@ export interface MiaCopilotState {
   currentStep: MiaWorkflowStep
   scriptAnalysis: MiaSceneAnalysis[] | null
   renderPlan: MiaRenderPlan | null
+}
+
+export interface MiaGreetingContext {
+  title: string
+  contentType: string
+  channels: string[]
+  aiTone?: string | null
+  scriptPreview?: string
+  wordCount?: number
 }

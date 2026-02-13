@@ -19,6 +19,7 @@
     "inngest": "inngest-cli dev -u http://localhost:3003/api/inngest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@azure/msal-browser": "^3.26.0",
     "@azure/msal-node": "^2.15.0",
     "@azure/msal-react": "^2.1.0",
@@ -40,6 +41,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.13.3",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.5.5",
     "zod": "^3.23.8",

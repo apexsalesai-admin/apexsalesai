@@ -25,6 +25,10 @@ import {
   Loader2,
   Play,
   AlertCircle,
+  Eye,
+  Lightbulb,
+  RefreshCw,
+  Brain,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
@@ -292,6 +296,11 @@ function MiaMessageBubble({
         <SceneBreakdown scenes={message.metadata.scenes} />
       )}
 
+      {/* Suggested Rewrites (AI-powered) */}
+      {message.metadata?.suggestedRewrites && message.metadata.suggestedRewrites.length > 0 && (
+        <SuggestedRewrites rewrites={message.metadata.suggestedRewrites} />
+      )}
+
       {/* Cost Summary */}
       {message.metadata?.estimatedCost != null && message.metadata.estimatedCost > 0 && (
         <div className="mt-2 flex items-center space-x-3 text-xs text-purple-600">
@@ -319,21 +328,29 @@ function MiaMessageBubble({
         </div>
       )}
 
-      {/* Confidence badge */}
-      {message.confidence && (
-        <div className="mt-2">
-          <span
-            className={cn(
-              'text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider',
-              message.confidence === 'high'
-                ? 'bg-emerald-100 text-emerald-700'
-                : message.confidence === 'medium'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-slate-100 text-slate-600',
-            )}
-          >
-            {message.confidence} confidence
-          </span>
+      {/* Confidence badge + AI indicator */}
+      {(message.confidence || message.metadata?.aiGenerated) && (
+        <div className="mt-2 flex items-center space-x-2">
+          {message.confidence && (
+            <span
+              className={cn(
+                'text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider',
+                message.confidence === 'high'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : message.confidence === 'medium'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-slate-100 text-slate-600',
+              )}
+            >
+              {message.confidence} confidence
+            </span>
+          )}
+          {message.metadata?.aiGenerated && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 uppercase tracking-wider flex items-center space-x-1">
+              <Brain className="w-2.5 h-2.5" />
+              <span>AI-Powered</span>
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -372,31 +389,112 @@ function SceneBreakdown({ scenes }: { scenes: MiaSceneAnalysis[] }) {
     template: 'Template (Free)',
   }
 
+  const STRENGTH_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+    'strong': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Strong' },
+    'adequate': { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Adequate' },
+    'needs-work': { bg: 'bg-red-100', text: 'text-red-700', label: 'Needs Work' },
+  }
+
   return (
     <div className="mt-3 space-y-2">
       {scenes.map(scene => (
         <div
           key={scene.sceneNumber}
-          className="flex items-start space-x-3 p-2 bg-purple-50/50 rounded-lg"
+          className="p-2.5 bg-purple-50/50 rounded-lg space-y-1.5"
         >
-          <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center shrink-0">
-            <span className="text-[10px] font-bold text-purple-700">{scene.sceneNumber}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-800">{scene.label} ({scene.estimatedDuration}s)</span>
-              <span className="text-[10px] text-purple-600">
-                {scene.estimatedCost > 0 ? `$${scene.estimatedCost.toFixed(2)}` : 'Free'}
-              </span>
+          {/* Header row */}
+          <div className="flex items-start space-x-3">
+            <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-purple-700">{scene.sceneNumber}</span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-              {PROVIDER_NAMES[scene.recommendedModel || scene.recommendedProvider] || scene.recommendedProvider}
-              {' \u00B7 '}
-              &ldquo;{scene.scriptExcerpt}&rdquo;
-            </p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-xs font-medium text-slate-800">{scene.label} ({scene.estimatedDuration}s)</span>
+                  {scene.strengthRating && STRENGTH_STYLES[scene.strengthRating] && (
+                    <span className={cn(
+                      'text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider',
+                      STRENGTH_STYLES[scene.strengthRating].bg,
+                      STRENGTH_STYLES[scene.strengthRating].text,
+                    )}>
+                      {STRENGTH_STYLES[scene.strengthRating].label}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] text-purple-600">
+                  {scene.estimatedCost > 0 ? `$${scene.estimatedCost.toFixed(2)}` : 'Free'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                {PROVIDER_NAMES[scene.recommendedModel || scene.recommendedProvider] || scene.recommendedProvider}
+                {' \u00B7 '}
+                &ldquo;{scene.scriptExcerpt}&rdquo;
+              </p>
+            </div>
           </div>
+
+          {/* AI Visual Direction */}
+          {scene.visualDirection && (
+            <div className="ml-9 flex items-start space-x-1.5">
+              <Eye className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-indigo-600 leading-snug">{scene.visualDirection}</p>
+            </div>
+          )}
+
+          {/* AI Creative Feedback */}
+          {scene.creativeFeedback && (
+            <div className="ml-9 flex items-start space-x-1.5">
+              <Lightbulb className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-amber-700 leading-snug">{scene.creativeFeedback}</p>
+            </div>
+          )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function SuggestedRewrites({
+  rewrites,
+}: {
+  rewrites: Array<{ sceneNumber: number; original: string; rewrite: string; reason: string }>
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (rewrites.length === 0) return null
+
+  return (
+    <div className="mt-3 border border-amber-200 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-amber-50 hover:bg-amber-100 transition-colors"
+      >
+        <div className="flex items-center space-x-1.5">
+          <RefreshCw className="w-3 h-3 text-amber-600" />
+          <span className="text-xs font-medium text-amber-800">
+            {rewrites.length} Suggested Rewrite{rewrites.length > 1 ? 's' : ''}
+          </span>
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-3 h-3 text-amber-500" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-amber-500" />
+        )}
+      </button>
+      {expanded && (
+        <div className="px-3 py-2 space-y-3 bg-white">
+          {rewrites.map((rw, i) => (
+            <div key={i} className="space-y-1">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                Scene {rw.sceneNumber}
+              </span>
+              <div className="text-[11px] text-red-600 line-through">{rw.original}</div>
+              <div className="text-[11px] text-emerald-700 font-medium">{rw.rewrite}</div>
+              <div className="text-[10px] text-slate-400 italic">{rw.reason}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -435,8 +533,9 @@ function ActionButton({
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center space-x-2 p-3">
-      <Sparkles className="w-4 h-4 text-purple-400" />
+    <div className="flex items-center space-x-2 p-3 bg-white/50 rounded-lg border border-purple-100">
+      <Brain className="w-4 h-4 text-purple-500 animate-pulse" />
+      <span className="text-xs text-purple-600 font-medium">Mia is analyzing your script...</span>
       <div className="flex space-x-1">
         <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
         <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />

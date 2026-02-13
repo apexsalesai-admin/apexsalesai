@@ -174,8 +174,26 @@ export function useMiaCopilot({
     })
   }, [content, mode])
 
+  // ── Auto-analyze on version select (P20-B) ──────────────
+  const prevVersionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!version?.id || !version.script?.trim()) return
+    if (!content?.id) return
+    // Skip if same version or session was restored (greeted from cache)
+    if (prevVersionRef.current === version.id) return
+    prevVersionRef.current = version.id
+    // Don't auto-analyze if we restored a session (already has messages)
+    if (messages.length > 1) return
+    // Small delay to let greeting render first
+    const timer = setTimeout(() => {
+      analyzeScriptFn()
+    }, 800)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version?.id])
+
   // ── Script Analysis ───────────────────────────────────────
-  const analyzeScript = useCallback(async () => {
+  const analyzeScriptFn = useCallback(async () => {
     if (!content?.id || !version?.id) return
     if (!version.script?.trim()) {
       const { generateNoScript } = await import('@/lib/studio/mia-messages')
@@ -341,7 +359,7 @@ export function useMiaCopilot({
   const handleAction = useCallback((action: string, data?: Record<string, unknown>) => {
     switch (action) {
       case 'analyze-script':
-        analyzeScript()
+        analyzeScriptFn()
         break
       case 'render-all':
         renderAll()
@@ -388,7 +406,7 @@ export function useMiaCopilot({
         // These are handled by the parent via onAction callback
         break
     }
-  }, [analyzeScript, renderAll, renderScene, renderPlan])
+  }, [analyzeScriptFn, renderAll, renderScene, renderPlan])
 
   return {
     mode,
@@ -398,7 +416,7 @@ export function useMiaCopilot({
     scriptAnalysis,
     renderPlan,
     setMode,
-    analyzeScript,
+    analyzeScript: analyzeScriptFn,
     renderAll,
     renderScene,
     handleAction,
