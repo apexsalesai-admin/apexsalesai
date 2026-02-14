@@ -203,6 +203,79 @@ If the draft is already excellent, return {"fixes": []}.`
   return NextResponse.json(response)
 }
 
+// ─── Review edited section ────────────────────────────────────────────────────
+
+async function handleReviewEdit(
+  body: { sectionType: string; originalContent: string; editedContent: string; topic: string; angle: { title: string } }
+): Promise<NextResponse> {
+  const { sectionType, originalContent, editedContent, topic, angle } = body
+
+  const prompt = `You are Mia, an expert AI content strategist. The user edited the ${sectionType} section of their ${topic} content (angle: "${angle.title}").
+
+Original:
+${originalContent}
+
+Edited:
+${editedContent}
+
+Provide brief feedback (1 sentence) on the edit quality and any suggestion. Return ONLY a JSON object:
+{"feedback": "Your 1-sentence feedback here", "thinking": "Your internal reasoning about this edit"}`
+
+  const raw = await callAI(prompt, 512)
+  const parsed = parseJSON(raw) as { feedback: string; thinking: string }
+
+  return NextResponse.json({
+    success: true,
+    feedback: parsed.feedback || '',
+    thinking: parsed.thinking || '',
+  })
+}
+
+// ─── Score content (momentum meter) ──────────────────────────────────────────
+
+async function handleScore(
+  body: { topic: string; angle: { title: string }; sections: { type: string; content: string }[]; channels: string[]; contentType: string }
+): Promise<NextResponse> {
+  const { topic, angle, sections, channels, contentType } = body
+  const channelList = channels.join(', ') || 'social media'
+  const assembledDraft = sections.map((s) => `[${s.type.toUpperCase()}]: ${s.content}`).join('\n\n')
+
+  const prompt = `You are Mia, an expert AI content strategist. Score this ${contentType} draft for ${channelList} on 5 dimensions (0-100 each).
+
+Topic: "${topic}"
+Angle: "${angle.title}"
+
+Draft:
+${assembledDraft}
+
+Dimensions:
+- hook: How attention-grabbing is the opening?
+- clarity: How clear and well-structured is the message?
+- cta: How strong is the call-to-action?
+- seo: How well optimized for search/discovery?
+- platformFit: How well does it fit ${channelList} conventions?
+
+Return ONLY a JSON object:
+{"hook": 0, "clarity": 0, "cta": 0, "seo": 0, "platformFit": 0, "overall": 0}
+
+The "overall" should be a weighted average of the 5 scores.`
+
+  const raw = await callAI(prompt, 256)
+  const parsed = parseJSON(raw) as { hook: number; clarity: number; cta: number; seo: number; platformFit: number; overall: number }
+
+  return NextResponse.json({
+    success: true,
+    scores: {
+      hook: Math.min(100, Math.max(0, parsed.hook || 0)),
+      clarity: Math.min(100, Math.max(0, parsed.clarity || 0)),
+      cta: Math.min(100, Math.max(0, parsed.cta || 0)),
+      seo: Math.min(100, Math.max(0, parsed.seo || 0)),
+      platformFit: Math.min(100, Math.max(0, parsed.platformFit || 0)),
+      overall: Math.min(100, Math.max(0, parsed.overall || 0)),
+    },
+  })
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -215,9 +288,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const workspace = await getOrCreateWorkspace(session.user.id)
 
-    // Route to polish handler if action is 'polish'
+    // Route to action-specific handlers
     if (body.action === 'polish') {
       return handlePolish(body, workspace.id)
+    }
+    if (body.action === 'review-edit') {
+      return handleReviewEdit(body)
+    }
+    if (body.action === 'score') {
+      return handleScore(body)
     }
 
     // Default: generate section

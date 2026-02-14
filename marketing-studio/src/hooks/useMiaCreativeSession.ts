@@ -9,6 +9,7 @@ import type {
   AngleCard,
   ThinkingEntry,
   FixSuggestion,
+  MomentumScore,
   MiaContextResponse,
   MiaResearchRequest,
   MiaResearchResponse,
@@ -44,6 +45,7 @@ const initialState: MiaSessionState = {
   currentSectionIndex: 0,
   fixes: [],
   thinking: [],
+  momentum: null,
   isLoading: false,
   error: null,
 }
@@ -134,6 +136,9 @@ function reducer(state: MiaSessionState, action: MiaSessionAction): MiaSessionSt
     case 'SET_ERROR':
       return { ...state, error: action.error }
 
+    case 'SET_MOMENTUM':
+      return { ...state, momentum: action.momentum }
+
     case 'RESET':
       return { ...initialState, sections: createInitialSections() }
 
@@ -159,6 +164,8 @@ export function useMiaCreativeSession({
 }: UseMiaCreativeSessionProps) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const thinkingIdRef = useRef(0)
+  const seedRef = useRef(0)
+  const videoProviderRef = useRef<string | undefined>(undefined)
 
   const addThinking = useCallback(
     (phase: MiaCreativePhase, label: string, detail: string) => {
@@ -238,6 +245,38 @@ export function useMiaCreativeSession({
     [channels, contentType, goal, addThinking]
   )
 
+  // ── Phase 1b: Refresh angles with a new seed ─────────────────────────────
+
+  const refreshAngles = useCallback(async () => {
+    seedRef.current += 1
+    dispatch({ type: 'SET_LOADING', loading: true })
+    dispatch({ type: 'SET_ERROR', error: null })
+    addThinking('angles', 'Generating new angles', `Trying seed variation ${seedRef.current}...`)
+    try {
+      const body: MiaResearchRequest = {
+        topic: state.topic,
+        channels,
+        contentType,
+        goal,
+        seed: seedRef.current,
+      }
+      const res = await fetch('/api/studio/mia/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data: MiaResearchResponse = await res.json()
+      if (!data.success) throw new Error(data.error || 'Research failed')
+      dispatch({ type: 'SET_ANGLES', angles: data.angles })
+      addThinking('angles', 'Fresh angles ready', data.angles.map((a) => `- ${a.title}`).join('\n'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to refresh angles'
+      dispatch({ type: 'SET_ERROR', error: msg })
+    } finally {
+      dispatch({ type: 'SET_LOADING', loading: false })
+    }
+  }, [state.topic, channels, contentType, goal, addThinking])
+
   // ── Phase 2: Select angle & start building ────────────────────────────────
 
   const selectAngle = useCallback(
@@ -300,6 +339,49 @@ export function useMiaCreativeSession({
     [state.sections, state.selectedAngle, state.topic, channels, contentType, goal, addThinking]
   )
 
+  // ── Score content (momentum meter) ──────────────────────────────────────────
+
+  const scoreContent = useCallback(async () => {
+    if (!state.selectedAngle) return
+    const scoreSections = state.sections.filter((s) => s.content)
+    if (scoreSections.length === 0) return
+
+    try {
+      const res = await fetch('/api/studio/mia/generate-section', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'score',
+          topic: state.topic,
+          angle: state.selectedAngle,
+          sections: scoreSections.map((s) => ({ type: s.type, content: s.content })),
+          channels,
+          contentType,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.scores) {
+        dispatch({ type: 'SET_MOMENTUM', momentum: data.scores })
+      }
+    } catch {
+      // Fallback: client-side heuristic scoring
+      const allText = state.sections.map((s) => s.content).join(' ')
+      const wordCount = allText.split(/\s+/).filter(Boolean).length
+      const hasQuestion = allText.includes('?')
+      const hasCTA = /click|learn|discover|try|get|start|sign up|subscribe|join/i.test(allText)
+      const hasHashtags = /#\w+/.test(allText)
+
+      const hookScore = Math.min(100, 40 + (state.sections[0]?.content ? 30 : 0) + (hasQuestion ? 15 : 0) + (wordCount > 10 ? 15 : 0))
+      const clarityScore = Math.min(100, 50 + (wordCount < 500 ? 25 : 0) + (wordCount > 20 ? 25 : 0))
+      const ctaScore = hasCTA ? 80 : 35
+      const seoScore = Math.min(100, 30 + (hasHashtags ? 30 : 0) + (wordCount > 50 ? 20 : 0) + (state.topic ? 20 : 0))
+      const platformFitScore = Math.min(100, 50 + (channels.length > 0 ? 25 : 0) + (wordCount > 30 && wordCount < 400 ? 25 : 0))
+      const overallScore = Math.round((hookScore + clarityScore + ctaScore + seoScore + platformFitScore) / 5)
+
+      dispatch({ type: 'SET_MOMENTUM', momentum: { hook: hookScore, clarity: clarityScore, cta: ctaScore, seo: seoScore, platformFit: platformFitScore, overall: overallScore } })
+    }
+  }, [state.selectedAngle, state.sections, state.topic, channels, contentType])
+
   // ── Section actions ────────────────────────────────────────────────────────
 
   const acceptSection = useCallback(
@@ -318,8 +400,11 @@ export function useMiaCreativeSession({
       } else if (index < SECTION_ORDER.length - 1) {
         dispatch({ type: 'ADVANCE_SECTION' })
       }
+
+      // Score content after each acceptance
+      setTimeout(() => scoreContent(), 200)
     },
-    [state.sections, addThinking]
+    [state.sections, addThinking, scoreContent]
   )
 
   const retrySection = useCallback(
@@ -333,6 +418,39 @@ export function useMiaCreativeSession({
   const editSection = useCallback((index: number, content: string) => {
     dispatch({ type: 'EDIT_SECTION', index, content })
   }, [])
+
+  // ── Review edited section (Mia re-analysis) ────────────────────────────────
+
+  const reviewEditedSection = useCallback(
+    async (index: number, editedContent: string) => {
+      const section = state.sections[index]
+      if (!state.selectedAngle) return null
+      addThinking('building', 'Reviewing your edit', `Analyzing changes to ${section.type}...`)
+      try {
+        const res = await fetch('/api/studio/mia/generate-section', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'review-edit',
+            sectionType: section.type,
+            originalContent: section.content,
+            editedContent,
+            topic: state.topic,
+            angle: state.selectedAngle,
+          }),
+        })
+        const data = await res.json()
+        if (!data.success) return null
+        if (data.thinking) {
+          addThinking('building', 'Edit review', data.thinking)
+        }
+        return data.feedback as string
+      } catch {
+        return null
+      }
+    },
+    [state.sections, state.selectedAngle, state.topic, addThinking]
+  )
 
   // ── Phase 3: Polish ────────────────────────────────────────────────────────
 
@@ -379,13 +497,27 @@ export function useMiaCreativeSession({
       if (fix) {
         addThinking('polishing', 'Fix applied', fix.description)
       }
+      // Re-score after fix
+      setTimeout(() => scoreContent(), 200)
     },
-    [state.fixes, addThinking]
+    [state.fixes, addThinking, scoreContent]
+  )
+
+  // ── Phase 3.5: Video offer (video/reel only) ─────────────────────────────
+
+  const selectVideoProvider = useCallback(
+    (provider: string | undefined) => {
+      videoProviderRef.current = provider
+      // Proceed to done
+      finishSession()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   )
 
   // ── Phase 4: Complete ──────────────────────────────────────────────────────
 
-  const completeSession = useCallback(() => {
+  const finishSession = useCallback(() => {
     dispatch({ type: 'SET_PHASE', phase: 'done' })
     addThinking('done', 'Content ready!', 'Handing off to preview...')
 
@@ -393,15 +525,12 @@ export function useMiaCreativeSession({
     const bodySection = state.sections.find((s) => s.type === 'body')
     const ctaSection = state.sections.find((s) => s.type === 'cta')
 
-    // Build the title from the hook (first line or truncated)
     const hookContent = hookSection?.content || ''
     const title = hookContent.split('\n')[0].slice(0, 100) || state.topic
 
-    // Build the full body
     const bodyParts = [hookContent, bodySection?.content || '', ctaSection?.content || ''].filter(Boolean)
     const body = bodyParts.join('\n\n')
 
-    // Extract hashtags from content
     const hashtagMatches = body.match(/#\w+/g) || []
 
     onComplete({
@@ -409,8 +538,19 @@ export function useMiaCreativeSession({
       body,
       hashtags: hashtagMatches,
       callToAction: ctaSection?.content || '',
+      videoProvider: videoProviderRef.current,
     })
   }, [state.sections, state.topic, onComplete, addThinking])
+
+  const completeSession = useCallback(() => {
+    // If video/reel content, go to video-offer phase first
+    if (contentType === 'video' || contentType === 'reel') {
+      dispatch({ type: 'SET_PHASE', phase: 'video-offer' })
+      addThinking('video-offer', 'Video options', 'Checking available video providers...')
+      return
+    }
+    finishSession()
+  }, [contentType, finishSession, addThinking])
 
   // ── Reset ──────────────────────────────────────────────────────────────────
 
@@ -423,14 +563,18 @@ export function useMiaCreativeSession({
     dispatch,
     fetchGreeting,
     fetchAngles,
+    refreshAngles,
     selectAngle,
     generateSection,
     acceptSection,
     retrySection,
     editSection,
+    reviewEditedSection,
+    scoreContent,
     fetchPolishSuggestions,
     applyFix,
     completeSession,
+    selectVideoProvider,
     reset,
   }
 }

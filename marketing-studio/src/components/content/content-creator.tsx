@@ -46,9 +46,6 @@ import {
   ChevronDown,
   ChevronUp,
   Star,
-  Bookmark,
-  Share2,
-  ThumbsUp,
   Eye,
   Play,
   X,
@@ -68,6 +65,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MiaCreativeSession } from '@/components/mia/creative/mia-creative-session'
+import { MiaChannelPreview } from '@/components/mia/creative/mia-channel-previews'
 import type { MiaCreativeResult } from '@/lib/studio/mia-creative-types'
 import { IntegrationType } from '@/types'
 import { VideoPreviewPlayer } from '@/components/content/video-preview-player'
@@ -2184,93 +2182,14 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                           previewTheme === 'dark' ? 'bg-slate-900' : 'bg-white'
                         )}
                       >
-                        {/* Platform Header */}
-                        <div className={cn('px-5 py-4 flex items-center justify-between', `bg-gradient-to-r ${channel.gradient}`)}>
-                          <div className="flex items-center space-x-3 text-white">
-                            <channel.icon className="w-6 h-6" />
-                            <span className="font-bold">{channel.name}</span>
-                          </div>
-                          {variation && (
-                            <span className="text-xs bg-white/20 backdrop-blur px-3 py-1 rounded-full text-white">
-                              Optimized
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Post Preview */}
-                        <div className={cn(
-                          'p-6',
-                          previewTheme === 'dark' ? 'bg-slate-900' : 'bg-white'
-                        )}>
-                          {/* Author */}
-                          <div className="flex items-start space-x-4">
-                            <div className="w-14 h-14 bg-gradient-to-br from-apex-primary to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                              A
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-2">
-                                <span className={cn('font-bold text-lg', previewTheme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                                  Lyfye
-                                </span>
-                                <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <span className={cn('text-sm', previewTheme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
-                                @lyfye · Just now
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Content */}
-                          <div className="mt-5">
-                            {displayTitle && channelId !== 'X_TWITTER' && (
-                              <h3 className={cn('font-bold text-xl mb-3', previewTheme === 'dark' ? 'text-white' : 'text-slate-900')}>
-                                {displayTitle}
-                              </h3>
-                            )}
-                            <p className={cn('whitespace-pre-wrap leading-relaxed', previewTheme === 'dark' ? 'text-slate-300' : 'text-slate-700')}>
-                              {displayBody}
-                            </p>
-                          </div>
-
-                          {/* Hashtags */}
-                          {draft.hashtags.length > 0 && (
-                            <div className="mt-4 text-apex-primary font-medium">
-                              {draft.hashtags.map(tag => `#${tag}`).join(' ')}
-                            </div>
-                          )}
-
-                          {/* Engagement Bar */}
-                          <div className={cn(
-                            'mt-6 pt-5 border-t flex items-center justify-between',
-                            previewTheme === 'dark' ? 'border-slate-700' : 'border-slate-100'
-                          )}>
-                            <div className="flex items-center space-x-8">
-                              {[
-                                { icon: Heart, label: 'Like', count: '0' },
-                                { icon: MessageSquare, label: 'Comment', count: '0' },
-                                { icon: Share2, label: 'Share', count: '0' },
-                              ].map(action => (
-                                <button
-                                  key={action.label}
-                                  className={cn(
-                                    'flex items-center space-x-2 transition-colors',
-                                    previewTheme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-700'
-                                  )}
-                                >
-                                  <action.icon className="w-5 h-5" />
-                                  <span className="text-sm">{action.count}</span>
-                                </button>
-                              ))}
-                            </div>
-                            <button className={cn(
-                              previewTheme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-400 hover:text-slate-700'
-                            )}>
-                              <Bookmark className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </div>
+                        <MiaChannelPreview
+                          channelId={channelId}
+                          title={displayTitle}
+                          body={displayBody}
+                          hashtags={draft.hashtags}
+                          theme={previewTheme}
+                          mode={previewMode}
+                        />
                       </div>
                     )
                   })}

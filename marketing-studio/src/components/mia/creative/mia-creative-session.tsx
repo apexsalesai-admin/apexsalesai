@@ -8,6 +8,8 @@ import { MiaGreeting } from './mia-greeting'
 import { MiaAnglePicker } from './mia-angle-picker'
 import { MiaSectionBuilder } from './mia-section-builder'
 import { MiaThinkingPanel } from './mia-thinking-panel'
+import { MiaVideoOffer } from './mia-video-offer'
+import { MiaMomentumMeter } from './mia-momentum-meter'
 import type { MiaCreativeResult, FixSuggestion } from '@/lib/studio/mia-creative-types'
 
 interface MiaCreativeSessionProps {
@@ -29,14 +31,18 @@ export function MiaCreativeSession({
     state,
     fetchGreeting,
     fetchAngles,
+    refreshAngles,
     selectAngle,
     generateSection,
     acceptSection,
     retrySection,
     editSection,
+    reviewEditedSection,
+    scoreContent,
     fetchPolishSuggestions,
     applyFix,
     completeSession,
+    selectVideoProvider,
   } = useMiaCreativeSession({ channels, contentType, goal, onComplete })
 
   // Auto-fetch polish suggestions when entering polishing phase
@@ -107,13 +113,15 @@ export function MiaCreativeSession({
                   angles={state.angles}
                   isLoading={state.isLoading}
                   onSelect={selectAngle}
+                  onRefreshAngles={refreshAngles}
                 />
               </motion.div>
             )}
 
             {/* Phase 2: Section building */}
             {state.phase === 'building' && (
-              <motion.div key="building" exit={{ opacity: 0, y: -10 }}>
+              <motion.div key="building" exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                <MiaMomentumMeter score={state.momentum} />
                 <MiaSectionBuilder
                   sections={state.sections}
                   currentSectionIndex={state.currentSectionIndex}
@@ -122,6 +130,7 @@ export function MiaCreativeSession({
                   onRetry={handleRetrySection}
                   onEdit={editSection}
                   onGenerate={generateSection}
+                  onEditAndReview={reviewEditedSection}
                 />
               </motion.div>
             )}
@@ -133,13 +142,27 @@ export function MiaCreativeSession({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
+                className="space-y-4"
               >
+                <MiaMomentumMeter score={state.momentum} />
                 <PolishingPhase
                   fixes={state.fixes}
                   isLoading={state.isLoading}
                   onApplyFix={applyFix}
                   onComplete={completeSession}
                 />
+              </motion.div>
+            )}
+
+            {/* Phase 3.5: Video offer */}
+            {state.phase === 'video-offer' && (
+              <motion.div
+                key="video-offer"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <MiaVideoOffer onSelectProvider={selectVideoProvider} />
               </motion.div>
             )}
 

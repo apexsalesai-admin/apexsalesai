@@ -12,6 +12,7 @@ interface MiaSectionBuilderProps {
   onRetry: (index: number) => void
   onEdit: (index: number, content: string) => void
   onGenerate: (index: number) => void
+  onEditAndReview?: (index: number, content: string) => Promise<string | null>
 }
 
 export function MiaSectionBuilder({
@@ -22,6 +23,7 @@ export function MiaSectionBuilder({
   onRetry,
   onEdit,
   onGenerate,
+  onEditAndReview,
 }: MiaSectionBuilderProps) {
   return (
     <div className="space-y-6">
@@ -48,6 +50,7 @@ export function MiaSectionBuilder({
             onRetry={() => onRetry(i)}
             onEdit={(content) => onEdit(i, content)}
             onGenerate={() => onGenerate(i)}
+            onEditAndReview={onEditAndReview ? (content) => onEditAndReview(i, content) : undefined}
           />
         ))}
       </div>

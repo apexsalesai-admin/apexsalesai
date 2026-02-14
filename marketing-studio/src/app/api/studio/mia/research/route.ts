@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: MiaResearchRequest = await request.json()
-    const { topic, channels, contentType, goal } = body
+    const { topic, channels, contentType, goal, seed } = body
 
     if (!topic?.trim()) {
       return NextResponse.json({ success: false, angles: [], error: 'Topic is required' } satisfies MiaResearchResponse, { status: 400 })
@@ -138,8 +138,9 @@ export async function POST(request: NextRequest) {
 
     const channelList = channels.join(', ') || 'social media'
     const goalContext = goal ? `Content goal: ${goal}.` : ''
+    const seedContext = seed ? `(Variation seed: ${seed} — generate COMPLETELY DIFFERENT angles from any previous set.)\n` : ''
 
-    const prompt = `You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
+    const prompt = `${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
 
 Topic: "${topic}"
 ${sourceContext}

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import type { SectionDraft, SectionType } from '@/lib/studio/mia-creative-types'
 
 const SECTION_LABELS: Record<SectionType, string> = {
@@ -26,6 +26,7 @@ interface MiaSectionBlockProps {
   onRetry: () => void
   onEdit: (content: string) => void
   onGenerate: () => void
+  onEditAndReview?: (content: string) => Promise<string | null>
 }
 
 export function MiaSectionBlock({
@@ -37,10 +38,13 @@ export function MiaSectionBlock({
   onRetry,
   onEdit,
   onGenerate,
+  onEditAndReview,
 }: MiaSectionBlockProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(section.content)
   const [collapsed, setCollapsed] = useState(false)
+  const [reviewFeedback, setReviewFeedback] = useState<string | null>(null)
+  const [isReviewing, setIsReviewing] = useState(false)
 
   const label = SECTION_LABELS[section.type]
   const description = SECTION_DESCRIPTIONS[section.type]
@@ -54,6 +58,19 @@ export function MiaSectionBlock({
   const handleSaveEdit = () => {
     onEdit(editValue)
     setIsEditing(false)
+  }
+
+  const handleSaveAndReview = async () => {
+    if (!onEditAndReview) {
+      handleSaveEdit()
+      return
+    }
+    onEdit(editValue)
+    setIsEditing(false)
+    setIsReviewing(true)
+    const feedback = await onEditAndReview(editValue)
+    setReviewFeedback(feedback || null)
+    setIsReviewing(false)
   }
 
   const handleCancelEdit = () => {
@@ -148,6 +165,15 @@ export function MiaSectionBlock({
                 >
                   Save
                 </button>
+                {onEditAndReview && (
+                  <button
+                    onClick={handleSaveAndReview}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-medium hover:from-purple-600 hover:to-pink-600 transition-all"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Save &amp; let Mia review
+                  </button>
+                )}
                 <button
                   onClick={handleCancelEdit}
                   className="px-4 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-colors"
@@ -188,6 +214,32 @@ export function MiaSectionBlock({
               </div>
             </>
           )}
+
+          {/* Mia review feedback */}
+          <AnimatePresence>
+            {isReviewing && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2 text-xs text-purple-500"
+              >
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Mia is reviewing your edit...
+              </motion.div>
+            )}
+            {reviewFeedback && !isReviewing && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="flex items-start gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-200"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-purple-700">{reviewFeedback}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       ) : !isActive ? (
         <div className="py-6 text-center text-sm text-slate-400">

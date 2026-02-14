@@ -10,6 +10,7 @@ const PHASE_LABELS: Record<MiaCreativePhase, string> = {
   angles: 'Researching',
   building: 'Building',
   polishing: 'Polishing',
+  'video-offer': 'Video Options',
   done: 'Complete',
 }
 

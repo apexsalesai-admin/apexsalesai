@@ -8,11 +8,12 @@
 // ─── Session Phases ────────────────────────────────────────────────────────────
 
 export type MiaCreativePhase =
-  | 'greeting'   // Phase 0: personalized greeting + topic input
-  | 'angles'     // Phase 1: research + angle selection
-  | 'building'   // Phase 2: section-by-section generation
-  | 'polishing'  // Phase 3: assembled draft analysis + fix suggestions
-  | 'done'       // Phase 4: hand off to parent
+  | 'greeting'     // Phase 0: personalized greeting + topic input
+  | 'angles'       // Phase 1: research + angle selection
+  | 'building'     // Phase 2: section-by-section generation
+  | 'polishing'    // Phase 3: assembled draft analysis + fix suggestions
+  | 'video-offer'  // Phase 3.5: video provider selection (video/reel only)
+  | 'done'         // Phase 4: hand off to parent
 
 // ─── Section Types ─────────────────────────────────────────────────────────────
 
@@ -63,6 +64,17 @@ export interface FixSuggestion {
   applied: boolean
 }
 
+// ─── Momentum Score ───────────────────────────────────────────────────────────
+
+export interface MomentumScore {
+  hook: number        // 0-100
+  clarity: number     // 0-100
+  cta: number         // 0-100
+  seo: number         // 0-100
+  platformFit: number // 0-100
+  overall: number     // 0-100 weighted average
+}
+
 // ─── Session State ─────────────────────────────────────────────────────────────
 
 export interface MiaSessionState {
@@ -75,6 +87,7 @@ export interface MiaSessionState {
   currentSectionIndex: number
   fixes: FixSuggestion[]
   thinking: ThinkingEntry[]
+  momentum: MomentumScore | null
   isLoading: boolean
   error: string | null
 }
@@ -97,6 +110,7 @@ export type MiaSessionAction =
   | { type: 'ADD_THINKING'; entry: ThinkingEntry }
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'SET_MOMENTUM'; momentum: MomentumScore }
   | { type: 'RESET' }
 
 // ─── API Request / Response Types ──────────────────────────────────────────────
@@ -119,6 +133,7 @@ export interface MiaResearchRequest {
   channels: string[]
   contentType: string
   goal?: string
+  seed?: number
 }
 
 export interface MiaResearchResponse {
@@ -166,4 +181,5 @@ export interface MiaCreativeResult {
   body: string
   hashtags: string[]
   callToAction: string
+  videoProvider?: string
 }
