@@ -67,6 +67,8 @@ import {
   Heart
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MiaCreativeSession } from '@/components/mia/creative/mia-creative-session'
+import type { MiaCreativeResult } from '@/lib/studio/mia-creative-types'
 import { IntegrationType } from '@/types'
 import { VideoPreviewPlayer } from '@/components/content/video-preview-player'
 import type { VideoRenderState } from '@/types/content-draft'
@@ -279,6 +281,9 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   const [selectedProvider, setSelectedProvider] = useState<string>('anthropic')
   const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514')
   const [usedModel, setUsedModel] = useState<string | null>(null)
+
+  // Mia Creative Mode
+  const [miaCreativeMode, setMiaCreativeMode] = useState(true)
 
   // Video-specific State
   const [videoLength, setVideoLength] = useState<VideoLength>('medium')
@@ -1038,7 +1043,26 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
             )}
 
             {/* Step 2: Create Content with AI */}
-            {step === 2 && (
+            {step === 2 && miaCreativeMode && (
+              <MiaCreativeSession
+                channels={draft.channels.map(c => c.toString())}
+                contentType={draft.contentType}
+                goal={contentGoal}
+                onComplete={(result: MiaCreativeResult) => {
+                  setDraft(prev => ({
+                    ...prev,
+                    title: result.title,
+                    body: result.body,
+                    hashtags: result.hashtags,
+                    callToAction: result.callToAction,
+                  }))
+                  setGenerationCount(prev => prev + 1)
+                  setStep(3)
+                }}
+                onSwitchToManual={() => setMiaCreativeMode(false)}
+              />
+            )}
+            {step === 2 && !miaCreativeMode && (
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 via-pink-500 to-rose-500 mb-6 shadow-2xl shadow-pink-500/30">
