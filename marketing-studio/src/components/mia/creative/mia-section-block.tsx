@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react'
 import type { SectionDraft, SectionType } from '@/lib/studio/mia-creative-types'
@@ -28,6 +28,7 @@ interface MiaSectionBlockProps {
   onGenerate: () => void
   onEditAndReview?: (content: string) => Promise<string | null>
   onRevise?: (direction: string) => void
+  onAssist?: (currentContent: string, request: string) => void
 }
 
 export function MiaSectionBlock({
@@ -41,6 +42,7 @@ export function MiaSectionBlock({
   onGenerate,
   onEditAndReview,
   onRevise,
+  onAssist,
 }: MiaSectionBlockProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(section.content)
@@ -48,6 +50,21 @@ export function MiaSectionBlock({
   const [reviewFeedback, setReviewFeedback] = useState<string | null>(null)
   const [isReviewing, setIsReviewing] = useState(false)
   const [reviseInput, setReviseInput] = useState('')
+  const [assistInput, setAssistInput] = useState('')
+  const [pendingAssist, setPendingAssist] = useState(false)
+
+  // Sync editValue when an assist completes (content changes from parent)
+  useEffect(() => {
+    if (isEditing && pendingAssist && !section.isAssisting && section.content) {
+      setEditValue(section.content)
+      setPendingAssist(false)
+    }
+  }, [section.content, section.isAssisting, pendingAssist, isEditing])
+
+  const handleAssist = (content: string, request: string) => {
+    setPendingAssist(true)
+    onAssist?.(content, request)
+  }
 
   const label = SECTION_LABELS[section.type]
   const description = SECTION_DESCRIPTIONS[section.type]
@@ -161,6 +178,74 @@ export function MiaSectionBlock({
                 onChange={(e) => setEditValue(e.target.value)}
                 className="w-full min-h-[120px] p-3 rounded-lg border border-slate-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 outline-none text-sm text-slate-800 resize-y"
               />
+
+              {/* ─── Mia Assist Bar ─── */}
+              {onAssist && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: '✨ Finish this thought', request: 'Finish the incomplete or trailing thought naturally' },
+                      { label: '📊 Add a stat', request: 'Add a relevant statistic or data point where it fits best' },
+                      { label: '💪 Make it punchier', request: 'Make the language more impactful and direct without changing the structure' },
+                      { label: '✂️ Shorten', request: 'Make this more concise while keeping the core message' },
+                    ].map((action) => (
+                      <button
+                        key={action.label}
+                        onClick={() => {
+                          if (!section.isAssisting) {
+                            handleAssist(editValue, action.request)
+                          }
+                        }}
+                        disabled={section.isAssisting}
+                        className="px-2.5 py-1 text-[11px] font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-40 transition-all"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl">
+                    <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
+                    <input
+                      type="text"
+                      value={assistInput}
+                      onChange={(e) => setAssistInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && assistInput.trim() && !section.isAssisting) {
+                          handleAssist(editValue, assistInput.trim())
+                          setAssistInput('')
+                        }
+                      }}
+                      placeholder="Ask Mia to help... (e.g. 'finish the last sentence', 'add ROI data')"
+                      className="flex-1 bg-transparent border-none outline-none text-xs text-slate-700 placeholder-slate-400"
+                      disabled={section.isAssisting}
+                    />
+                    <button
+                      onClick={() => {
+                        if (assistInput.trim() && !section.isAssisting) {
+                          handleAssist(editValue, assistInput.trim())
+                          setAssistInput('')
+                        }
+                      }}
+                      disabled={!assistInput.trim() || section.isAssisting}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-40 transition-all shrink-0"
+                    >
+                      {section.isAssisting ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Working...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3" />
+                          Ask Mia
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveEdit}

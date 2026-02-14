@@ -26,6 +26,7 @@ export interface SectionDraft {
   accepted: boolean
   rejectedVersions: string[]
   isRevising?: boolean
+  isAssisting?: boolean
 }
 
 // ─── Angle Cards ───────────────────────────────────────────────────────────────
@@ -141,6 +142,9 @@ export type MiaSessionAction =
   | { type: 'REVISE_SECTION_START'; sectionIndex: number }
   | { type: 'REVISE_SECTION_SUCCESS'; sectionIndex: number; content: string }
   | { type: 'REVISE_SECTION_ERROR'; sectionIndex: number; error: string }
+  | { type: 'ASSIST_SECTION_START'; sectionIndex: number }
+  | { type: 'ASSIST_SECTION_SUCCESS'; sectionIndex: number; content: string }
+  | { type: 'ASSIST_SECTION_ERROR'; sectionIndex: number; error: string }
   | { type: 'RESET' }
 
 // ─── API Request / Response Types ──────────────────────────────────────────────

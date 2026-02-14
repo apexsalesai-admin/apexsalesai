@@ -327,6 +327,68 @@ Return ONLY a JSON object (no markdown):
   })
 }
 
+// ─── Assist user during inline editing ──────────────────────────────────────
+
+async function handleAssist(
+  body: {
+    sectionType: string
+    existingContent: string
+    assistRequest: string
+    topic: string
+    angle: { title: string }
+    channels: string[]
+    goal?: string
+    brandName?: string
+  },
+  workspaceId: string
+): Promise<NextResponse> {
+  const { sectionType, existingContent, assistRequest, topic, angle, channels, goal, brandName } = body
+  const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
+  const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
+  const channelList = channels.join(', ') || 'social media'
+
+  const prompt = `${brandGuardrail}You are Mia, an AI content strategist helping a user edit their ${sectionType} section in real-time.
+
+The user is currently editing this content:
+"""
+${existingContent}
+"""
+
+The user's request: "${assistRequest}"
+
+CRITICAL RULES:
+1. Apply ONLY what the user asked for. Do NOT rewrite parts they didn't mention.
+2. If they say "finish this thought" or "complete this" — find the incomplete sentence or trailing idea and complete it naturally.
+3. If they say "add a stat" or "add data" — insert a relevant, plausible statistic at the most logical point.
+4. If they say "make it punchier" or "stronger" — tighten the language and add impact, but preserve the structure.
+5. If they say "shorten" — cut length while keeping the core message.
+6. Preserve the user's voice and any edits they've already made. Do NOT reset to a previous version.
+7. Return the COMPLETE section content with your changes applied (the full text, not just the changed part).
+
+Topic: "${topic}"
+Angle: "${angle.title}"
+Channels: ${channelList}
+Goal: ${goal || 'awareness'}
+${brandVoice.brandName ? `Brand: "${brandVoice.brandName}"` : ''}
+
+Return ONLY a JSON object (no markdown):
+{
+  "content": "The full updated section text with your changes applied",
+  "thinking": "1 sentence: what you changed and why",
+  "changeDescription": "Brief label: 'Completed the last sentence' or 'Added enterprise adoption stat' or 'Tightened language'"
+}`
+
+  const raw = await callAI(prompt)
+  const parsed = parseJSON(raw) as { content: string; thinking: string; changeDescription: string }
+
+  return NextResponse.json({
+    success: true,
+    content: (parsed.content || '').trim(),
+    thinking: parsed.thinking || `Assisted with: "${assistRequest.slice(0, 80)}"`,
+    changeDescription: parsed.changeDescription || 'Applied your request',
+  })
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -351,6 +413,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === 'revise') {
       return handleRevise(body, workspace.id)
+    }
+    if (body.action === 'assist') {
+      return handleAssist(body, workspace.id)
     }
 
     // Default: generate section

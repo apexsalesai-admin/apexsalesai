@@ -197,6 +197,28 @@ function reducer(state: MiaSessionState, action: MiaSessionAction): MiaSessionSt
       return { ...state, sections, error: action.error }
     }
 
+    case 'ASSIST_SECTION_START': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = { ...sections[action.sectionIndex], isAssisting: true }
+      return { ...state, sections }
+    }
+
+    case 'ASSIST_SECTION_SUCCESS': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = {
+        ...sections[action.sectionIndex],
+        content: action.content,
+        isAssisting: false,
+      }
+      return { ...state, sections }
+    }
+
+    case 'ASSIST_SECTION_ERROR': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = { ...sections[action.sectionIndex], isAssisting: false }
+      return { ...state, sections, error: action.error }
+    }
+
     case 'RESET':
       return { ...initialState, sections: createInitialSections() }
 
@@ -423,6 +445,47 @@ export function useMiaCreativeSession({
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Revision failed'
         dispatch({ type: 'REVISE_SECTION_ERROR', sectionIndex, error: msg })
+      }
+    },
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, addThinking]
+  )
+
+  // ── Inline Mia Assist — help user during editing ─────────────────────────
+
+  const assistSection = useCallback(
+    async (sectionIndex: number, currentContent: string, assistRequest: string) => {
+      const section = state.sections[sectionIndex]
+      if (!section || !state.selectedAngle) return
+
+      dispatch({ type: 'ASSIST_SECTION_START', sectionIndex })
+
+      const sectionLabel = section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action'
+      addThinking('building', `Assisting with ${sectionLabel}`, `"${assistRequest.slice(0, 80)}${assistRequest.length > 80 ? '...' : ''}"`)
+
+      try {
+        const res = await fetch('/api/studio/mia/generate-section', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'assist',
+            sectionType: section.type,
+            existingContent: currentContent,
+            assistRequest,
+            topic: state.topic,
+            angle: state.selectedAngle,
+            channels,
+            goal,
+            brandName: state.brandName || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!data.success) throw new Error(data.error || 'Assist failed')
+
+        dispatch({ type: 'ASSIST_SECTION_SUCCESS', sectionIndex, content: data.content })
+        addThinking('building', `${sectionLabel} updated`, data.changeDescription || data.thinking || 'Applied your request')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Assist failed'
+        dispatch({ type: 'ASSIST_SECTION_ERROR', sectionIndex, error: msg })
       }
     },
     [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, addThinking]
@@ -835,6 +898,7 @@ export function useMiaCreativeSession({
     selectAngle,
     generateSection,
     reviseSection,
+    assistSection,
     acceptSection,
     retrySection,
     editSection,
