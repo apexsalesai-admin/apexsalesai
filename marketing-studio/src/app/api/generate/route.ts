@@ -11,7 +11,7 @@ interface GenerateRequest {
   goal?: string
   template?: string
   additionalContext?: string
-  model?: 'claude' | 'gpt4' | 'auto'
+  model?: 'claude' | 'gpt4' | 'gemini' | 'auto'
   seoKeywords?: string[]
   targetAudience?: string
   includeSeoAnalysis?: boolean
@@ -166,6 +166,42 @@ async function generateWithOpenAI(prompt: string, model: string = 'gpt-4o'): Pro
   return data.choices[0].message.content
 }
 
+// Use Google Gemini for generation
+async function generateWithGemini(prompt: string, model: string = 'gemini-2.0-flash'): Promise<string> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) {
+    throw new Error('GOOGLE_AI_API_KEY not configured')
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: `You are Mia, an expert AI content strategist for Lyfye Marketing Studio. You create high-converting, engaging content that drives measurable results.\n\n${prompt}` }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.8,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    console.error('Gemini API error:', error)
+    throw new Error(`Gemini API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body: GenerateRequest = await request.json()
@@ -309,15 +345,24 @@ Return ONLY the JSON object, no additional text or markdown.`
     } else if (model === 'claude') {
       result = await generateWithClaude(prompt, 'claude-sonnet-4-20250514')
       usedModel = 'claude-sonnet-4-20250514'
+    } else if (model === 'gemini') {
+      result = await generateWithGemini(prompt, 'gemini-2.0-flash')
+      usedModel = 'gemini-2.0-flash'
     } else {
-      // Auto mode: try Claude first, fall back to OpenAI
+      // Auto mode: try Claude first, fall back to OpenAI, then Gemini
       try {
         result = await generateWithClaude(prompt)
         usedModel = 'claude-sonnet-4-20250514'
       } catch (claudeError) {
         console.log('Claude failed, falling back to OpenAI:', claudeError)
-        result = await generateWithOpenAI(prompt)
-        usedModel = 'gpt-4o'
+        try {
+          result = await generateWithOpenAI(prompt)
+          usedModel = 'gpt-4o'
+        } catch (openaiError) {
+          console.log('OpenAI failed, falling back to Gemini:', openaiError)
+          result = await generateWithGemini(prompt)
+          usedModel = 'gemini-2.0-flash'
+        }
       }
     }
 

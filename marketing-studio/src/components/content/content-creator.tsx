@@ -154,10 +154,13 @@ const AI_PROVIDERS: AIProvider[] = [
   {
     id: 'google',
     name: 'Google',
-    description: 'Gemini - Coming soon',
+    description: 'Gemini - Multimodal AI',
     icon: Sparkles,
-    available: false,
-    models: []
+    available: true,
+    models: [
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast & capable' },
+      { id: 'gemini-2.5-pro-preview-05-06', name: 'Gemini 2.5 Pro', description: 'Most capable' },
+    ]
   },
 ]
 
@@ -541,12 +544,9 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
 
     try {
       // Determine model based on provider selection
-      const modelMapping: Record<string, string> = {
-        'anthropic': selectedModel.includes('claude') ? selectedModel : 'claude-sonnet-4-20250514',
-        'openai': selectedModel.includes('gpt') ? selectedModel : 'gpt-4o',
-      }
-
-      const modelParam = selectedProvider === 'anthropic' ? 'claude' : 'gpt4'
+      const modelParam = selectedProvider === 'anthropic' ? 'claude'
+        : selectedProvider === 'google' ? 'gemini'
+        : 'gpt4'
 
       // Build video-specific context if applicable
       let videoContext = ''
