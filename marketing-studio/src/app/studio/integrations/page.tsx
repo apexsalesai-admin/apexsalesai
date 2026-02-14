@@ -443,12 +443,6 @@ function ConnectProviderModal({
             <p className="text-sm text-slate-600">
               {integration.displayName} requires OAuth authorization. Click below to authorize with Google.
             </p>
-            {!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                YouTube publishing requires <code className="bg-amber-100 px-1 rounded">GOOGLE_CLIENT_ID</code> and{' '}
-                <code className="bg-amber-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code> in your environment.
-              </div>
-            )}
             <button
               onClick={() => {
                 window.location.href = `/api/studio/youtube/authorize`

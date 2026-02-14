@@ -53,6 +53,26 @@ export async function GET() {
     })
   }
 
+  // Check Gemini
+  const geminiKey = process.env.GOOGLE_AI_API_KEY
+  if (geminiKey) {
+    providers.push({
+      id: 'gemini',
+      name: 'Google Gemini',
+      configured: true,
+      status: 'ready',
+      message: 'API key configured',
+    })
+  } else {
+    providers.push({
+      id: 'gemini',
+      name: 'Google Gemini',
+      configured: false,
+      status: 'unconfigured',
+      message: 'GOOGLE_AI_API_KEY not set',
+    })
+  }
+
   const defaultProvider = process.env.AI_PROVIDER_DEFAULT || 'anthropic'
   const fallbackProvider = process.env.AI_PROVIDER_FALLBACK || 'openai'
 
@@ -156,6 +176,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'OpenAI GPT-4 is working',
+        latencyMs,
+      })
+    }
+
+    if (provider === 'gemini') {
+      const apiKey = process.env.GOOGLE_AI_API_KEY
+      if (!apiKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'GOOGLE_AI_API_KEY not configured',
+        })
+      }
+
+      // Simple test call
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Say "OK" and nothing else.' }] }],
+            generationConfig: { maxOutputTokens: 10 },
+          }),
+        }
+      )
+
+      const latencyMs = Date.now() - startTime
+
+      if (!response.ok) {
+        const error = await response.text()
+        return NextResponse.json({
+          success: false,
+          error: `API error: ${response.status}`,
+          details: error,
+          latencyMs,
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Google Gemini is working',
         latencyMs,
       })
     }

@@ -8,7 +8,7 @@
  */
 
 export interface AIProviderStatus {
-  id: 'anthropic' | 'openai'
+  id: 'anthropic' | 'openai' | 'gemini'
   name: string
   configured: boolean
   status: 'ready' | 'error' | 'unconfigured'
@@ -88,16 +88,26 @@ export function getConfiguredProviders(): AIProviderStatus[] {
     message: openaiKey ? 'API key configured' : 'OPENAI_API_KEY not set',
   })
 
+  // Check Gemini
+  const geminiKey = process.env.GOOGLE_AI_API_KEY
+  providers.push({
+    id: 'gemini',
+    name: 'Google Gemini',
+    configured: !!geminiKey,
+    status: geminiKey ? 'ready' : 'unconfigured',
+    message: geminiKey ? 'API key configured' : 'GOOGLE_AI_API_KEY not set',
+  })
+
   return providers
 }
 
 // Check if any provider is configured
 export function hasAnyProvider(): boolean {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY)
+  return !!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GOOGLE_AI_API_KEY)
 }
 
 // Get the best available provider
-export function getBestProvider(): 'anthropic' | 'openai' | null {
+export function getBestProvider(): 'anthropic' | 'openai' | 'gemini' | null {
   const defaultProvider = process.env.AI_PROVIDER_DEFAULT || 'anthropic'
   const fallbackProvider = process.env.AI_PROVIDER_FALLBACK || 'openai'
 
@@ -107,16 +117,23 @@ export function getBestProvider(): 'anthropic' | 'openai' | null {
   if (defaultProvider === 'openai' && process.env.OPENAI_API_KEY) {
     return 'openai'
   }
+  if (defaultProvider === 'gemini' && process.env.GOOGLE_AI_API_KEY) {
+    return 'gemini'
+  }
   if (fallbackProvider === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
     return 'anthropic'
   }
   if (fallbackProvider === 'openai' && process.env.OPENAI_API_KEY) {
     return 'openai'
   }
+  if (fallbackProvider === 'gemini' && process.env.GOOGLE_AI_API_KEY) {
+    return 'gemini'
+  }
 
   // Last resort: try any configured provider
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic'
   if (process.env.OPENAI_API_KEY) return 'openai'
+  if (process.env.GOOGLE_AI_API_KEY) return 'gemini'
 
   return null
 }
@@ -181,6 +198,35 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
 
   const data = await response.json()
   return data.choices[0].message.content
+}
+
+// Generate with Google Gemini
+async function generateWithGemini(prompt: string): Promise<string> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not configured')
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.8,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Gemini API error (${response.status}): ${error}`)
+  }
+
+  const data = await response.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 }
 
 // Build the content generation prompt
@@ -290,12 +336,15 @@ export async function generateContent(request: GenerateContentRequest): Promise<
   let usedProvider: string
   let usedModel: string
 
-  // Try primary provider, then fallback
-  const providers: ('anthropic' | 'openai')[] = provider === 'anthropic'
-    ? ['anthropic', 'openai']
-    : ['openai', 'anthropic']
+  // Try primary provider, then fallback (Anthropic → OpenAI → Gemini)
+  const fallbackOrder: ('anthropic' | 'openai' | 'gemini')[] =
+    provider === 'gemini'
+      ? ['gemini', 'anthropic', 'openai']
+      : provider === 'openai'
+        ? ['openai', 'anthropic', 'gemini']
+        : ['anthropic', 'openai', 'gemini']
 
-  for (const p of providers) {
+  for (const p of fallbackOrder) {
     try {
       if (p === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
         response = await generateWithAnthropic(prompt)
@@ -307,6 +356,12 @@ export async function generateContent(request: GenerateContentRequest): Promise<
         response = await generateWithOpenAI(prompt)
         usedProvider = 'openai'
         usedModel = 'gpt-4o'
+        break
+      }
+      if (p === 'gemini' && process.env.GOOGLE_AI_API_KEY) {
+        response = await generateWithGemini(prompt)
+        usedProvider = 'gemini'
+        usedModel = 'gemini-2.0-flash'
         break
       }
     } catch (error) {
@@ -345,13 +400,18 @@ export async function generateContent(request: GenerateContentRequest): Promise<
 /**
  * Test a specific provider with a minimal prompt
  */
-export async function testProvider(providerId: 'anthropic' | 'openai'): Promise<{
+export async function testProvider(providerId: 'anthropic' | 'openai' | 'gemini'): Promise<{
   success: boolean
   latencyMs: number
   message?: string
   error?: string
 }> {
   const startTime = Date.now()
+  const names: Record<string, string> = {
+    anthropic: 'Anthropic Claude',
+    openai: 'OpenAI GPT-4',
+    gemini: 'Google Gemini',
+  }
 
   try {
     if (providerId === 'anthropic') {
@@ -359,17 +419,22 @@ export async function testProvider(providerId: 'anthropic' | 'openai'): Promise<
         return { success: false, latencyMs: 0, error: 'ANTHROPIC_API_KEY not configured' }
       }
       await generateWithAnthropic('Say "OK" and nothing else.')
-    } else {
+    } else if (providerId === 'openai') {
       if (!process.env.OPENAI_API_KEY) {
         return { success: false, latencyMs: 0, error: 'OPENAI_API_KEY not configured' }
       }
       await generateWithOpenAI('Say "OK" and nothing else.')
+    } else if (providerId === 'gemini') {
+      if (!process.env.GOOGLE_AI_API_KEY) {
+        return { success: false, latencyMs: 0, error: 'GOOGLE_AI_API_KEY not configured' }
+      }
+      await generateWithGemini('Say "OK" and nothing else.')
     }
 
     return {
       success: true,
       latencyMs: Date.now() - startTime,
-      message: `${providerId === 'anthropic' ? 'Anthropic Claude' : 'OpenAI GPT-4'} is working`,
+      message: `${names[providerId]} is working`,
     }
   } catch (error) {
     return {

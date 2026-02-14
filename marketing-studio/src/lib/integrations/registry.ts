@@ -72,7 +72,7 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     getApiKeyUrl: 'https://aistudio.google.com/apikey',
     capabilities: ['content_generation', 'multimodal_analysis'],
     tier: 'premium',
-    dbType: null, // No DB type yet — env-only for P21
+    dbType: 'GEMINI',
   },
   // ── Search ──────────────────────────────────────────────
   {

@@ -123,6 +123,7 @@ enum StudioIntegrationType {
   // AI/Video providers
   OPENAI
   ANTHROPIC
+  GEMINI
   ELEVENLABS
   HEYGEN
   RUNWAY
