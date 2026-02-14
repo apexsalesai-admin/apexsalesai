@@ -64,6 +64,12 @@ const TEST_HANDLERS: Record<string, (apiKey: string) => Promise<boolean>> = {
     })
     return r.ok
   },
+  elevenlabs: async (key) => {
+    const r = await fetch('https://api.elevenlabs.io/v1/user', {
+      headers: { 'xi-api-key': key },
+    })
+    return r.ok
+  },
   sora: async (key) => {
     // Sora uses OpenAI API key — test with models endpoint
     const r = await fetch('https://api.openai.com/v1/models', {
