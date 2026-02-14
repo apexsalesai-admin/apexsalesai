@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Loader2, Check, Sparkles, Wand2 } from 'lucide-react'
+import { Loader2, Check, Sparkles, Wand2 } from 'lucide-react'
 import { useMiaCreativeSession } from '@/hooks/useMiaCreativeSession'
 import { MiaGreeting } from './mia-greeting'
 import { MiaAnglePicker } from './mia-angle-picker'
@@ -10,7 +10,7 @@ import { MiaSectionBuilder } from './mia-section-builder'
 import { MiaThinkingPanel } from './mia-thinking-panel'
 import { MiaVideoOffer } from './mia-video-offer'
 import { MiaMomentumMeter } from './mia-momentum-meter'
-import type { MiaCreativeResult, FixSuggestion } from '@/lib/studio/mia-creative-types'
+import type { MiaCreativeResult, FixSuggestion, VideoRecommendationState } from '@/lib/studio/mia-creative-types'
 
 interface MiaCreativeSessionProps {
   channels: string[]
@@ -29,6 +29,7 @@ export function MiaCreativeSession({
 }: MiaCreativeSessionProps) {
   const {
     state,
+    dispatch,
     fetchGreeting,
     fetchAngles,
     refreshAngles,
@@ -43,7 +44,31 @@ export function MiaCreativeSession({
     applyFix,
     completeSession,
     selectVideoProvider,
+    fetchRecommendation,
+    requestTestRender,
+    confirmFullRender,
   } = useMiaCreativeSession({ channels, contentType, goal, onComplete })
+
+  // Assemble content summary for video prompt generation
+  const contentSummary = useMemo(() => {
+    return state.sections
+      .filter(s => s.accepted && s.content)
+      .map(s => s.content)
+      .join('\n\n')
+  }, [state.sections])
+
+  // Update video state via dispatch
+  const updateVideoState = useCallback(
+    (partial: Partial<VideoRecommendationState>) => {
+      dispatch({ type: 'SET_VIDEO_STATE', videoState: partial })
+    },
+    [dispatch]
+  )
+
+  // Skip video — proceed without a provider
+  const handleSkipVideo = useCallback(() => {
+    selectVideoProvider(undefined)
+  }, [selectVideoProvider])
 
   // Auto-fetch polish suggestions when entering polishing phase
   useEffect(() => {
@@ -155,14 +180,24 @@ export function MiaCreativeSession({
             )}
 
             {/* Phase 3.5: Video offer */}
-            {state.phase === 'video-offer' && (
+            {state.phase === 'video-offer' && state.videoState && (
               <motion.div
                 key="video-offer"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <MiaVideoOffer onSelectProvider={selectVideoProvider} />
+                <MiaVideoOffer
+                  videoState={state.videoState}
+                  contentSummary={contentSummary}
+                  channels={channels}
+                  goal={goal || 'awareness'}
+                  onFetchRecommendation={fetchRecommendation}
+                  onRequestTestRender={requestTestRender}
+                  onConfirmFullRender={confirmFullRender}
+                  onSkip={handleSkipVideo}
+                  onUpdateVideoState={updateVideoState}
+                />
               </motion.div>
             )}
 

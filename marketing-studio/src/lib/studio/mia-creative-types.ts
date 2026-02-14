@@ -75,6 +75,27 @@ export interface MomentumScore {
   overall: number     // 0-100 weighted average
 }
 
+// ─── Video Intelligence Types ─────────────────────────────────────────────────
+
+export type { VideoProviderMeta } from '@/lib/shared/video-providers'
+export type { BudgetBand, QualityTier, ScoredProvider, RecommendationResult } from '@/lib/studio/video-scoring'
+
+export interface VideoRecommendationState {
+  mode: 'auto' | 'manual'
+  budgetBand: import('@/lib/studio/video-scoring').BudgetBand
+  qualityTier: import('@/lib/studio/video-scoring').QualityTier
+  durationSeconds: number
+  recommendation: import('@/lib/studio/video-scoring').RecommendationResult | null
+  selectedProviderId: string | null
+  isLoadingRecommendation: boolean
+  testRenderStatus: 'idle' | 'confirming' | 'rendering' | 'polling' | 'complete' | 'error'
+  testRenderVideoUrl: string | null
+  testRenderProgress: number
+  testRenderError: string | null
+  testRenderCostConfirmed: boolean
+  fullRenderCostConfirmed: boolean
+}
+
 // ─── Session State ─────────────────────────────────────────────────────────────
 
 export interface MiaSessionState {
@@ -88,6 +109,7 @@ export interface MiaSessionState {
   fixes: FixSuggestion[]
   thinking: ThinkingEntry[]
   momentum: MomentumScore | null
+  videoState: VideoRecommendationState | null
   isLoading: boolean
   error: string | null
 }
@@ -111,6 +133,7 @@ export type MiaSessionAction =
   | { type: 'SET_LOADING'; loading: boolean }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_MOMENTUM'; momentum: MomentumScore }
+  | { type: 'SET_VIDEO_STATE'; videoState: Partial<VideoRecommendationState> }
   | { type: 'RESET' }
 
 // ─── API Request / Response Types ──────────────────────────────────────────────

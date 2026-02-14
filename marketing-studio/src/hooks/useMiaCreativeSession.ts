@@ -10,6 +10,7 @@ import type {
   ThinkingEntry,
   FixSuggestion,
   MomentumScore,
+  VideoRecommendationState,
   MiaContextResponse,
   MiaResearchRequest,
   MiaResearchResponse,
@@ -20,6 +21,7 @@ import type {
   MiaCreativeResult,
   SectionType,
 } from '@/lib/studio/mia-creative-types'
+import type { BudgetBand, QualityTier } from '@/lib/studio/video-scoring'
 
 // ─── Initial State ─────────────────────────────────────────────────────────────
 
@@ -35,6 +37,22 @@ function createInitialSections(): SectionDraft[] {
   }))
 }
 
+const initialVideoState: VideoRecommendationState = {
+  mode: 'auto',
+  budgetBand: '$5-$25',
+  qualityTier: 'balanced',
+  durationSeconds: 10,
+  recommendation: null,
+  selectedProviderId: null,
+  isLoadingRecommendation: false,
+  testRenderStatus: 'idle',
+  testRenderVideoUrl: null,
+  testRenderProgress: 0,
+  testRenderError: null,
+  testRenderCostConfirmed: false,
+  fullRenderCostConfirmed: false,
+}
+
 const initialState: MiaSessionState = {
   phase: 'greeting',
   greeting: null,
@@ -46,6 +64,7 @@ const initialState: MiaSessionState = {
   fixes: [],
   thinking: [],
   momentum: null,
+  videoState: null,
   isLoading: false,
   error: null,
 }
@@ -138,6 +157,14 @@ function reducer(state: MiaSessionState, action: MiaSessionAction): MiaSessionSt
 
     case 'SET_MOMENTUM':
       return { ...state, momentum: action.momentum }
+
+    case 'SET_VIDEO_STATE':
+      return {
+        ...state,
+        videoState: state.videoState
+          ? { ...state.videoState, ...action.videoState }
+          : { ...initialVideoState, ...action.videoState },
+      }
 
     case 'RESET':
       return { ...initialState, sections: createInitialSections() }
@@ -503,16 +530,142 @@ export function useMiaCreativeSession({
     [state.fixes, addThinking, scoreContent]
   )
 
-  // ── Phase 3.5: Video offer (video/reel only) ─────────────────────────────
+  // ── Phase 3.5: Video Intelligence ──────────────────────────────────────────
+
+  const fetchRecommendation = useCallback(
+    async (budgetBand: BudgetBand, qualityTier: QualityTier, durationSeconds: number) => {
+      dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: true, budgetBand, qualityTier, durationSeconds } })
+      try {
+        const res = await fetch('/api/studio/video/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            goal: goal || 'awareness',
+            channels,
+            budgetBand,
+            qualityTier,
+            durationSeconds,
+          }),
+        })
+        const data = await res.json()
+        if (data.success) {
+          dispatch({
+            type: 'SET_VIDEO_STATE',
+            videoState: {
+              recommendation: { recommended: data.recommended, ranking: data.ranking, fallbackUsed: data.fallbackUsed },
+              selectedProviderId: data.recommended?.provider.id || null,
+              isLoadingRecommendation: false,
+            },
+          })
+          addThinking('video-offer', 'Provider recommended', data.recommended?.reason || 'No providers available')
+        } else {
+          dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: false } })
+        }
+      } catch {
+        dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: false } })
+      }
+    },
+    [goal, channels, addThinking]
+  )
+
+  const requestTestRender = useCallback(
+    async (providerId: string, prompt: string) => {
+      dispatch({
+        type: 'SET_VIDEO_STATE',
+        videoState: { testRenderStatus: 'rendering', testRenderVideoUrl: null, testRenderError: null, testRenderProgress: 0 },
+      })
+      addThinking('video-offer', 'Test render started', `Generating 10s preview with ${providerId}...`)
+
+      try {
+        const res = await fetch('/api/studio/video/test-render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId, prompt, durationSeconds: 10 }),
+        })
+        const data = await res.json()
+
+        if (data.status === 'complete' && data.videoUrl) {
+          dispatch({
+            type: 'SET_VIDEO_STATE',
+            videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl },
+          })
+          addThinking('video-offer', 'Test render complete', `Preview ready (${data.renderTimeMs}ms)`)
+        } else if (data.status === 'processing' && data.pollUrl) {
+          dispatch({ type: 'SET_VIDEO_STATE', videoState: { testRenderStatus: 'polling' } })
+          pollTestRenderAsync(data.pollUrl)
+        } else {
+          throw new Error(data.error || 'Unknown render error')
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Test render failed'
+        dispatch({
+          type: 'SET_VIDEO_STATE',
+          videoState: { testRenderStatus: 'error', testRenderError: msg },
+        })
+      }
+    },
+    [addThinking] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  const pollTestRenderAsync = useCallback(
+    (pollUrl: string) => {
+      let attempts = 0
+      const maxAttempts = 60
+
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          dispatch({
+            type: 'SET_VIDEO_STATE',
+            videoState: { testRenderStatus: 'error', testRenderError: 'Render timed out after 5 minutes' },
+          })
+          return
+        }
+        attempts++
+
+        try {
+          const res = await fetch(pollUrl)
+          const data = await res.json()
+
+          if (data.status === 'complete' && data.videoUrl) {
+            dispatch({
+              type: 'SET_VIDEO_STATE',
+              videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl },
+            })
+            addThinking('video-offer', 'Test render complete', 'Preview ready')
+          } else if (data.status === 'processing') {
+            dispatch({ type: 'SET_VIDEO_STATE', videoState: { testRenderProgress: data.progress || 0 } })
+            setTimeout(poll, 5000)
+          } else if (data.status === 'failed') {
+            dispatch({
+              type: 'SET_VIDEO_STATE',
+              videoState: { testRenderStatus: 'error', testRenderError: data.error || 'Render failed' },
+            })
+          }
+        } catch {
+          setTimeout(poll, 5000)
+        }
+      }
+
+      setTimeout(poll, 5000)
+    },
+    [addThinking]
+  )
+
+  const confirmFullRender = useCallback(
+    (providerId: string) => {
+      videoProviderRef.current = providerId
+      dispatch({ type: 'SET_VIDEO_STATE', videoState: { fullRenderCostConfirmed: true } })
+      finishSession()
+    },
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   const selectVideoProvider = useCallback(
     (provider: string | undefined) => {
       videoProviderRef.current = provider
-      // Proceed to done
       finishSession()
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // ── Phase 4: Complete ──────────────────────────────────────────────────────
@@ -546,6 +699,7 @@ export function useMiaCreativeSession({
     // If video/reel content, go to video-offer phase first
     if (contentType === 'video' || contentType === 'reel') {
       dispatch({ type: 'SET_PHASE', phase: 'video-offer' })
+      dispatch({ type: 'SET_VIDEO_STATE', videoState: { ...initialVideoState } })
       addThinking('video-offer', 'Video options', 'Checking available video providers...')
       return
     }
@@ -575,6 +729,9 @@ export function useMiaCreativeSession({
     applyFix,
     completeSession,
     selectVideoProvider,
+    fetchRecommendation,
+    requestTestRender,
+    confirmFullRender,
     reset,
   }
 }
