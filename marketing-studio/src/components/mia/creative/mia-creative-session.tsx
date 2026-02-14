@@ -47,6 +47,8 @@ export function MiaCreativeSession({
     fetchRecommendation,
     requestTestRender,
     confirmFullRender,
+    refineAngles,
+    reviseSection,
   } = useMiaCreativeSession({ channels, contentType, goal, onComplete })
 
   // Assemble content summary for video prompt generation
@@ -139,6 +141,7 @@ export function MiaCreativeSession({
                   isLoading={state.isLoading}
                   onSelect={selectAngle}
                   onRefreshAngles={refreshAngles}
+                  onRefineAngles={refineAngles}
                 />
               </motion.div>
             )}
@@ -156,6 +159,7 @@ export function MiaCreativeSession({
                   onEdit={editSection}
                   onGenerate={generateSection}
                   onEditAndReview={reviewEditedSection}
+                  onReviseSection={reviseSection}
                 />
               </motion.div>
             )}

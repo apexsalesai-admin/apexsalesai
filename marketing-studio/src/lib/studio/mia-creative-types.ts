@@ -25,6 +25,7 @@ export interface SectionDraft {
   version: number
   accepted: boolean
   rejectedVersions: string[]
+  isRevising?: boolean
 }
 
 // ─── Angle Cards ───────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ export interface MiaSessionState {
   phase: MiaCreativePhase
   greeting: string | null
   topic: string
+  brandName: string
   selectedAngle: AngleCard | null
   angles: AngleCard[]
   sections: SectionDraft[]
@@ -134,6 +136,11 @@ export type MiaSessionAction =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'SET_MOMENTUM'; momentum: MomentumScore }
   | { type: 'SET_VIDEO_STATE'; videoState: Partial<VideoRecommendationState> }
+  | { type: 'SET_BRAND_NAME'; brandName: string }
+  | { type: 'REFINE_ANGLES'; angles: AngleCard[] }
+  | { type: 'REVISE_SECTION_START'; sectionIndex: number }
+  | { type: 'REVISE_SECTION_SUCCESS'; sectionIndex: number; content: string }
+  | { type: 'REVISE_SECTION_ERROR'; sectionIndex: number; error: string }
   | { type: 'RESET' }
 
 // ─── API Request / Response Types ──────────────────────────────────────────────

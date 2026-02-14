@@ -95,14 +95,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, angles: [], error: 'Unauthorized' } satisfies MiaResearchResponse, { status: 401 })
     }
 
-    const body: MiaResearchRequest = await request.json()
-    const { topic, channels, contentType, goal, seed } = body
+    const body = await request.json()
+    const { topic, channels, contentType, goal, seed, action, brandName, currentAngles, userFeedback } = body as MiaResearchRequest & {
+      action?: 'generate' | 'refine'
+      brandName?: string
+      currentAngles?: AngleCard[]
+      userFeedback?: string
+    }
 
     if (!topic?.trim()) {
       return NextResponse.json({ success: false, angles: [], error: 'Topic is required' } satisfies MiaResearchResponse, { status: 400 })
     }
 
     const workspace = await getOrCreateWorkspace(session.user.id)
+
+    // ── Brand guardrail prefix ───────────────────────────────────────────────
+    const brandGuardrail = brandName && brandName !== 'your brand'
+      ? `CRITICAL BRAND RULE: The user's brand/company is spelled exactly "${brandName}". Never misspell it. Never confuse it with similarly-named companies (e.g. Lyft vs Lyfye). If search results mention a different company with a similar name, IGNORE those results and focus only on "${brandName}" and the topic they requested. Every angle must be about "${brandName}", not any other company.\n\n`
+      : ''
+
+    // ── REFINE action — no Brave Search, AI adjusts existing angles ────────
+    if (action === 'refine' && userFeedback && currentAngles) {
+      const currentAnglesText = currentAngles.map((a: AngleCard, i: number) =>
+        `Angle ${i + 1}: "${a.title}" — ${a.description}`
+      ).join('\n')
+
+      const refinePrompt = `${brandGuardrail}You are Mia, an expert AI content strategist.
+
+The user was presented with these 3 content angles:
+${currentAnglesText}
+
+The user's feedback: "${userFeedback}"
+
+Based on their feedback, generate 3 NEW angles that incorporate their direction.
+If they liked a specific angle, build on it.
+If they want a completely different direction, pivot entirely.
+If they want minor adjustments, keep the core idea but refine.
+
+Topic: "${topic}"
+Channels: ${channels.join(', ')}
+Goal: ${goal || 'awareness'}
+${brandName ? `Brand: "${brandName}"` : ''}
+
+Return ONLY a JSON object (no markdown):
+{
+  "angles": [
+    {
+      "id": "angle-1",
+      "title": "Angle title here",
+      "description": "Brief description of the approach",
+      "rationale": "Why this angle works well for the audience and channel",
+      "sources": []
+    }
+  ]
+}`
+
+      const raw = await callAI(refinePrompt)
+      const parsed = parseJSON(raw) as { angles: AngleCard[] }
+
+      const angles: AngleCard[] = (parsed.angles || []).slice(0, 3).map((a, i) => ({
+        id: a.id || `angle-${i + 1}`,
+        title: a.title || `Angle ${i + 1}`,
+        description: a.description || '',
+        rationale: a.rationale || '',
+        sources: Array.isArray(a.sources) ? a.sources : [],
+      }))
+
+      return NextResponse.json({ success: true, angles } satisfies MiaResearchResponse)
+    }
+
+    // ── GENERATE action (default) — Brave Search + AI synthesis ────────────
 
     // Attempt Brave searches — degrade gracefully if not configured
     let searchResults: AngleSource[] = []
@@ -132,15 +194,36 @@ export async function POST(request: NextRequest) {
       // Brave not configured — continue without search results
     }
 
+    // ── Brand contamination filter ─────────────────────────────────────────
+    if (brandName && brandName !== 'your brand' && searchResults.length > 0) {
+      const brandLower = brandName.toLowerCase()
+      const confusables: Record<string, string[]> = {
+        lyfye: ['lyft', 'lyfte'],
+        apexsalesai: ['apex sales', 'apex ai'],
+      }
+      const knownConfusions = confusables[brandLower] || []
+
+      if (knownConfusions.length > 0) {
+        searchResults = searchResults.filter(result => {
+          const text = (result.title + ' ' + result.snippet).toLowerCase()
+          const mentionsConfusable = knownConfusions.some(c => text.includes(c))
+          const mentionsBrand = text.includes(brandLower)
+          return !(mentionsConfusable && !mentionsBrand)
+        })
+      }
+    }
+
     const sourceContext = searchResults.length > 0
       ? `\n\nResearch sources found:\n${searchResults.map((s, i) => `${i + 1}. "${s.title}" — ${s.snippet}`).join('\n')}`
-      : '\n\n(No web search results available — generate angles from your knowledge.)'
+      : brandName && brandName !== 'your brand'
+        ? `\n\n(Web search returned no relevant results for "${brandName}". Generate angles from your knowledge about the topic "${topic}" and the brand "${brandName}". Do NOT reference other companies.)`
+        : '\n\n(No web search results available — generate angles from your knowledge.)'
 
     const channelList = channels.join(', ') || 'social media'
     const goalContext = goal ? `Content goal: ${goal}.` : ''
     const seedContext = seed ? `(Variation seed: ${seed} — generate COMPLETELY DIFFERENT angles from any previous set.)\n` : ''
 
-    const prompt = `${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
+    const prompt = `${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
 
 Topic: "${topic}"
 ${sourceContext}

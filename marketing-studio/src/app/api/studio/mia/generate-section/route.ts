@@ -91,12 +91,19 @@ function parseJSON(raw: string): unknown {
 
 // ─── Section generation ────────────────────────────────────────────────────────
 
+function buildBrandGuardrail(brandName?: string): string {
+  return brandName && brandName !== 'your brand'
+    ? `CRITICAL BRAND RULE: The user's brand/company is spelled exactly "${brandName}". Never misspell it. Never confuse it with similarly-named companies.\n\n`
+    : ''
+}
+
 async function handleGenerateSection(
-  body: MiaGenerateSectionRequest,
+  body: MiaGenerateSectionRequest & { brandName?: string },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { topic, angle, sectionType, channels, contentType, previousSections, rejectedVersions, goal } = body
+  const { topic, angle, sectionType, channels, contentType, previousSections, rejectedVersions, goal, brandName } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
+  const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
 
   const channelList = channels.join(', ') || 'social media'
   const goalContext = goal ? `Content goal: ${goal}.` : ''
@@ -118,7 +125,7 @@ async function handleGenerateSection(
     cta: 'Write a compelling call-to-action (1-2 sentences). Be specific about what the reader should do next. Match the content goal.',
   }
 
-  const prompt = `You are Mia, an expert AI content strategist. Generate the ${sectionType.toUpperCase()} section for ${contentType} content on ${channelList}.
+  const prompt = `${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionType.toUpperCase()} section for ${contentType} content on ${channelList}.
 
 Topic: "${topic}"
 Angle: "${angle.title}" — ${angle.description}
@@ -276,6 +283,50 @@ The "overall" should be a weighted average of the 5 scores.`
   })
 }
 
+// ─── Revise section based on user direction ──────────────────────────────────
+
+async function handleRevise(
+  body: { sectionType: string; existingContent: string; userDirection: string; topic: string; angle: { title: string }; channels: string[]; goal?: string; brandName?: string },
+  workspaceId: string
+): Promise<NextResponse> {
+  const { sectionType, existingContent, userDirection, topic, angle, channels, goal, brandName } = body
+  const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
+  const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
+  const channelList = channels.join(', ') || 'social media'
+
+  const prompt = `${brandGuardrail}You are Mia, an expert AI content strategist revising a ${sectionType} section.
+
+Current content:
+"""
+${existingContent}
+"""
+
+The user's direction for revision: "${userDirection}"
+
+Revise the ${sectionType} to incorporate their feedback. Maintain the core topic and angle but adjust tone, focus, length, or content as directed.
+
+Topic: "${topic}"
+Angle: "${angle.title}"
+Channels: ${channelList}
+Goal: ${goal || 'awareness'}
+${brandVoice.brandName ? `Brand: "${brandVoice.brandName}"` : ''}
+
+Return ONLY a JSON object (no markdown):
+{
+  "content": "The revised section text (plain text, not markdown)",
+  "thinking": "1-2 sentences explaining what you changed and why"
+}`
+
+  const raw = await callAI(prompt)
+  const parsed = parseJSON(raw) as { content: string; thinking: string }
+
+  return NextResponse.json({
+    success: true,
+    content: (parsed.content || '').trim(),
+    thinking: parsed.thinking || `Revised ${sectionType} based on: "${userDirection.slice(0, 80)}"`,
+  })
+}
+
 // ─── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -297,6 +348,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === 'score') {
       return handleScore(body)
+    }
+    if (body.action === 'revise') {
+      return handleRevise(body, workspace.id)
     }
 
     // Default: generate section

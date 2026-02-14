@@ -57,6 +57,7 @@ const initialState: MiaSessionState = {
   phase: 'greeting',
   greeting: null,
   topic: '',
+  brandName: '',
   selectedAngle: null,
   angles: [],
   sections: createInitialSections(),
@@ -166,6 +167,36 @@ function reducer(state: MiaSessionState, action: MiaSessionAction): MiaSessionSt
           : { ...initialVideoState, ...action.videoState },
       }
 
+    case 'SET_BRAND_NAME':
+      return { ...state, brandName: action.brandName }
+
+    case 'REFINE_ANGLES':
+      return { ...state, angles: action.angles, isLoading: false }
+
+    case 'REVISE_SECTION_START': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = { ...sections[action.sectionIndex], isRevising: true }
+      return { ...state, sections }
+    }
+
+    case 'REVISE_SECTION_SUCCESS': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = {
+        ...sections[action.sectionIndex],
+        content: action.content,
+        version: sections[action.sectionIndex].version + 1,
+        accepted: false,
+        isRevising: false,
+      }
+      return { ...state, sections }
+    }
+
+    case 'REVISE_SECTION_ERROR': {
+      const sections = [...state.sections]
+      sections[action.sectionIndex] = { ...sections[action.sectionIndex], isRevising: false }
+      return { ...state, sections, error: action.error }
+    }
+
     case 'RESET':
       return { ...initialState, sections: createInitialSections() }
 
@@ -224,6 +255,9 @@ export function useMiaCreativeSession({
       const data: MiaContextResponse = await res.json()
       if (!data.success) throw new Error(data.error || 'Failed to load context')
       dispatch({ type: 'SET_GREETING', greeting: data.greeting })
+      if (data.brandName) {
+        dispatch({ type: 'SET_BRAND_NAME', brandName: data.brandName })
+      }
       addThinking('greeting', 'Context loaded', `Brand: ${data.brandName || 'default'}. Ready to create!`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load greeting'
@@ -248,7 +282,7 @@ export function useMiaCreativeSession({
       dispatch({ type: 'SET_ERROR', error: null })
       addThinking('angles', 'Researching your topic', `Searching for insights on "${topic}"...`)
       try {
-        const body: MiaResearchRequest = { topic, channels, contentType, goal }
+        const body: MiaResearchRequest & { brandName?: string } = { topic, channels, contentType, goal, brandName: state.brandName || undefined }
         const res = await fetch('/api/studio/mia/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -269,7 +303,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'SET_LOADING', loading: false })
       }
     },
-    [channels, contentType, goal, addThinking]
+    [channels, contentType, goal, state.brandName, addThinking]
   )
 
   // ── Phase 1b: Refresh angles with a new seed ─────────────────────────────
@@ -280,12 +314,13 @@ export function useMiaCreativeSession({
     dispatch({ type: 'SET_ERROR', error: null })
     addThinking('angles', 'Generating new angles', `Trying seed variation ${seedRef.current}...`)
     try {
-      const body: MiaResearchRequest = {
+      const body: MiaResearchRequest & { brandName?: string } = {
         topic: state.topic,
         channels,
         contentType,
         goal,
         seed: seedRef.current,
+        brandName: state.brandName || undefined,
       }
       const res = await fetch('/api/studio/mia/research', {
         method: 'POST',
@@ -302,7 +337,7 @@ export function useMiaCreativeSession({
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false })
     }
-  }, [state.topic, channels, contentType, goal, addThinking])
+  }, [state.topic, state.brandName, channels, contentType, goal, addThinking])
 
   // ── Phase 2: Select angle & start building ────────────────────────────────
 
@@ -313,6 +348,84 @@ export function useMiaCreativeSession({
       addThinking('building', 'Angle selected', `Going with: "${angle.title}"`)
     },
     [addThinking]
+  )
+
+  // ── Phase 1c: Refine angles based on user feedback ─────────────────────────
+
+  const refineAngles = useCallback(
+    async (feedback: string) => {
+      dispatch({ type: 'SET_LOADING', loading: true })
+      dispatch({ type: 'SET_ERROR', error: null })
+      addThinking('angles', 'Listening to your feedback', `Adjusting angles based on: "${feedback.slice(0, 80)}${feedback.length > 80 ? '...' : ''}"`)
+
+      try {
+        const res = await fetch('/api/studio/mia/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: state.topic,
+            channels,
+            contentType,
+            goal,
+            brandName: state.brandName || undefined,
+            action: 'refine',
+            currentAngles: state.angles,
+            userFeedback: feedback,
+          }),
+        })
+        const data = await res.json()
+        if (!data.success) throw new Error(data.error || 'Refinement failed')
+
+        dispatch({ type: 'REFINE_ANGLES', angles: data.angles })
+        addThinking('angles', 'Refined angles ready', data.angles.map((a: AngleCard) => `- ${a.title}`).join('\n'))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to refine angles'
+        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_LOADING', loading: false })
+      }
+    },
+    [state.topic, state.angles, state.brandName, channels, contentType, goal, addThinking]
+  )
+
+  // ── Revise a section based on user direction ─────────────────────────────
+
+  const reviseSection = useCallback(
+    async (sectionIndex: number, direction: string) => {
+      const section = state.sections[sectionIndex]
+      if (!section || !state.selectedAngle) return
+
+      dispatch({ type: 'REVISE_SECTION_START', sectionIndex })
+
+      const sectionLabel = section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action'
+      addThinking('building', `Revising ${sectionLabel}`, `Based on your direction: "${direction.slice(0, 80)}${direction.length > 80 ? '...' : ''}"`)
+
+      try {
+        const res = await fetch('/api/studio/mia/generate-section', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'revise',
+            sectionType: section.type,
+            existingContent: section.content,
+            userDirection: direction,
+            topic: state.topic,
+            angle: state.selectedAngle,
+            channels,
+            goal,
+            brandName: state.brandName || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!data.success) throw new Error(data.error || 'Revision failed')
+
+        dispatch({ type: 'REVISE_SECTION_SUCCESS', sectionIndex, content: data.content })
+        addThinking('building', `${sectionLabel} revised`, data.thinking || 'Updated based on your feedback')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Revision failed'
+        dispatch({ type: 'REVISE_SECTION_ERROR', sectionIndex, error: msg })
+      }
+    },
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, addThinking]
   )
 
   // ── Generate a single section ──────────────────────────────────────────────
@@ -718,8 +831,10 @@ export function useMiaCreativeSession({
     fetchGreeting,
     fetchAngles,
     refreshAngles,
+    refineAngles,
     selectAngle,
     generateSection,
+    reviseSection,
     acceptSection,
     retrySection,
     editSection,

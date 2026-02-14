@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react'
 import type { SectionDraft, SectionType } from '@/lib/studio/mia-creative-types'
 
 const SECTION_LABELS: Record<SectionType, string> = {
@@ -27,6 +27,7 @@ interface MiaSectionBlockProps {
   onEdit: (content: string) => void
   onGenerate: () => void
   onEditAndReview?: (content: string) => Promise<string | null>
+  onRevise?: (direction: string) => void
 }
 
 export function MiaSectionBlock({
@@ -39,12 +40,14 @@ export function MiaSectionBlock({
   onEdit,
   onGenerate,
   onEditAndReview,
+  onRevise,
 }: MiaSectionBlockProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(section.content)
   const [collapsed, setCollapsed] = useState(false)
   const [reviewFeedback, setReviewFeedback] = useState<string | null>(null)
   const [isReviewing, setIsReviewing] = useState(false)
+  const [reviseInput, setReviseInput] = useState('')
 
   const label = SECTION_LABELS[section.type]
   const description = SECTION_DESCRIPTIONS[section.type]
@@ -212,6 +215,44 @@ export function MiaSectionBlock({
                   Edit
                 </button>
               </div>
+
+              {/* Conversational revision input */}
+              {onRevise && !section.isRevising && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  <input
+                    type="text"
+                    value={reviseInput}
+                    onChange={(e) => setReviseInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && reviseInput.trim()) {
+                        onRevise(reviseInput.trim())
+                        setReviseInput('')
+                      }
+                    }}
+                    placeholder="Tell Mia how to improve this..."
+                    className="flex-1 bg-transparent border-none outline-none text-xs text-slate-700 placeholder-slate-400"
+                  />
+                  <button
+                    onClick={() => {
+                      if (reviseInput.trim()) {
+                        onRevise(reviseInput.trim())
+                        setReviseInput('')
+                      }
+                    }}
+                    disabled={!reviseInput.trim()}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-40 transition-all shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Revise
+                  </button>
+                </div>
+              )}
+              {section.isRevising && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2.5 text-xs text-purple-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Mia is revising based on your feedback...
+                </div>
+              )}
             </>
           )}
 

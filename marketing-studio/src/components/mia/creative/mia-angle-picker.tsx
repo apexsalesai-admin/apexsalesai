@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Loader2, ExternalLink, Lightbulb, Sparkles, MessageSquare } from 'lucide-react'
+import { Loader2, ExternalLink, Lightbulb, Sparkles, MessageSquare, Send } from 'lucide-react'
 import type { AngleCard } from '@/lib/studio/mia-creative-types'
 
 interface MiaAnglePickerProps {
@@ -10,11 +10,13 @@ interface MiaAnglePickerProps {
   isLoading: boolean
   onSelect: (angle: AngleCard) => void
   onRefreshAngles: () => void
+  onRefineAngles: (feedback: string) => void
 }
 
-export function MiaAnglePicker({ angles, isLoading, onSelect, onRefreshAngles }: MiaAnglePickerProps) {
+export function MiaAnglePicker({ angles, isLoading, onSelect, onRefreshAngles, onRefineAngles }: MiaAnglePickerProps) {
   const [showCustomInput, setShowCustomInput] = useState(false)
   const [customAngleText, setCustomAngleText] = useState('')
+  const [chatInput, setChatInput] = useState('')
 
   if (isLoading) {
     return (
@@ -89,6 +91,49 @@ export function MiaAnglePicker({ angles, isLoading, onSelect, onRefreshAngles }:
           </motion.button>
         ))}
       </div>
+
+      {/* Conversational feedback input */}
+      {angles.length > 0 && (
+        <div className="mt-2 mb-4">
+          <div className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
+            <MessageSquare className="w-4 h-4 text-purple-400 shrink-0" />
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && chatInput.trim() && !isLoading) {
+                  onRefineAngles(chatInput.trim())
+                  setChatInput('')
+                }
+              }}
+              placeholder="Tell Mia what you'd like to change..."
+              className="flex-1 bg-transparent border-none outline-none text-sm text-slate-800 placeholder-slate-400"
+              disabled={isLoading}
+            />
+            <button
+              onClick={() => {
+                if (chatInput.trim() && !isLoading) {
+                  onRefineAngles(chatInput.trim())
+                  setChatInput('')
+                }
+              }}
+              disabled={!chatInput.trim() || isLoading}
+              className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-500 text-white text-xs font-medium rounded-lg hover:opacity-90 disabled:opacity-40 transition-all shrink-0"
+            >
+              {isLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Send className="w-3 h-3" />
+              )}
+              {isLoading ? 'Refining...' : 'Send'}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1.5 text-center">
+            {'"Focus more on ROI" · "Make it edgier" · "Try a completely different direction"'}
+          </p>
+        </div>
+      )}
 
       {/* None of these — refresh or custom angle */}
       <div className="border-t border-slate-200 pt-5">
