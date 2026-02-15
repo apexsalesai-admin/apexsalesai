@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import NextImage from 'next/image'
 import {
   ArrowLeft,
@@ -351,15 +351,38 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   const totalSteps = 4
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const calculateContentScore = useCallback(async () => {
+    setIsScoring(true)
+    // Simulate AI scoring
+    await new Promise(r => setTimeout(r, 500))
+
+    // Check for common emojis using surrogate pair detection
+    const hasEmoji = /[\uD83C-\uDBFF\uDC00-\uDFFF]+/.test(draft.body)
+    const hasQuestion = draft.body.includes('?')
+    const hasCTA = draft.callToAction.length > 0 || /click|learn|discover|try|get|start/i.test(draft.body)
+    const hasHashtags = draft.hashtags.length > 0
+    const wordCount = draft.body.split(/\s+/).length
+    const optimalLength = wordCount >= 50 && wordCount <= 300
+
+    const tone = aiTones[0]
+    const engagement = Math.min(100, 40 + (hasEmoji ? 15 : 0) + (hasQuestion ? 20 : 0) + (hasHashtags ? 15 : 0) + (optimalLength ? 10 : 0))
+    const clarity = Math.min(100, 50 + (wordCount < 500 ? 25 : 0) + (draft.title.length > 0 ? 25 : 0))
+    const emotion = Math.min(100, 30 + (hasEmoji ? 30 : 0) + (/!/.test(draft.body) ? 20 : 0) + (AI_TONES.find(t => t.id === tone)?.id === 'bold' ? 20 : 0))
+    const cta = hasCTA ? 85 : 40
+    const overall = Math.round((engagement + clarity + emotion + cta) / 4)
+
+    setContentScore({ overall, engagement, clarity, emotion, cta })
+    setIsScoring(false)
+  }, [draft.body, draft.title, draft.hashtags, draft.callToAction, aiTones])
+
   // Calculate content score when body changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- calculateContentScore reads draft fields already listed as deps
   useEffect(() => {
     if (draft.body.length > 50) {
       calculateContentScore()
     } else {
       setContentScore(null)
     }
-  }, [draft.body, draft.title, draft.hashtags])
+  }, [draft.body, calculateContentScore])
 
   // Set initial preview channel when channels are selected
   useEffect(() => {
@@ -375,29 +398,6 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
     }
   }, [draft.channels])
 
-  const calculateContentScore = async () => {
-    setIsScoring(true)
-    // Simulate AI scoring
-    await new Promise(r => setTimeout(r, 500))
-
-    // Check for common emojis using surrogate pair detection
-    const hasEmoji = /[\uD83C-\uDBFF\uDC00-\uDFFF]+/.test(draft.body)
-    const hasQuestion = draft.body.includes('?')
-    const hasCTA = draft.callToAction.length > 0 || /click|learn|discover|try|get|start/i.test(draft.body)
-    const hasHashtags = draft.hashtags.length > 0
-    const wordCount = draft.body.split(/\s+/).length
-    const optimalLength = wordCount >= 50 && wordCount <= 300
-
-    const engagement = Math.min(100, 40 + (hasEmoji ? 15 : 0) + (hasQuestion ? 20 : 0) + (hasHashtags ? 15 : 0) + (optimalLength ? 10 : 0))
-    const clarity = Math.min(100, 50 + (wordCount < 500 ? 25 : 0) + (draft.title.length > 0 ? 25 : 0))
-    const emotion = Math.min(100, 30 + (hasEmoji ? 30 : 0) + (/!/.test(draft.body) ? 20 : 0) + (AI_TONES.find(t => t.id === aiTone)?.id === 'bold' ? 20 : 0))
-    const cta = hasCTA ? 85 : 40
-    const overall = Math.round((engagement + clarity + emotion + cta) / 4)
-
-    setContentScore({ overall, engagement, clarity, emotion, cta })
-    setIsScoring(false)
-  }
-
   const generateOptimalTimes = () => {
     const times = [
       { day: 'Tuesday', time: '10:00 AM', score: 95 },
@@ -410,7 +410,7 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   }
 
   // Generate contextual guidance tips based on current state
-  const generateGuidanceTips = () => {
+  const generateGuidanceTips = useCallback(() => {
     const tips: GuidanceTip[] = []
 
     // Channel-specific tips
@@ -472,13 +472,12 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
     }
 
     setGuidanceTips(tips)
-  }
+  }, [draft.channels, draft.contentType, aiTones, contentGoal])
 
   // Update guidance when relevant state changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- generateGuidanceTips reads state already listed as deps
   useEffect(() => {
     generateGuidanceTips()
-  }, [draft.channels, draft.contentType, aiTones, contentGoal])
+  }, [generateGuidanceTips])
 
   // Toggle tone (multi-select)
   const toggleTone = (tone: ToneType) => {

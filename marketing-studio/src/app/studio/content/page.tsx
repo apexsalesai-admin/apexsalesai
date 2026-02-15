@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
@@ -110,7 +110,7 @@ function ContentPageInner() {
   }, [searchParams])
 
   // Fetch content
-  const fetchContent = async () => {
+  const fetchContent = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
@@ -134,12 +134,11 @@ function ContentPageInner() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filter])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchContent reads `filter` via closure; adding it would require useCallback wrapping a state setter
   useEffect(() => {
     fetchContent()
-  }, [filter])
+  }, [fetchContent])
 
   // Delete content
   const handleDelete = async (id: string) => {
