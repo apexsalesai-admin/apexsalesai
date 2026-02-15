@@ -33,8 +33,11 @@ interface SeoToolkitProps {
   title: string
   content: string
   keywords: string[]
+  contentId?: string
   onKeywordsChange?: (keywords: string[]) => void
   onMetaDescriptionChange?: (description: string) => void
+  onTitleChange?: (title: string) => void
+  onBodyChange?: (body: string) => void
 }
 
 interface KeywordAnalysis {
@@ -103,8 +106,11 @@ export function SeoToolkit({
   title,
   content,
   keywords,
+  contentId,
   onKeywordsChange,
   onMetaDescriptionChange,
+  onTitleChange,
+  onBodyChange,
 }: SeoToolkitProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'keywords' | 'optimization' | 'preview'>('analysis')
   const [metaDescription, setMetaDescription] = useState('')
@@ -134,6 +140,8 @@ export function SeoToolkit({
   const [optimizeResults, setOptimizeResults] = useState<Record<string, OptimizeData>>({})
   const [optimizeError, setOptimizeError] = useState<string | null>(null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [appliedField, setAppliedField] = useState<string | null>(null)
+  const [isExpandingContent, setIsExpandingContent] = useState(false)
 
   // Calculate content analysis
   const contentAnalysis: ContentAnalysis = {
@@ -242,28 +250,45 @@ export function SeoToolkit({
   const generateMetaDescription = async () => {
     setIsGeneratingMeta(true)
     try {
-      // Simulate AI generation - in production, call your AI API
-      const response = await fetch('/api/generate', {
+      const response = await fetch('/api/studio/mia/generate-meta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic: `Generate a compelling 150-character meta description for: ${title}`,
-          tone: 'professional',
-          channels: [],
-          contentType: 'meta',
-          additionalContext: content.slice(0, 500),
+          title,
+          body: content.slice(0, 500),
+          keywords,
         }),
       })
       const data = await response.json()
-      if (data.success && data.content?.body) {
-        const meta = data.content.body.slice(0, 160)
-        setMetaDescription(meta)
-        onMetaDescriptionChange?.(meta)
+      if (data.success && data.metaDescription) {
+        setMetaDescription(data.metaDescription)
+        onMetaDescriptionChange?.(data.metaDescription)
       }
     } catch (e) {
       console.error('Failed to generate meta description:', e)
     } finally {
       setIsGeneratingMeta(false)
+    }
+  }
+
+  const expandContentWithMia = async () => {
+    setIsExpandingContent(true)
+    try {
+      const res = await fetch('/api/studio/seo/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'improve-readability', title, content, keywords }),
+      })
+      const data = await res.json()
+      if (data.success && data.data?.improved) {
+        onBodyChange?.(data.data.improved)
+        setAppliedField('expand')
+        setTimeout(() => setAppliedField(null), 2000)
+      }
+    } catch (e) {
+      console.error('Failed to expand content:', e)
+    } finally {
+      setIsExpandingContent(false)
     }
   }
 
@@ -676,9 +701,9 @@ export function SeoToolkit({
                     <SuggestionCard
                       type="warning"
                       title="Increase Content Length"
-                      suggestion="Longer content (1000+ words) typically ranks better. Consider adding more detail."
-                      onApply={() => runOptimizeAction('improve-readability')}
-                      applyLabel="Expand Content"
+                      suggestion={`Currently ${contentAnalysis.wordCount} words. Longer content (1000+ words) typically ranks better.`}
+                      onApply={onBodyChange ? expandContentWithMia : () => runOptimizeAction('improve-readability')}
+                      applyLabel={isExpandingContent ? 'Expanding...' : 'Expand with Mia'}
                     />
                   )}
                   {contentAnalysis.avgSentenceLength > 25 && (
@@ -743,13 +768,28 @@ export function SeoToolkit({
                       {(optimizeResults['generate-title'].titles ?? []).map((t, i) => (
                         <div key={i} className="flex items-center justify-between gap-2">
                           <p className="text-sm text-slate-800 flex-1">{t}</p>
-                          <button
-                            onClick={() => copyToClipboard(t, `title-${i}`)}
-                            className="p-1 text-purple-500 hover:text-purple-700 flex-shrink-0"
-                            title="Copy"
-                          >
-                            {copiedField === `title-${i}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {onTitleChange && (
+                              <button
+                                onClick={() => {
+                                  onTitleChange(t)
+                                  setAppliedField(`title-${i}`)
+                                  setTimeout(() => setAppliedField(null), 2000)
+                                }}
+                                className="text-xs px-2 py-0.5 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center gap-1"
+                              >
+                                {appliedField === `title-${i}` ? <Check className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+                                {appliedField === `title-${i}` ? 'Applied' : 'Apply'}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => copyToClipboard(t, `title-${i}`)}
+                              className="p-1 text-purple-500 hover:text-purple-700"
+                              title="Copy"
+                            >
+                              {copiedField === `title-${i}` ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -819,16 +859,31 @@ export function SeoToolkit({
                     <div className="ml-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-medium text-emerald-700">Improved Version</p>
-                        <button
-                          onClick={() => copyToClipboard(
-                            optimizeResults['improve-readability'].improved ?? '',
-                            'readability'
+                        <div className="flex items-center gap-2">
+                          {onBodyChange && optimizeResults['improve-readability'].improved && (
+                            <button
+                              onClick={() => {
+                                onBodyChange!(optimizeResults['improve-readability'].improved!)
+                                setAppliedField('readability-apply')
+                                setTimeout(() => setAppliedField(null), 2000)
+                              }}
+                              className="text-xs px-2.5 py-1 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                            >
+                              {appliedField === 'readability-apply' ? <Check className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+                              {appliedField === 'readability-apply' ? 'Applied!' : 'Apply Improved Version'}
+                            </button>
                           )}
-                          className="text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
-                        >
-                          {copiedField === 'readability' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                          {copiedField === 'readability' ? 'Copied' : 'Copy'}
-                        </button>
+                          <button
+                            onClick={() => copyToClipboard(
+                              optimizeResults['improve-readability'].improved ?? '',
+                              'readability'
+                            )}
+                            className="text-xs text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
+                          >
+                            {copiedField === 'readability' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {copiedField === 'readability' ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-slate-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
                         {optimizeResults['improve-readability'].improved}
@@ -869,11 +924,30 @@ export function SeoToolkit({
                     <div className="ml-2 p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
                       {(optimizeResults['suggest-links'].links ?? []).map((link, i) => (
                         <div key={i} className="text-sm border-b border-amber-100 pb-2 last:border-0 last:pb-0">
-                          <div className="flex items-center gap-1">
-                            <LinkIcon className="w-3 h-3 text-amber-600" />
-                            <span className="font-medium text-slate-900">&ldquo;{link.anchorText}&rdquo;</span>
-                            <span className="text-slate-400">&rarr;</span>
-                            <span className="text-amber-700">{link.targetTopic}</span>
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center gap-1 flex-1">
+                              <LinkIcon className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                              <span className="font-medium text-slate-900">&ldquo;{link.anchorText}&rdquo;</span>
+                              <span className="text-slate-400">&rarr;</span>
+                              <span className="text-amber-700">{link.targetTopic}</span>
+                            </div>
+                            {onBodyChange && (
+                              <button
+                                onClick={() => {
+                                  const linkMarkdown = `[${link.anchorText}](/content/${link.targetTopic.toLowerCase().replace(/\s+/g, '-')})`
+                                  const updated = content.includes(link.anchorText)
+                                    ? content.replace(link.anchorText, linkMarkdown)
+                                    : content + `\n\n${linkMarkdown}`
+                                  onBodyChange(updated)
+                                  setAppliedField(`link-${i}`)
+                                  setTimeout(() => setAppliedField(null), 2000)
+                                }}
+                                className="text-xs px-2 py-0.5 rounded-full bg-amber-600 text-white hover:bg-amber-700 transition-colors flex items-center gap-1 flex-shrink-0"
+                              >
+                                {appliedField === `link-${i}` ? <Check className="w-3 h-3" /> : <LinkIcon className="w-3 h-3" />}
+                                {appliedField === `link-${i}` ? 'Inserted' : 'Insert'}
+                              </button>
+                            )}
                           </div>
                           <p className="text-xs text-slate-500 mt-0.5 ml-4">{link.reason}</p>
                         </div>

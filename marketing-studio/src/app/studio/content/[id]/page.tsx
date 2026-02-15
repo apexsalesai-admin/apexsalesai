@@ -1125,7 +1125,39 @@ export default function ContentDetailPage() {
                 title={content.title}
                 content={content.body}
                 keywords={seoKeywords}
-                onKeywordsChange={setSeoKeywords}
+                contentId={content.id}
+                onKeywordsChange={(kw) => {
+                  setSeoKeywords(kw)
+                  // Persist keywords as hashtags
+                  fetch(`/api/content/${params.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hashtags: kw.map(k => k.startsWith('#') ? k : `#${k}`) }),
+                  })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) setContent(data.data) })
+                    .catch(() => {})
+                }}
+                onTitleChange={(newTitle) => {
+                  fetch(`/api/content/${params.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: newTitle }),
+                  })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) setContent(data.data) })
+                    .catch(() => {})
+                }}
+                onBodyChange={(newBody) => {
+                  fetch(`/api/content/${params.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body: newBody }),
+                  })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) setContent(data.data) })
+                    .catch(() => {})
+                }}
               />
             </div>
           )}
