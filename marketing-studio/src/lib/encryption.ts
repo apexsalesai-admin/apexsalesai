@@ -3,7 +3,7 @@
  * Uses AES-256-GCM for encrypting OAuth tokens at rest
  *
  * SECURITY REQUIREMENTS:
- * - ENCRYPTION_KEY must be a 32-byte (256-bit) key, base64 encoded
+ * - TOKEN_ENCRYPTION_KEY must be a 32-byte (256-bit) key, base64 encoded
  * - Generate with: openssl rand -base64 32
  * - Store in environment variable, never commit to code
  * - Tokens are stored as: iv:ciphertext:authTag (all base64)
@@ -17,14 +17,14 @@ const AUTH_TAG_LENGTH = 16 // 128 bits
 
 /**
  * Get the encryption key from environment
- * @throws Error if ENCRYPTION_KEY is not configured or invalid
+ * @throws Error if TOKEN_ENCRYPTION_KEY is not configured or invalid
  */
 function getEncryptionKey(): Buffer {
-  const keyBase64 = process.env.ENCRYPTION_KEY
+  const keyBase64 = process.env.TOKEN_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY
 
   if (!keyBase64) {
     throw new Error(
-      'ENCRYPTION_KEY environment variable is not set. ' +
+      'TOKEN_ENCRYPTION_KEY environment variable is not set. ' +
         'Generate one with: openssl rand -base64 32'
     )
   }
@@ -33,7 +33,7 @@ function getEncryptionKey(): Buffer {
 
   if (key.length !== 32) {
     throw new Error(
-      `ENCRYPTION_KEY must be exactly 32 bytes (256 bits). ` +
+      `TOKEN_ENCRYPTION_KEY must be exactly 32 bytes (256 bits). ` +
         `Current key is ${key.length} bytes. ` +
         `Generate a valid key with: openssl rand -base64 32`
     )
