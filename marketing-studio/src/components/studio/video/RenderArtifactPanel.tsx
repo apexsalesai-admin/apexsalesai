@@ -46,7 +46,7 @@ export function RenderArtifactPanel({ initial, onRetry, compact }: RenderArtifac
   useEffect(() => {
     setResult(initial)
     setPollCount(0)
-  }, [initial.jobId, initial.status])
+  }, [initial])
 
   // Auto-poll while non-terminal
   useEffect(() => {

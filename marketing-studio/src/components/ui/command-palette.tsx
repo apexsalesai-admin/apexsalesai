@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -42,7 +42,7 @@ export function CommandPalette({ onOpenMia }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  const commands: CommandItem[] = [
+  const commands: CommandItem[] = useMemo(() => [
     // Navigation
     {
       id: 'nav-dashboard',
@@ -184,22 +184,22 @@ export function CommandPalette({ onOpenMia }: CommandPaletteProps) {
       category: 'ai',
       keywords: ['help', 'suggest', 'ai', 'assistant'],
     },
-  ]
+  ], [router, onOpenMia])
 
-  const filteredCommands = query
+  const filteredCommands = useMemo(() => query
     ? commands.filter((cmd) => {
         const searchStr = `${cmd.label} ${cmd.description || ''} ${cmd.keywords?.join(' ') || ''}`.toLowerCase()
         return searchStr.includes(query.toLowerCase())
       })
-    : commands
+    : commands, [query, commands])
 
-  const groupedCommands = {
+  const groupedCommands = useMemo(() => ({
     action: filteredCommands.filter((c) => c.category === 'action'),
     navigation: filteredCommands.filter((c) => c.category === 'navigation'),
     ai: filteredCommands.filter((c) => c.category === 'ai'),
-  }
+  }), [filteredCommands])
 
-  const allFiltered = [...groupedCommands.action, ...groupedCommands.ai, ...groupedCommands.navigation]
+  const allFiltered = useMemo(() => [...groupedCommands.action, ...groupedCommands.ai, ...groupedCommands.navigation], [groupedCommands])
 
   const executeCommand = useCallback(
     (command: CommandItem) => {

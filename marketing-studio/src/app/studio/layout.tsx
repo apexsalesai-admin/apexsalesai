@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
@@ -98,9 +99,11 @@ export default function StudioLayout({
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-3 px-3 py-1.5 rounded-lg">
                 {session?.user?.image ? (
-                  <img
+                  <Image
                     src={session.user.image}
                     alt={userName}
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full"
                   />
                 ) : (

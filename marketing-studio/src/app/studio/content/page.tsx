@@ -136,6 +136,7 @@ function ContentPageInner() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchContent reads `filter` via closure; adding it would require useCallback wrapping a state setter
   useEffect(() => {
     fetchContent()
   }, [filter])
