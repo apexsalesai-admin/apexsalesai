@@ -80,6 +80,89 @@ export type StudioEvents = {
     }
   }
 
+  // Video render events (test render polling)
+  'studio/video.render.requested': {
+    data: {
+      taskId: string
+      providerId: string
+      userId: string
+      estimatedCost: number
+      renderType: 'test' | 'full'
+      prompt: string
+      durationSeconds: number
+      contentId?: string
+    }
+  }
+  'studio/video.render.completed': {
+    data: {
+      userId: string
+      taskId: string
+      providerId: string
+      videoUrl: string
+      renderType: string
+      actualCost: number
+      renderTimeMs: number
+      contentId?: string
+    }
+  }
+  'studio/video.render.failed': {
+    data: {
+      userId: string
+      taskId: string
+      providerId: string
+      error: string
+      renderType: string
+      contentId?: string
+    }
+  }
+
+  // Content scheduling events
+  'studio/content.schedule.requested': {
+    data: {
+      userId: string
+      contentId: string
+      title: string
+      body: string
+      channels: string[]
+      scheduledAt: string
+      hashtags?: string[]
+      callToAction?: string
+      videoUrl?: string
+    }
+  }
+  'studio/content.published': {
+    data: {
+      userId: string
+      contentId: string
+      channels: string[]
+      publishedAt: string
+      results: Array<{ channel: string; success: boolean; postUrl?: string; error?: string }>
+    }
+  }
+
+  // Fact-check events
+  'studio/content.factcheck.requested': {
+    data: {
+      userId: string
+      contentId: string
+      title: string
+      body: string
+    }
+  }
+  'studio/content.factcheck.completed': {
+    data: {
+      userId: string
+      contentId: string
+      score: number
+      verdict: 'clean' | 'caution' | 'warning'
+      claims: Array<{ id: number; text: string; category: string }>
+      verifications: Array<{ claimId: number; claim: string; verified: boolean; confidence: number; source?: string; correction?: string }>
+      verifiedCount?: number
+      totalClaims?: number
+      checkedAt: string
+    }
+  }
+
   // Workflow events
   'studio/workflow.execute': {
     data: {

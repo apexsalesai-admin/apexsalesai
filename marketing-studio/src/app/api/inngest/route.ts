@@ -15,6 +15,7 @@ const handler = serve({
   functions,
   // Serve path must match the API route
   servePath: '/api/inngest',
+  streaming: 'allow',
 })
 
 // Export handlers for App Router

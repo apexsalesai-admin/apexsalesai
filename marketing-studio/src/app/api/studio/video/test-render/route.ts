@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getProvider, estimateTestRenderCost, snapToAllowedDuration } from '@/lib/shared/video-providers'
+import { inngest } from '@/lib/inngest/client'
 
 interface TestRenderRequest {
   providerId: string
@@ -78,8 +79,20 @@ export async function POST(request: NextRequest) {
         const runwayData = await runwayRes.json()
         videoUrl = runwayData.output?.[0] || null
 
-        // If Runway returns a task (async), return task info for polling
+        // If Runway returns a task (async), fire durable polling and return task info
         if (runwayData.id && !videoUrl) {
+          await inngest.send({
+            name: 'studio/video.render.requested',
+            data: {
+              taskId: runwayData.id,
+              providerId: provider.id,
+              userId: session.user.id || session.user.email || 'unknown',
+              estimatedCost,
+              renderType: 'test' as const,
+              prompt,
+              durationSeconds: testDuration,
+            },
+          })
           return NextResponse.json({
             success: true,
             status: 'processing',
@@ -118,8 +131,20 @@ export async function POST(request: NextRequest) {
 
         const soraData = await soraRes.json()
 
-        // Sora is always async — return task for polling
+        // Sora is always async — fire durable polling and return task info
         if (soraData.id) {
+          await inngest.send({
+            name: 'studio/video.render.requested',
+            data: {
+              taskId: soraData.id,
+              providerId: provider.id,
+              userId: session.user.id || session.user.email || 'unknown',
+              estimatedCost,
+              renderType: 'test' as const,
+              prompt,
+              durationSeconds: testDuration,
+            },
+          })
           return NextResponse.json({
             success: true,
             status: 'processing',
@@ -167,9 +192,15 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    // Allow Inngest internal calls (durable polling) or authenticated users
+    const inngestHeader = request.headers.get('x-inngest-internal')
+    const isInngestCall = inngestHeader && inngestHeader === process.env.INNGEST_SIGNING_KEY
+
+    if (!isInngestCall) {
+      const session = await getServerSession(authOptions)
+      if (!session?.user) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+      }
     }
 
     const { searchParams } = new URL(request.url)
