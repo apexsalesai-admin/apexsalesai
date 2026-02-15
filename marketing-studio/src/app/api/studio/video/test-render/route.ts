@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getProvider, estimateTestRenderCost } from '@/lib/shared/video-providers'
+import { getProvider, estimateTestRenderCost, snapToAllowedDuration } from '@/lib/shared/video-providers'
 
 interface TestRenderRequest {
   providerId: string
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: `${provider.name} API key not configured` }, { status: 400 })
     }
 
-    const testDuration = Math.min(durationSeconds, provider.maxDurationSeconds)
+    const testDuration = snapToAllowedDuration(providerId, Math.min(durationSeconds, provider.maxDurationSeconds))
     const estimatedCost = estimateTestRenderCost(providerId)
 
     let videoUrl: string | null = null
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
             'X-Runway-Version': '2024-11-06',
           },
           body: JSON.stringify({
-            model: 'gen4_turbo',
+            model: 'gen4.5',
             prompt: prompt.slice(0, 512),
             duration: testDuration,
             ratio: '16:9',
@@ -93,21 +93,18 @@ export async function POST(request: NextRequest) {
       }
 
       case 'sora-2': {
-        const soraRes = await fetch('https://api.openai.com/v1/responses', {
+        // Sora 2 API: POST /v1/videos  →  poll GET /v1/videos/{id}
+        const soraRes = await fetch('https://api.openai.com/v1/videos', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'sora',
-            input: prompt.slice(0, 1000),
-            tools: [{
-              type: 'video_generation',
-              duration: testDuration,
-              resolution: '1080p',
-              aspect_ratio: '16:9',
-            }],
+            model: 'sora-2',
+            prompt: prompt.slice(0, 1000),
+            seconds: String(testDuration),
+            size: '1280x720',
           }),
         })
 
@@ -120,9 +117,24 @@ export async function POST(request: NextRequest) {
         }
 
         const soraData = await soraRes.json()
-        const videoOutput = soraData.output?.find((o: { type: string }) => o.type === 'video_generation_call')
-        videoUrl = videoOutput?.result?.url || null
-        break
+
+        // Sora is always async — return task for polling
+        if (soraData.id) {
+          return NextResponse.json({
+            success: true,
+            status: 'processing',
+            taskId: soraData.id,
+            provider: provider.id,
+            estimatedCost,
+            pollUrl: `/api/studio/video/test-render?taskId=${soraData.id}&provider=${provider.id}`,
+          })
+        }
+
+        // Unexpected: no id returned
+        return NextResponse.json({
+          success: false,
+          error: 'Sora API did not return a video id',
+        }, { status: 502 })
       }
 
       default:
@@ -200,6 +212,48 @@ export async function GET(request: NextRequest) {
             success: false,
             status: 'failed',
             error: pollData.failure || 'Render failed',
+          })
+        } else {
+          return NextResponse.json({
+            success: true,
+            status: 'processing',
+            progress: pollData.progress || 0,
+          })
+        }
+      }
+      case 'sora-2': {
+        // Poll: GET /v1/videos/{id}
+        const pollRes = await fetch(`https://api.openai.com/v1/videos/${taskId}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        })
+        const pollData = await pollRes.json()
+
+        if (pollData.status === 'completed') {
+          // Download video content: GET /v1/videos/{id}/content
+          let downloadedUrl: string | null = null
+          try {
+            const dlRes = await fetch(`https://api.openai.com/v1/videos/${taskId}/content`, {
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+            })
+            if (dlRes.ok) {
+              const buf = Buffer.from(await dlRes.arrayBuffer())
+              downloadedUrl = `data:video/mp4;base64,${buf.toString('base64')}`
+            }
+          } catch {
+            // Fall back to null — UI will show success without inline preview
+          }
+
+          return NextResponse.json({
+            success: true,
+            status: 'complete',
+            videoUrl: downloadedUrl,
+            provider: provider.id,
+          })
+        } else if (pollData.status === 'failed') {
+          return NextResponse.json({
+            success: false,
+            status: 'failed',
+            error: pollData.error?.message || 'Sora render failed',
           })
         } else {
           return NextResponse.json({

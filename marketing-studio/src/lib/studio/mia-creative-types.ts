@@ -96,6 +96,7 @@ export interface VideoRecommendationState {
   testRenderError: string | null
   testRenderCostConfirmed: boolean
   fullRenderCostConfirmed: boolean
+  testRenderCostPaid: number
 }
 
 // ─── Session State ─────────────────────────────────────────────────────────────

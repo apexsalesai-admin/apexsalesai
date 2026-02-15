@@ -51,6 +51,7 @@ const initialVideoState: VideoRecommendationState = {
   testRenderError: null,
   testRenderCostConfirmed: false,
   fullRenderCostConfirmed: false,
+  testRenderCostPaid: 0,
 }
 
 const initialState: MiaSessionState = {
@@ -246,6 +247,7 @@ export function useMiaCreativeSession({
   const thinkingIdRef = useRef(0)
   const seedRef = useRef(0)
   const videoProviderRef = useRef<string | undefined>(undefined)
+  const recommendDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const addThinking = useCallback(
     (phase: MiaCreativePhase, label: string, detail: string) => {
@@ -709,37 +711,42 @@ export function useMiaCreativeSession({
   // ── Phase 3.5: Video Intelligence ──────────────────────────────────────────
 
   const fetchRecommendation = useCallback(
-    async (budgetBand: BudgetBand, qualityTier: QualityTier, durationSeconds: number) => {
+    (budgetBand: BudgetBand, qualityTier: QualityTier, durationSeconds: number) => {
+      // Debounce 400ms — prevents thinking-panel spam when slider is dragged
+      if (recommendDebounceRef.current) clearTimeout(recommendDebounceRef.current)
       dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: true, budgetBand, qualityTier, durationSeconds } })
-      try {
-        const res = await fetch('/api/studio/video/recommend', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            goal: goal || 'awareness',
-            channels,
-            budgetBand,
-            qualityTier,
-            durationSeconds,
-          }),
-        })
-        const data = await res.json()
-        if (data.success) {
-          dispatch({
-            type: 'SET_VIDEO_STATE',
-            videoState: {
-              recommendation: { recommended: data.recommended, ranking: data.ranking, fallbackUsed: data.fallbackUsed },
-              selectedProviderId: data.recommended?.provider.id || null,
-              isLoadingRecommendation: false,
-            },
+
+      recommendDebounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/studio/video/recommend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              goal: goal || 'awareness',
+              channels,
+              budgetBand,
+              qualityTier,
+              durationSeconds,
+            }),
           })
-          addThinking('video-offer', 'Provider recommended', data.recommended?.reason || 'No providers available')
-        } else {
+          const data = await res.json()
+          if (data.success) {
+            dispatch({
+              type: 'SET_VIDEO_STATE',
+              videoState: {
+                recommendation: { recommended: data.recommended, ranking: data.ranking, fallbackUsed: data.fallbackUsed },
+                selectedProviderId: data.recommended?.provider.id || null,
+                isLoadingRecommendation: false,
+              },
+            })
+            addThinking('video-offer', 'Provider recommended', data.recommended?.reason || 'No providers available')
+          } else {
+            dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: false } })
+          }
+        } catch {
           dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: false } })
         }
-      } catch {
-        dispatch({ type: 'SET_VIDEO_STATE', videoState: { isLoadingRecommendation: false } })
-      }
+      }, 400)
     },
     [goal, channels, addThinking]
   )
@@ -763,7 +770,7 @@ export function useMiaCreativeSession({
         if (data.status === 'complete' && data.videoUrl) {
           dispatch({
             type: 'SET_VIDEO_STATE',
-            videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl },
+            videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl, testRenderCostPaid: data.actualCost || data.estimatedCost || 0 },
           })
           addThinking('video-offer', 'Test render complete', `Preview ready (${data.renderTimeMs}ms)`)
         } else if (data.status === 'processing' && data.pollUrl) {
@@ -805,7 +812,7 @@ export function useMiaCreativeSession({
           if (data.status === 'complete' && data.videoUrl) {
             dispatch({
               type: 'SET_VIDEO_STATE',
-              videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl },
+              videoState: { testRenderStatus: 'complete', testRenderVideoUrl: data.videoUrl, testRenderCostPaid: data.estimatedCost || 0 },
             })
             addThinking('video-offer', 'Test render complete', 'Preview ready')
           } else if (data.status === 'processing') {

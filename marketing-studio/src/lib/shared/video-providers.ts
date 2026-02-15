@@ -15,6 +15,7 @@ export interface VideoProviderMeta {
   costPerSecond: number
   minDurationSeconds: number
   maxDurationSeconds: number
+  allowedDurations?: number[]   // discrete steps; if absent, any integer in range
   qualityScore: number          // 0-100
   latencyScore: number          // 0-100, higher = faster
   resolutions: string[]
@@ -36,7 +37,7 @@ export const PROVIDER_REGISTRY: VideoProviderMeta[] = [
     category: 'cinematic',
     costPerSecond: 0.34,
     minDurationSeconds: 4,
-    maxDurationSeconds: 16,
+    maxDurationSeconds: 40,
     qualityScore: 92,
     latencyScore: 45,
     resolutions: ['720p', '1080p'],
@@ -56,7 +57,8 @@ export const PROVIDER_REGISTRY: VideoProviderMeta[] = [
     category: 'cinematic',
     costPerSecond: 0.10,
     minDurationSeconds: 4,
-    maxDurationSeconds: 20,
+    maxDurationSeconds: 12,
+    allowedDurations: [4, 8, 12],
     qualityScore: 85,
     latencyScore: 60,
     resolutions: ['720p', '1080p', '4K'],
@@ -98,4 +100,14 @@ export function estimateTestRenderCost(providerId: string): number {
   if (!provider || !provider.supportsTestRender) return 0
   const testDuration = Math.min(10, provider.maxDurationSeconds)
   return Math.round(provider.costPerSecond * testDuration * provider.testRenderCostMultiplier * 100) / 100
+}
+
+export function snapToAllowedDuration(providerId: string, desired: number): number {
+  const provider = getProvider(providerId)
+  if (!provider) return desired
+  const clamped = Math.max(provider.minDurationSeconds, Math.min(provider.maxDurationSeconds, desired))
+  if (!provider.allowedDurations || provider.allowedDurations.length === 0) return clamped
+  return provider.allowedDurations.reduce((best, d) =>
+    Math.abs(d - clamped) < Math.abs(best - clamped) ? d : best
+  )
 }

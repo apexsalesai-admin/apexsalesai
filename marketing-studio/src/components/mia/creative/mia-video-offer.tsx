@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Video, Sparkles, SkipForward, Loader2, ChevronDown, ChevronUp, Film, Settings } from 'lucide-react'
 import type { VideoRecommendationState } from '@/lib/studio/mia-creative-types'
+import { getProvider } from '@/lib/shared/video-providers'
 import type { BudgetBand, QualityTier } from '@/lib/studio/video-scoring'
 import { MiaProviderCard } from './mia-provider-card'
 import { MiaVideoPreviewPlayer } from './mia-video-preview-player'
@@ -205,17 +206,46 @@ export function MiaVideoOffer({
         </div>
         <div>
           <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Duration</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={4}
-              max={20}
-              value={durationSeconds}
-              onChange={e => onUpdateVideoState({ durationSeconds: Number(e.target.value) })}
-              className="w-24 accent-purple-600"
-            />
-            <span className="text-xs font-medium text-slate-700 w-8">{durationSeconds}s</span>
-          </div>
+          {(() => {
+            const providerMeta = selectedProviderId ? getProvider(selectedProviderId) : null
+            const allowed = providerMeta?.allowedDurations
+            if (allowed && allowed.length > 0) {
+              // Discrete buttons (e.g. Sora: 4/8/12)
+              return (
+                <div className="flex gap-1">
+                  {allowed.map(d => (
+                    <button
+                      key={d}
+                      onClick={() => onUpdateVideoState({ durationSeconds: d })}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                        durationSeconds === d
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white text-slate-500 border border-slate-200 hover:border-purple-300'
+                      }`}
+                    >
+                      {d}s
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+            // Continuous slider with provider-specific range
+            const minD = providerMeta?.minDurationSeconds || 4
+            const maxD = providerMeta?.maxDurationSeconds || 40
+            return (
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={minD}
+                  max={maxD}
+                  value={durationSeconds}
+                  onChange={e => onUpdateVideoState({ durationSeconds: Number(e.target.value) })}
+                  className="w-24 accent-purple-600"
+                />
+                <span className="text-xs font-medium text-slate-700 w-8">{durationSeconds}s</span>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -363,6 +393,7 @@ export function MiaVideoOffer({
         providerName={costGateProvider?.provider.name || ''}
         estimatedCost={costGateAction === 'test-render' ? testCost : fullCost}
         durationSeconds={costGateAction === 'test-render' ? 10 : durationSeconds}
+        testRenderCredit={videoState.testRenderCostPaid || 0}
         onConfirm={handleCostConfirm}
         onCancel={() => setCostGateAction(null)}
         isVisible={costGateAction !== null}

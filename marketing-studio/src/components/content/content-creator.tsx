@@ -1047,12 +1047,14 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                 contentType={draft.contentType}
                 goal={contentGoal}
                 onComplete={(result: MiaCreativeResult) => {
+                  const safeTitle = result.title || result.body?.split('\n')[0]?.slice(0, 100) || 'Untitled'
                   setDraft(prev => ({
                     ...prev,
-                    title: result.title,
+                    title: safeTitle,
                     body: result.body,
                     hashtags: result.hashtags,
                     callToAction: result.callToAction,
+                    videoScript: prev.contentType === 'video' || prev.contentType === 'reel' ? result.body : prev.videoScript,
                   }))
                   setGenerationCount(prev => prev + 1)
                   setStep(3)

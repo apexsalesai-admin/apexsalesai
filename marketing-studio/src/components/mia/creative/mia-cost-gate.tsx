@@ -9,6 +9,7 @@ interface MiaCostGateProps {
   providerName: string
   estimatedCost: number
   durationSeconds: number
+  testRenderCredit?: number
   onConfirm: () => void
   onCancel: () => void
   isVisible: boolean
@@ -19,6 +20,7 @@ export function MiaCostGate({
   providerName,
   estimatedCost,
   durationSeconds,
+  testRenderCredit = 0,
   onConfirm,
   onCancel,
   isVisible,
@@ -38,6 +40,8 @@ export function MiaCostGate({
   }, [handleKeyDown])
 
   const actionLabel = action === 'test-render' ? 'Test Render' : 'Full Video Render'
+  const credit = action === 'full-render' ? Math.min(testRenderCredit, estimatedCost) : 0
+  const netCost = Math.max(0, Math.round((estimatedCost - credit) * 100) / 100)
 
   return (
     <AnimatePresence>
@@ -87,9 +91,15 @@ export function MiaCostGate({
                   <span className="text-slate-500">Duration</span>
                   <span className="font-medium text-slate-900">{durationSeconds}s</span>
                 </div>
+                {credit > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600">Test render credit</span>
+                    <span className="font-medium text-green-600">-${credit.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm pt-2 border-t border-slate-200">
-                  <span className="text-slate-700 font-medium">Estimated cost</span>
-                  <span className="font-bold text-lg text-slate-900">${estimatedCost.toFixed(2)}</span>
+                  <span className="text-slate-700 font-medium">{credit > 0 ? 'Net cost' : 'Estimated cost'}</span>
+                  <span className="font-bold text-lg text-slate-900">${netCost.toFixed(2)}</span>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-3">
@@ -109,7 +119,7 @@ export function MiaCostGate({
                 onClick={onConfirm}
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25"
               >
-                Confirm — ${estimatedCost.toFixed(2)}
+                Confirm — ${netCost.toFixed(2)}
               </button>
             </div>
           </motion.div>
