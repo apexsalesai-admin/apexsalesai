@@ -22,6 +22,7 @@ import type {
   SectionType,
 } from '@/lib/studio/mia-creative-types'
 import type { BudgetBand, QualityTier } from '@/lib/studio/video-scoring'
+import type { CreatorProfile } from '@/lib/studio/creator-profile'
 
 // ─── Initial State ─────────────────────────────────────────────────────────────
 
@@ -234,6 +235,7 @@ interface UseMiaCreativeSessionProps {
   channels: string[]
   contentType: string
   goal?: string
+  profile?: CreatorProfile | null
   onComplete: (result: MiaCreativeResult) => void
 }
 
@@ -241,6 +243,7 @@ export function useMiaCreativeSession({
   channels,
   contentType,
   goal,
+  profile,
   onComplete,
 }: UseMiaCreativeSessionProps) {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -306,7 +309,7 @@ export function useMiaCreativeSession({
       dispatch({ type: 'SET_ERROR', error: null })
       addThinking('angles', 'Researching your topic', `Searching for insights on "${topic}"...`)
       try {
-        const body: MiaResearchRequest & { brandName?: string } = { topic, channels, contentType, goal, brandName: state.brandName || undefined }
+        const body: MiaResearchRequest & { brandName?: string; profile?: CreatorProfile | null } = { topic, channels, contentType, goal, brandName: state.brandName || undefined, profile: profile || undefined }
         const res = await fetch('/api/studio/mia/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -327,7 +330,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'SET_LOADING', loading: false })
       }
     },
-    [channels, contentType, goal, state.brandName, addThinking]
+    [channels, contentType, goal, state.brandName, profile, addThinking]
   )
 
   // ── Phase 1b: Refresh angles with a new seed ─────────────────────────────
@@ -338,13 +341,14 @@ export function useMiaCreativeSession({
     dispatch({ type: 'SET_ERROR', error: null })
     addThinking('angles', 'Generating new angles', `Trying seed variation ${seedRef.current}...`)
     try {
-      const body: MiaResearchRequest & { brandName?: string } = {
+      const body: MiaResearchRequest & { brandName?: string; profile?: CreatorProfile | null } = {
         topic: state.topic,
         channels,
         contentType,
         goal,
         seed: seedRef.current,
         brandName: state.brandName || undefined,
+        profile: profile || undefined,
       }
       const res = await fetch('/api/studio/mia/research', {
         method: 'POST',
@@ -361,7 +365,7 @@ export function useMiaCreativeSession({
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false })
     }
-  }, [state.topic, state.brandName, channels, contentType, goal, addThinking])
+  }, [state.topic, state.brandName, channels, contentType, goal, profile, addThinking])
 
   // ── Phase 2: Select angle & start building ────────────────────────────────
 
@@ -395,6 +399,7 @@ export function useMiaCreativeSession({
             action: 'refine',
             currentAngles: state.angles,
             userFeedback: feedback,
+            profile: profile || undefined,
           }),
         })
         const data = await res.json()
@@ -408,7 +413,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'SET_LOADING', loading: false })
       }
     },
-    [state.topic, state.angles, state.brandName, channels, contentType, goal, addThinking]
+    [state.topic, state.angles, state.brandName, channels, contentType, goal, profile, addThinking]
   )
 
   // ── Revise a section based on user direction ─────────────────────────────
@@ -437,6 +442,7 @@ export function useMiaCreativeSession({
             channels,
             goal,
             brandName: state.brandName || undefined,
+            profile: profile || undefined,
           }),
         })
         const data = await res.json()
@@ -449,7 +455,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'REVISE_SECTION_ERROR', sectionIndex, error: msg })
       }
     },
-    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, addThinking]
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, profile, addThinking]
   )
 
   // ── Inline Mia Assist — help user during editing ─────────────────────────
@@ -478,6 +484,7 @@ export function useMiaCreativeSession({
             channels,
             goal,
             brandName: state.brandName || undefined,
+            profile: profile || undefined,
           }),
         })
         const data = await res.json()
@@ -490,7 +497,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'ASSIST_SECTION_ERROR', sectionIndex, error: msg })
       }
     },
-    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, addThinking]
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, profile, addThinking]
   )
 
   // ── Generate a single section ──────────────────────────────────────────────
@@ -513,7 +520,7 @@ export function useMiaCreativeSession({
           .filter((s) => s.accepted)
           .map((s) => ({ type: s.type, content: s.content }))
 
-        const body: MiaGenerateSectionRequest = {
+        const body: MiaGenerateSectionRequest & { profile?: CreatorProfile | null } = {
           topic: state.topic,
           angle: state.selectedAngle,
           sectionType: section.type,
@@ -522,6 +529,7 @@ export function useMiaCreativeSession({
           previousSections,
           rejectedVersions: section.rejectedVersions,
           goal,
+          profile: profile || undefined,
         }
 
         const res = await fetch('/api/studio/mia/generate-section', {
@@ -541,7 +549,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'SET_LOADING', loading: false })
       }
     },
-    [state.sections, state.selectedAngle, state.topic, channels, contentType, goal, addThinking]
+    [state.sections, state.selectedAngle, state.topic, channels, contentType, goal, profile, addThinking]
   )
 
   // ── Score content (momentum meter) ──────────────────────────────────────────
@@ -562,6 +570,7 @@ export function useMiaCreativeSession({
           sections: scoreSections.map((s) => ({ type: s.type, content: s.content })),
           channels,
           contentType,
+          profile: profile || undefined,
         }),
       })
       const data = await res.json()
@@ -675,7 +684,7 @@ export function useMiaCreativeSession({
       const res = await fetch('/api/studio/mia/generate-section', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...body, action: 'polish' }),
+        body: JSON.stringify({ ...body, action: 'polish', profile: profile || undefined }),
       })
       const data: MiaPolishResponse = await res.json()
       if (!data.success) throw new Error(data.error || 'Polish analysis failed')

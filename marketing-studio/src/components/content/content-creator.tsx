@@ -67,6 +67,8 @@ import { cn } from '@/lib/utils'
 import { MiaCreativeSession } from '@/components/mia/creative/mia-creative-session'
 import { MiaChannelPreview } from '@/components/mia/creative/mia-channel-previews'
 import type { MiaCreativeResult } from '@/lib/studio/mia-creative-types'
+import { ProfileSwitcher } from '@/components/profile/profile-switcher'
+import type { CreatorProfile } from '@/lib/studio/creator-profile'
 import { IntegrationType } from '@/types'
 import { VideoPreviewPlayer } from '@/components/content/video-preview-player'
 import type { VideoRenderState } from '@/types/content-draft'
@@ -282,6 +284,21 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
 
   // Mia Creative Mode
   const [miaCreativeMode, setMiaCreativeMode] = useState(true)
+
+  // Creator Profile
+  const [activeProfile, setActiveProfile] = useState<CreatorProfile | null>(null)
+
+  // Fetch default profile on mount
+  useEffect(() => {
+    fetch('/api/studio/profile')
+      .then((res) => res.json())
+      .then((data) => {
+        const profiles = data.profiles || []
+        const defaultProfile = profiles.find((p: CreatorProfile) => p.isDefault) || profiles[0] || null
+        setActiveProfile(defaultProfile)
+      })
+      .catch(() => {})
+  }, [])
 
   // Video-specific State
   const [videoLength, setVideoLength] = useState<VideoLength>('medium')
@@ -802,6 +819,14 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                   <p className="text-slate-500 mt-3 text-lg">Select your target platforms for maximum impact</p>
                 </div>
 
+                {/* Creator Profile Switcher */}
+                <div className="max-w-xs mx-auto">
+                  <ProfileSwitcher
+                    activeProfile={activeProfile}
+                    onSwitch={(p) => setActiveProfile(p)}
+                  />
+                </div>
+
                 {/* Channel Selection - Premium Cards */}
                 <div className="grid grid-cols-2 gap-5">
                   {CHANNELS.map(channel => {
@@ -1046,6 +1071,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                 channels={draft.channels.map(c => c.toString())}
                 contentType={draft.contentType}
                 goal={contentGoal}
+                profile={activeProfile}
                 onComplete={(result: MiaCreativeResult) => {
                   const safeTitle = result.title || result.body?.split('\n')[0]?.slice(0, 100) || 'Untitled'
                   setDraft(prev => ({

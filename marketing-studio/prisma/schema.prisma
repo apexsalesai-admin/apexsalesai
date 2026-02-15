@@ -108,6 +108,54 @@ model StudioBrandGuardrails {
 }
 
 // ============================================================================
+// NEW: CREATOR PROFILE (P24 — Persona Engine)
+// ============================================================================
+
+model CreatorProfile {
+  id                  String    @id @default(cuid())
+  userId              String
+  name                String    @default("My Profile")
+  isDefault           Boolean   @default(false)
+
+  // Voice
+  voicePreset         String    @default("trusted-advisor")
+  voiceCustom         Json?
+
+  // Industry & Audience
+  role                String    @default("")
+  company             String    @default("")
+  industry            String    @default("saas")
+  audienceRole        String    @default("Decision Maker")
+  audienceSeniority   String    @default("Manager")
+  complianceLevel     String    @default("none")
+
+  // Strategy
+  primaryGoal         String    @default("thought-leadership")
+  secondaryGoal       String?
+  preferredChannels   String[]  @default([])
+  contentMix          Json?
+  postingFrequency    String    @default("3x/week")
+  competitorNames     String[]  @default([])
+
+  // Brand
+  brandName           String    @default("")
+  brandKeywords       String[]  @default([])
+  brandAvoid          String[]  @default([])
+  brandColors         Json?
+  logoUrl             String?
+
+  // Fact-checking
+  factCheckSensitivity String   @default("medium")
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, isDefault])
+  @@map("creator_profiles")
+}
+
+// ============================================================================
 // NEW: INTEGRATION CONNECTIONS (Per-Workspace, Encrypted Tokens)
 // ============================================================================
 

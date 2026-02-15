@@ -19,6 +19,7 @@ import type {
   MiaPolishResponse,
   FixSuggestion,
 } from '@/lib/studio/mia-creative-types'
+import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 
 async function callAI(prompt: string, maxTokens = 2048): Promise<string> {
   const provider = getBestProvider()
@@ -98,12 +99,13 @@ function buildBrandGuardrail(brandName?: string): string {
 }
 
 async function handleGenerateSection(
-  body: MiaGenerateSectionRequest & { brandName?: string },
+  body: MiaGenerateSectionRequest & { brandName?: string; profile?: CreatorProfile | null },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { topic, angle, sectionType, channels, contentType, previousSections, rejectedVersions, goal, brandName } = body
+  const { topic, angle, sectionType, channels, contentType, previousSections, rejectedVersions, goal, brandName, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
   const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
+  const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
 
   const channelList = channels.join(', ') || 'social media'
   const goalContext = goal ? `Content goal: ${goal}.` : ''
@@ -125,7 +127,7 @@ async function handleGenerateSection(
     cta: 'Write a compelling call-to-action (1-2 sentences). Be specific about what the reader should do next. Match the content goal.',
   }
 
-  const prompt = `${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionType.toUpperCase()} section for ${contentType} content on ${channelList}.
+  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionType.toUpperCase()} section for ${contentType} content on ${channelList}.
 
 Topic: "${topic}"
 Angle: "${angle.title}" — ${angle.description}
@@ -156,11 +158,12 @@ Return ONLY a JSON object (no markdown):
 // ─── Polish / fix suggestions ──────────────────────────────────────────────────
 
 async function handlePolish(
-  body: MiaPolishRequest & { action: string },
+  body: MiaPolishRequest & { action: string; profile?: CreatorProfile | null },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { topic, sections, channels, contentType } = body
+  const { topic, sections, channels, contentType, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
+  const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
 
   const channelList = channels.join(', ') || 'social media'
   const assembledDraft = sections.map((s) => `[${s.type.toUpperCase()}]:\n${s.content}`).join('\n\n')
@@ -168,7 +171,7 @@ async function handlePolish(
     ? `Brand: "${brandVoice.brandName}". Tones: ${brandVoice.tones.join(', ')}.`
     : ''
 
-  const prompt = `You are Mia, an expert AI content strategist. Review this assembled ${contentType} draft for ${channelList} and suggest improvements.
+  const prompt = `${profilePrompt}You are Mia, an expert AI content strategist. Review this assembled ${contentType} draft for ${channelList} and suggest improvements.
 
 Topic: "${topic}"
 ${brandContext}
@@ -286,15 +289,16 @@ The "overall" should be a weighted average of the 5 scores.`
 // ─── Revise section based on user direction ──────────────────────────────────
 
 async function handleRevise(
-  body: { sectionType: string; existingContent: string; userDirection: string; topic: string; angle: { title: string }; channels: string[]; goal?: string; brandName?: string },
+  body: { sectionType: string; existingContent: string; userDirection: string; topic: string; angle: { title: string }; channels: string[]; goal?: string; brandName?: string; profile?: CreatorProfile | null },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { sectionType, existingContent, userDirection, topic, angle, channels, goal, brandName } = body
+  const { sectionType, existingContent, userDirection, topic, angle, channels, goal, brandName, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
   const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
+  const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
   const channelList = channels.join(', ') || 'social media'
 
-  const prompt = `${brandGuardrail}You are Mia, an expert AI content strategist revising a ${sectionType} section.
+  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist revising a ${sectionType} section.
 
 Current content:
 """
@@ -339,15 +343,17 @@ async function handleAssist(
     channels: string[]
     goal?: string
     brandName?: string
+    profile?: CreatorProfile | null
   },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { sectionType, existingContent, assistRequest, topic, angle, channels, goal, brandName } = body
+  const { sectionType, existingContent, assistRequest, topic, angle, channels, goal, brandName, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
   const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
+  const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
   const channelList = channels.join(', ') || 'social media'
 
-  const prompt = `${brandGuardrail}You are Mia, an AI content strategist helping a user edit their ${sectionType} section in real-time.
+  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an AI content strategist helping a user edit their ${sectionType} section in real-time.
 
 The user is currently editing this content:
 """

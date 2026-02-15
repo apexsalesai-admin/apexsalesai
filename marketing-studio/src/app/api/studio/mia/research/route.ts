@@ -18,6 +18,7 @@ import type {
   AngleCard,
   AngleSource,
 } from '@/lib/studio/mia-creative-types'
+import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -96,12 +97,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { topic, channels, contentType, goal, seed, action, brandName, currentAngles, userFeedback } = body as MiaResearchRequest & {
+    const { topic, channels, contentType, goal, seed, action, brandName, currentAngles, userFeedback, profile } = body as MiaResearchRequest & {
       action?: 'generate' | 'refine'
       brandName?: string
       currentAngles?: AngleCard[]
       userFeedback?: string
+      profile?: CreatorProfile | null
     }
+
+    // ── Creator Profile prompt prefix ──────────────────────────────────────────
+    const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
 
     if (!topic?.trim()) {
       return NextResponse.json({ success: false, angles: [], error: 'Topic is required' } satisfies MiaResearchResponse, { status: 400 })
@@ -120,7 +125,7 @@ export async function POST(request: NextRequest) {
         `Angle ${i + 1}: "${a.title}" — ${a.description}`
       ).join('\n')
 
-      const refinePrompt = `${brandGuardrail}You are Mia, an expert AI content strategist.
+      const refinePrompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist.
 
 The user was presented with these 3 content angles:
 ${currentAnglesText}
@@ -223,7 +228,7 @@ Return ONLY a JSON object (no markdown):
     const goalContext = goal ? `Content goal: ${goal}.` : ''
     const seedContext = seed ? `(Variation seed: ${seed} — generate COMPLETELY DIFFERENT angles from any previous set.)\n` : ''
 
-    const prompt = `${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
+    const prompt = `${profilePrompt}${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
 
 Topic: "${topic}"
 ${sourceContext}

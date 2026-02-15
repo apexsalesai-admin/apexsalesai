@@ -11,11 +11,13 @@ import { MiaThinkingPanel } from './mia-thinking-panel'
 import { MiaVideoOffer } from './mia-video-offer'
 import { MiaMomentumMeter } from './mia-momentum-meter'
 import type { MiaCreativeResult, FixSuggestion, VideoRecommendationState } from '@/lib/studio/mia-creative-types'
+import type { CreatorProfile } from '@/lib/studio/creator-profile'
 
 interface MiaCreativeSessionProps {
   channels: string[]
   contentType: string
   goal?: string
+  profile?: CreatorProfile | null
   onComplete: (result: MiaCreativeResult) => void
   onSwitchToManual: () => void
 }
@@ -24,6 +26,7 @@ export function MiaCreativeSession({
   channels,
   contentType,
   goal,
+  profile,
   onComplete,
   onSwitchToManual,
 }: MiaCreativeSessionProps) {
@@ -50,7 +53,7 @@ export function MiaCreativeSession({
     refineAngles,
     reviseSection,
     assistSection,
-  } = useMiaCreativeSession({ channels, contentType, goal, onComplete })
+  } = useMiaCreativeSession({ channels, contentType, goal, profile, onComplete })
 
   // Assemble content summary for video prompt generation
   const contentSummary = useMemo(() => {
