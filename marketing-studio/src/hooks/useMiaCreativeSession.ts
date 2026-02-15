@@ -594,7 +594,7 @@ export function useMiaCreativeSession({
 
       dispatch({ type: 'SET_MOMENTUM', momentum: { hook: hookScore, clarity: clarityScore, cta: ctaScore, seo: seoScore, platformFit: platformFitScore, overall: overallScore } })
     }
-  }, [state.selectedAngle, state.sections, state.topic, channels, contentType])
+  }, [state.selectedAngle, state.sections, state.topic, channels, contentType, profile])
 
   // ── Section actions ────────────────────────────────────────────────────────
 
@@ -702,7 +702,7 @@ export function useMiaCreativeSession({
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false })
     }
-  }, [state.selectedAngle, state.topic, state.sections, channels, contentType, addThinking])
+  }, [state.selectedAngle, state.topic, state.sections, channels, contentType, profile, addThinking])
 
   const applyFix = useCallback(
     (fixId: string) => {
