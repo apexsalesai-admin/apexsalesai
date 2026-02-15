@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Zap,
   Check,
@@ -19,10 +20,27 @@ import {
   Upload,
   Scissors,
   Image as ImageIcon,
+  Linkedin,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MiaContextHint } from '@/components/studio/MiaContextHint'
 import type { IntegrationStatus } from '@/lib/integrations/registry'
+
+interface PublishingChannel {
+  id: string
+  platform: string
+  tier: number
+  displayName: string
+  accountName: string | null
+  accountAvatar: string | null
+  isActive: boolean
+  connectedAt: string
+  lastPublishedAt: string | null
+  lastError: string | null
+  tokenExpiresAt: string | null
+  tokenHealth: 'healthy' | 'expiring_soon' | 'expired' | 'unknown'
+}
 
 // ─── Category Config ────────────────────────────────────────
 
@@ -46,14 +64,54 @@ const CATEGORIES = Object.entries(CATEGORY_CONFIG).map(([id, cfg]) => ({
 // ─── Main Page ──────────────────────────────────────────────
 
 export default function IntegrationsPage() {
+  const searchParams = useSearchParams()
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [testingAll, setTestingAll] = useState(false)
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; latency: number } | null>>({})
 
+  // Publishing Channels state
+  const [channels, setChannels] = useState<PublishingChannel[]>([])
+  const [channelsLoading, setChannelsLoading] = useState(true)
+  const [disconnectingChannel, setDisconnectingChannel] = useState<string | null>(null)
+
+  // OAuth status from query params
+  const oauthConnected = searchParams.get('connected')
+  const oauthError = searchParams.get('error')
+
   // Connect modal state
   const [connectModal, setConnectModal] = useState<IntegrationStatus | null>(null)
+
+  const fetchChannels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/studio/channels')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setChannels(data.channels || [])
+      }
+    } catch (e) {
+      console.error('Failed to fetch channels:', e)
+    } finally {
+      setChannelsLoading(false)
+    }
+  }, [])
+
+  const disconnectChannel = async (channelId: string) => {
+    setDisconnectingChannel(channelId)
+    try {
+      await fetch('/api/studio/channels', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId }),
+      })
+      setChannels(prev => prev.filter(c => c.id !== channelId))
+    } catch (e) {
+      console.error('Failed to disconnect channel:', e)
+    } finally {
+      setDisconnectingChannel(null)
+    }
+  }
 
   const fetchIntegrations = useCallback(async () => {
     try {
@@ -73,7 +131,8 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchIntegrations()
-  }, [fetchIntegrations])
+    fetchChannels()
+  }, [fetchIntegrations, fetchChannels])
 
   const testAllConnections = useCallback(async () => {
     setTestingAll(true)
@@ -170,6 +229,113 @@ export default function IntegrationsPage() {
             {integrations.filter(i => i.category === 'video_generation' && (i.status === 'connected' || i.status === 'connected_env')).length}
           </p>
         </div>
+      </div>
+
+      {/* OAuth Status Banner */}
+      {oauthConnected && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-3">
+          <Check className="w-5 h-5 text-emerald-600" />
+          <span className="text-sm font-medium text-emerald-800">
+            {oauthConnected.charAt(0).toUpperCase() + oauthConnected.slice(1)} connected successfully!
+          </span>
+        </div>
+      )}
+      {oauthError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center space-x-3">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <span className="text-sm font-medium text-red-800">
+            OAuth failed: {oauthError.replace(/_/g, ' ')}
+          </span>
+        </div>
+      )}
+
+      {/* Publishing Channels */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
+            <Upload className="w-5 h-5 text-purple-600" />
+            <span>Publishing Channels</span>
+          </h2>
+          <a
+            href="/api/studio/channels/connect/linkedin"
+            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-[#0A66C2] text-white rounded-lg hover:bg-[#004182] transition-colors"
+          >
+            <Linkedin className="w-4 h-4" />
+            <span>Connect LinkedIn</span>
+          </a>
+        </div>
+
+        {channelsLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+          </div>
+        ) : channels.length === 0 ? (
+          <div className="p-8 bg-slate-50 rounded-xl border border-slate-200 text-center">
+            <Upload className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 text-sm">No publishing channels connected yet.</p>
+            <p className="text-slate-400 text-xs mt-1">Connect LinkedIn to publish directly from Marketing Studio.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {channels.map(channel => {
+              const platformIcons: Record<string, typeof Linkedin> = { linkedin: Linkedin }
+              const PlatformIcon = platformIcons[channel.platform] || Upload
+              const healthColors = {
+                healthy: 'bg-emerald-500',
+                expiring_soon: 'bg-amber-500',
+                expired: 'bg-red-500',
+                unknown: 'bg-slate-400',
+              }
+
+              return (
+                <div key={channel.id} className="p-4 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-[#0A66C2] rounded-lg flex items-center justify-center">
+                      <PlatformIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold text-slate-900">{channel.displayName}</span>
+                        <span className={cn('w-2 h-2 rounded-full', healthColors[channel.tokenHealth])} title={`Token: ${channel.tokenHealth}`} />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {channel.platform.charAt(0).toUpperCase() + channel.platform.slice(1)}
+                        {channel.accountName && ` — ${channel.accountName}`}
+                        {channel.lastPublishedAt && ` — Last posted ${new Date(channel.lastPublishedAt).toLocaleDateString()}`}
+                      </p>
+                      {channel.lastError && (
+                        <p className="text-xs text-red-500 mt-0.5">{channel.lastError}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {channel.tokenHealth === 'expired' && (
+                      <a
+                        href="/api/studio/channels/connect/linkedin"
+                        className="text-xs font-medium px-3 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center space-x-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Reconnect</span>
+                      </a>
+                    )}
+                    <button
+                      onClick={() => disconnectChannel(channel.id)}
+                      disabled={disconnectingChannel === channel.id}
+                      className="text-xs text-red-500 hover:text-red-700 p-1 rounded transition-colors disabled:opacity-50"
+                      title="Disconnect"
+                    >
+                      {disconnectingChannel === channel.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Category Tabs */}

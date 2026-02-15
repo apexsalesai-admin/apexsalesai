@@ -1,7 +1,3 @@
-// Lyfye Marketing Studio - Production-Grade Prisma Schema
-// Multi-tenant extension on top of existing database
-// IMPORTANT: This database serves multiple products - do not remove existing models
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,224 +8,213 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ============================================================================
-// NEW: WORKSPACE & MULTI-TENANCY FOR MARKETING STUDIO
-// ============================================================================
-
 model StudioWorkspace {
-  id            String    @id @default(cuid())
-  name          String
-  slug          String    @unique  // URL-safe identifier
-  domain        String?   // Optional custom domain
-
-  // Branding
-  logoUrl       String?
-  primaryColor  String?   @default("#8b5cf6")
-
-  // Settings
-  settings      Json      @default("{}")
-  features      Json      @default("{}")  // Feature flags
-
-  // Limits
-  maxUsers      Int       @default(5)
-  maxContent    Int       @default(1000)
-
-  // Relations
-  members       StudioWorkspaceMember[]
-  integrations  StudioIntegration[]
-  assets        StudioAsset[]
-  videoJobs     StudioVideoJob[]
-  renderLogs    StudioRenderLog[]
-  publishJobs   StudioPublishJob[]
-  auditLogs     StudioAuditLog[]
+  id              String                  @id @default(cuid())
+  name            String
+  slug            String                  @unique
+  domain          String?
+  logoUrl         String?
+  primaryColor    String?                 @default("#8b5cf6")
+  settings        Json                    @default("{}")
+  features        Json                    @default("{}")
+  maxUsers        Int                     @default(5)
+  maxContent      Int                     @default(1000)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  assets          StudioAsset[]
+  auditLogs       StudioAuditLog[]
   brandGuardrails StudioBrandGuardrails?
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  integrations    StudioIntegration[]
+  publishJobs     StudioPublishJob[]
+  renderLogs      StudioRenderLog[]
+  videoJobs       StudioVideoJob[]
+  members         StudioWorkspaceMember[]
 
   @@index([slug])
   @@map("studio_workspaces")
 }
 
 model StudioWorkspaceMember {
-  id            String    @id @default(cuid())
-  workspaceId   String
-  workspace     StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  userId        String    // References echo_breaker_users.id or other user ID
-
-  role          StudioWorkspaceRole @default(CREATOR)
-
-  invitedAt     DateTime  @default(now())
-  joinedAt      DateTime?
+  id          String              @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        StudioWorkspaceRole @default(CREATOR)
+  invitedAt   DateTime            @default(now())
+  joinedAt    DateTime?
+  workspace   StudioWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([userId])
   @@map("studio_workspace_members")
 }
 
-enum StudioWorkspaceRole {
-  OWNER       // Full control, billing, can delete workspace
-  ADMIN       // Manage members, integrations, settings
-  APPROVER    // Can approve/reject content
-  CREATOR     // Can create and edit content
-  VIEWER      // Read-only access
-}
-
-// ============================================================================
-// NEW: BRAND GUARDRAILS
-// ============================================================================
-
 model StudioBrandGuardrails {
-  id              String    @id @default(cuid())
-  workspaceId     String    @unique
-  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // Voice profile
-  voiceTones      String[]  @default([])
-  writingStyle    String?
-
-  // Compliance
-  bannedClaims    String[]  @default([])
-  complianceRules String[]  @default([])
-  doNotSayList    String[]  @default([])
-  requiredDisclosures String[] @default([])
-
-  // CTA
-  ctaStyle        String?
-  ctaExamples     String[]  @default([])
-
-  // Personas/Audiences
-  targetAudiences Json      @default("[]")
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String          @id @default(cuid())
+  workspaceId         String          @unique
+  voiceTones          String[]        @default([])
+  writingStyle        String?
+  bannedClaims        String[]        @default([])
+  complianceRules     String[]        @default([])
+  doNotSayList        String[]        @default([])
+  requiredDisclosures String[]        @default([])
+  ctaStyle            String?
+  ctaExamples         String[]        @default([])
+  targetAudiences     Json            @default("[]")
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  workspace           StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("studio_brand_guardrails")
 }
 
-// ============================================================================
-// NEW: CREATOR PROFILE (P24 — Persona Engine)
-// ============================================================================
-
 model CreatorProfile {
-  id                  String    @id @default(cuid())
-  userId              String
-  name                String    @default("My Profile")
-  isDefault           Boolean   @default(false)
-
-  // Voice
-  voicePreset         String    @default("trusted-advisor")
-  voiceCustom         Json?
-
-  // Industry & Audience
-  role                String    @default("")
-  company             String    @default("")
-  industry            String    @default("saas")
-  audienceRole        String    @default("Decision Maker")
-  audienceSeniority   String    @default("Manager")
-  complianceLevel     String    @default("none")
-
-  // Strategy
-  primaryGoal         String    @default("thought-leadership")
-  secondaryGoal       String?
-  preferredChannels   String[]  @default([])
-  contentMix          Json?
-  postingFrequency    String    @default("3x/week")
-  competitorNames     String[]  @default([])
-
-  // Brand
-  brandName           String    @default("")
-  brandKeywords       String[]  @default([])
-  brandAvoid          String[]  @default([])
-  brandColors         Json?
-  logoUrl             String?
-
-  // Fact-checking
+  id                   String   @id @default(cuid())
+  userId               String
+  name                 String   @default("My Profile")
+  isDefault            Boolean  @default(false)
+  voicePreset          String   @default("trusted-advisor")
+  voiceCustom          Json?
+  role                 String   @default("")
+  company              String   @default("")
+  industry             String   @default("saas")
+  audienceRole         String   @default("Decision Maker")
+  audienceSeniority    String   @default("Manager")
+  complianceLevel      String   @default("none")
+  primaryGoal          String   @default("thought-leadership")
+  secondaryGoal        String?
+  preferredChannels    String[] @default([])
+  contentMix           Json?
+  postingFrequency     String   @default("3x/week")
+  competitorNames      String[] @default([])
+  brandName            String   @default("")
+  brandKeywords        String[] @default([])
+  brandAvoid           String[] @default([])
+  brandColors          Json?
+  logoUrl              String?
   factCheckSensitivity String   @default("medium")
-
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([userId])
   @@index([userId, isDefault])
   @@map("creator_profiles")
 }
 
-// ============================================================================
-// NEW: INTEGRATION CONNECTIONS (Per-Workspace, Encrypted Tokens)
-// ============================================================================
+// ─── Publishing Channel Registry ───────────────────────────────
+model PublishingChannel {
+  id              String   @id @default(cuid())
+  userId          String
+  platform        String
+  tier            Int
+  displayName     String
+  accountId       String?
+  accountName     String?
+  accountAvatar   String?
+  accessToken     String?
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  scopes          String[] @default([])
+  metadata        Json?
+  isActive        Boolean  @default(true)
+  connectedAt     DateTime @default(now())
+  lastPublishedAt DateTime?
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-enum StudioIntegrationType {
-  YOUTUBE
-  TIKTOK
-  LINKEDIN
-  X_TWITTER
-  FACEBOOK
-  INSTAGRAM
-  THREADS
-  PINTEREST
-  // AI/Video providers
-  OPENAI
-  ANTHROPIC
-  GEMINI
-  ELEVENLABS
-  HEYGEN
-  RUNWAY
-  MIDJOURNEY
-  INVIDEO
+  publications    Publication[]
+
+  @@unique([userId, platform, accountId])
+  @@index([userId])
+  @@map("publishing_channels")
 }
 
-enum StudioIntegrationStatus {
-  PENDING       // OAuth initiated
-  CONNECTED     // Active connection
-  DISCONNECTED  // User disconnected
-  REVOKED       // Admin revoked
-  ERROR         // Connection error
-  EXPIRED       // Token expired, needs refresh
+// ─── Content Variant (platform-adapted version) ────────────────
+model ContentVariant {
+  id              String   @id @default(cuid())
+  contentId       String
+  platform        String
+  channelId       String?
+  title           String?
+  body            String
+  hashtags        String[] @default([])
+  mentions        String[] @default([])
+  callToAction    String?
+  mediaUrls       String[] @default([])
+  mediaType       String?
+  thumbnailUrl    String?
+  charCount       Int?
+  charLimit       Int?
+  aspectRatio     String?
+  threadParts     String[] @default([])
+  adaptationNotes String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  publications    Publication[]
+
+  @@index([contentId])
+  @@index([platform])
+  @@map("content_variants")
+}
+
+// ─── Publication Record ────────────────────────────────────────
+model Publication {
+  id              String   @id @default(cuid())
+  contentId       String
+  variantId       String?
+  channelId       String
+  userId          String
+  status          String   @default("draft")
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  postUrl         String?
+  postId          String?
+  error           String?
+  retryCount      Int      @default(0)
+  packageData     Json?
+  impressions     Int?
+  engagements     Int?
+  clicks          Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variant         ContentVariant? @relation(fields: [variantId], references: [id])
+  channel         PublishingChannel @relation(fields: [channelId], references: [id])
+
+  @@index([contentId])
+  @@index([userId])
+  @@index([status])
+  @@index([channelId])
+  @@map("publications")
 }
 
 model StudioIntegration {
-  id              String            @id @default(cuid())
-  workspaceId     String
-  workspace       StudioWorkspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  type            StudioIntegrationType
-  status          StudioIntegrationStatus @default(PENDING)
-
-  // Encrypted tokens - stored as: iv:ciphertext:authTag (base64)
-  accessTokenEncrypted   String?   @db.Text
-  refreshTokenEncrypted  String?   @db.Text
-  tokenExpiresAt         DateTime?
-
-  // Token metadata (not sensitive)
-  tokenType       String?   @default("Bearer")
-
-  // Scopes
-  scopesGranted   String[]  @default([])
-  scopesRequired  String[]  @default([])
-
-  // Channel info (external platform IDs)
-  externalId      String?   // User/page/channel ID on the platform
-  externalName    String?   // Display name
-  externalUrl     String?   // Profile/channel URL
-  externalMeta    Json      @default("{}")  // Platform-specific metadata
-
-  // Connection health
-  lastTestedAt    DateTime?
-  lastTestResult  String?   // "success" | "error:reason"
-  errorCount      Int       @default(0)
-
-  // Audit
-  connectedBy     String?   // User ID who connected
-  revokedBy       String?   // User ID who revoked
-  revokedAt       DateTime?
-  revokeReason    String?
-
-  // Relations
-  publishResults  StudioPublishResult[]
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                    String                  @id @default(cuid())
+  workspaceId           String
+  type                  StudioIntegrationType
+  status                StudioIntegrationStatus @default(PENDING)
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  tokenType             String?                 @default("Bearer")
+  scopesGranted         String[]                @default([])
+  scopesRequired        String[]                @default([])
+  externalId            String?
+  externalName          String?
+  externalUrl           String?
+  externalMeta          Json                    @default("{}")
+  lastTestedAt          DateTime?
+  lastTestResult        String?
+  errorCount            Int                     @default(0)
+  connectedBy           String?
+  revokedBy             String?
+  revokedAt             DateTime?
+  revokeReason          String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  workspace             StudioWorkspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  publishResults        StudioPublishResult[]
 
   @@unique([workspaceId, type])
   @@index([status])
@@ -237,83 +222,31 @@ model StudioIntegration {
   @@map("studio_integrations")
 }
 
-// ============================================================================
-// NEW: ASSETS (Images, Videos, Audio stored in Vercel Blob)
-// ============================================================================
-
-enum StudioAssetType {
-  IMAGE
-  VIDEO
-  AUDIO
-  THUMBNAIL
-  DOCUMENT
-}
-
-enum StudioAssetStatus {
-  UPLOADING
-  PROCESSING
-  READY
-  FAILED
-  DELETED
-}
-
-enum StudioAssetProvider {
-  UPLOAD        // User uploaded
-  DALLE         // DALL-E generated
-  MIDJOURNEY    // Midjourney generated
-  RUNWAY        // Runway video
-  HEYGEN        // HeyGen avatar video
-  ELEVENLABS    // ElevenLabs audio
-  SORA          // OpenAI Sora video
-  PIKA          // Pika Labs video
-  INVIDEO       // InVideo generated
-  TEMPLATE      // Template/internal (zero-cost placeholder)
-}
-
 model StudioAsset {
-  id              String        @id @default(cuid())
+  id              String              @id @default(cuid())
   workspaceId     String
-  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // Type & Status
   type            StudioAssetType
   status          StudioAssetStatus   @default(UPLOADING)
-
-  // File info
   filename        String
   mimeType        String
   sizeBytes       Int
-
-  // Storage
-  storageProvider String        @default("vercel-blob")  // vercel-blob | s3 | r2
-  storageKey      String        // Key/path in storage
-  publicUrl       String?       // Public URL if available
-
-  // Generation source
+  storageProvider String              @default("vercel-blob")
+  storageKey      String
+  publicUrl       String?
   provider        StudioAssetProvider @default(UPLOAD)
-  providerJobId   String?       // External job ID
-  providerMeta    Json          @default("{}")  // Provider-specific metadata
-
-  // Dimensions (for images/videos)
+  providerJobId   String?
+  providerMeta    Json                @default("{}")
   width           Int?
   height          Int?
   durationSeconds Float?
-
-  // Processing
   processingError String?
-
-  // Thumbnails (for videos)
   thumbnailUrl    String?
-
-  // Relations
-  videoJob        StudioVideoJob?     @relation(fields: [videoJobId], references: [id])
   videoJobId      String?
-
-  // Link to content via contentId (references ScheduledContent.id)
   contentId       String?
-
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  videoJob        StudioVideoJob?     @relation(fields: [videoJobId], references: [id])
+  workspace       StudioWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([type])
@@ -322,78 +255,36 @@ model StudioAsset {
   @@map("studio_assets")
 }
 
-// ============================================================================
-// NEW: VIDEO JOBS
-// ============================================================================
-
-enum StudioVideoJobStatus {
-  QUEUED
-  PROCESSING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum StudioVideoJobType {
-  TEXT_TO_VIDEO     // Generate video from text
-  AVATAR_VIDEO      // AI avatar speaking
-  SCRIPT_TO_VIDEO   // Full script to video
-  IMAGE_TO_VIDEO    // Animate image
-  VOICEOVER         // Generate voiceover only
-  THUMBNAIL         // Generate thumbnail
-}
-
 model StudioVideoJob {
-  id              String              @id @default(cuid())
+  id              String                 @id @default(cuid())
   workspaceId     String
-  workspace       StudioWorkspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // Job type
   type            StudioVideoJobType
-  status          StudioVideoJobStatus  @default(QUEUED)
-
-  // Input - references ScheduledContent.id
+  status          StudioVideoJobStatus   @default(QUEUED)
   contentId       String?
-  inputScript     String?         @db.Text
-  inputPrompt     String?         @db.Text
-  inputAssetId    String?         // For image-to-video
-
-  // Configuration
-  config          Json            @default("{}")
-
-  // Provider tracking
-  provider        String?         // runway | heygen | elevenlabs | dalle
-  providerJobId   String?         // External job ID
-  providerStatus  String?         // Provider's status string
-  providerMeta    Json            @default("{}")
-
-  // Progress
-  progress        Int             @default(0)  // 0-100
+  inputScript     String?
+  inputPrompt     String?
+  inputAssetId    String?
+  config          Json                   @default("{}")
+  provider        String?
+  providerJobId   String?
+  providerStatus  String?
+  providerMeta    Json                   @default("{}")
+  progress        Int                    @default(0)
   progressMessage String?
-
-  // Output
-  outputAssets    StudioAsset[]
-
-  // Error handling
   errorMessage    String?
   errorCode       String?
-  retryCount      Int             @default(0)
-  maxRetries      Int             @default(3)
-
-  // Timing
+  retryCount      Int                    @default(0)
+  maxRetries      Int                    @default(3)
   startedAt       DateTime?
   completedAt     DateTime?
-
-  // Cost tracking
   estimatedCost   Float?
   actualCost      Float?
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Content version relation
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  outputAssets    StudioAsset[]
   contentVersions StudioContentVersion[]
   renderLogs      StudioRenderLog[]
+  workspace       StudioWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([status])
@@ -401,37 +292,23 @@ model StudioVideoJob {
   @@map("studio_video_jobs")
 }
 
-// ============================================================================
-// NEW: RENDER COST LEDGER
-// ============================================================================
-
 model StudioRenderLog {
-  id              String          @id @default(cuid())
-  workspaceId     String
-  workspace       StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  videoJobId      String?
-  videoJob        StudioVideoJob? @relation(fields: [videoJobId], references: [id], onDelete: SetNull)
-
-  // Provider info
-  provider        String          // runway | heygen | template
-  providerJobId   String?
-
-  // Request params
-  durationSeconds Int
-  aspectRatio     String          @default("16:9")
-  promptLength    Int             @default(0)
-
-  // Cost tracking
-  estimatedCostUsd Float          @default(0)
+  id               String          @id @default(cuid())
+  workspaceId      String
+  videoJobId       String?
+  provider         String
+  providerJobId    String?
+  durationSeconds  Int
+  aspectRatio      String          @default("16:9")
+  promptLength     Int             @default(0)
+  estimatedCostUsd Float           @default(0)
   actualCostUsd    Float?
-
-  // Status
-  status          String          @default("submitted") // submitted | completed | failed | blocked
-  errorMessage    String?
-
-  // Timing
-  submittedAt     DateTime        @default(now())
-  completedAt     DateTime?
+  status           String          @default("submitted")
+  errorMessage     String?
+  submittedAt      DateTime        @default(now())
+  completedAt      DateTime?
+  videoJob         StudioVideoJob? @relation(fields: [videoJobId], references: [id])
+  workspace        StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, submittedAt])
   @@index([provider])
@@ -439,24 +316,19 @@ model StudioRenderLog {
 }
 
 model StudioContentVersion {
-  id              String              @id @default(cuid())
-  contentId       String              // References ScheduledContent.id
-  versionNumber   Int                 // Auto-increment per contentId (1, 2, 3...)
-  label           String?             // User-defined label (e.g. "Draft v1", "Final Cut")
-  isFinal         Boolean             @default(false)
-
-  // Recipe
-  script          String              @db.Text
-  visualPrompt    String?             @db.Text
-  config          Json                @default("{}")  // { aspectRatio, duration, style, voiceId, ... }
-
-  // Render tracking
-  videoJobId      String?
-  videoJob        StudioVideoJob?     @relation(fields: [videoJobId], references: [id])
-
-  createdById     String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id            String          @id @default(cuid())
+  contentId     String
+  versionNumber Int
+  label         String?
+  isFinal       Boolean         @default(false)
+  script        String
+  visualPrompt  String?
+  config        Json            @default("{}")
+  videoJobId    String?
+  createdById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  videoJob      StudioVideoJob? @relation(fields: [videoJobId], references: [id])
 
   @@unique([contentId, versionNumber])
   @@index([contentId])
@@ -464,52 +336,21 @@ model StudioContentVersion {
   @@map("studio_content_versions")
 }
 
-// ============================================================================
-// NEW: PUBLISH JOBS & RESULTS (Enhanced publishing with verification)
-// ============================================================================
-
-enum StudioPublishJobStatus {
-  PENDING         // Waiting to publish
-  VALIDATING      // Checking integrations
-  PUBLISHING      // In progress
-  VERIFYING       // Verifying post exists
-  COMPLETED       // All channels done
-  PARTIAL         // Some channels failed
-  FAILED          // All channels failed
-  CANCELLED       // User cancelled
-}
-
 model StudioPublishJob {
-  id              String                @id @default(cuid())
-  workspaceId     String
-  workspace       StudioWorkspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // References ScheduledContent.id
-  contentId       String
-
-  status          StudioPublishJobStatus  @default(PENDING)
-
-  // Target channels
-  targetChannels  String[]          @default([])
-
-  // Results per channel
-  results         StudioPublishResult[]
-
-  // Scheduling
-  scheduledFor    DateTime?
-
-  // Timing
-  startedAt       DateTime?
-  completedAt     DateTime?
-
-  // Idempotency
-  idempotencyKey  String?           @unique
-
-  // Error summary
-  errorSummary    String?
-
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String                 @id @default(cuid())
+  workspaceId    String
+  contentId      String
+  status         StudioPublishJobStatus @default(PENDING)
+  targetChannels String[]               @default([])
+  scheduledFor   DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  idempotencyKey String?                @unique
+  errorSummary   String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  workspace      StudioWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  results        StudioPublishResult[]
 
   @@index([workspaceId])
   @@index([contentId])
@@ -518,46 +359,25 @@ model StudioPublishJob {
   @@map("studio_publish_jobs")
 }
 
-enum StudioPublishResultStatus {
-  PENDING
-  PUBLISHING
-  VERIFYING
-  SUCCESS
-  FAILED
-  SKIPPED       // Integration not connected
-}
-
 model StudioPublishResult {
-  id              String                    @id @default(cuid())
-  publishJobId    String
-  publishJob      StudioPublishJob          @relation(fields: [publishJobId], references: [id], onDelete: Cascade)
-
-  // Channel
-  channel         StudioIntegrationType
-  integrationId   String?
-  integration     StudioIntegration?        @relation(fields: [integrationId], references: [id])
-
-  status          StudioPublishResultStatus @default(PENDING)
-
-  // Platform response
-  externalPostId  String?             // Post ID on the platform
-  permalink       String?             // URL to the post
-  platformResponse Json               @default("{}")  // Raw API response
-
-  // Verification
-  verified        Boolean             @default(false)
-  verifiedAt      DateTime?
+  id                String                    @id @default(cuid())
+  publishJobId      String
+  channel           StudioIntegrationType
+  integrationId     String?
+  status            StudioPublishResultStatus @default(PENDING)
+  externalPostId    String?
+  permalink         String?
+  platformResponse  Json                      @default("{}")
+  verified          Boolean                   @default(false)
+  verifiedAt        DateTime?
   verificationError String?
-
-  // Error details
-  errorCode       String?
-  errorMessage    String?
-
-  // Timing
-  publishedAt     DateTime?
-
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  errorCode         String?
+  errorMessage      String?
+  publishedAt       DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  integration       StudioIntegration?        @relation(fields: [integrationId], references: [id])
+  publishJob        StudioPublishJob          @relation(fields: [publishJobId], references: [id], onDelete: Cascade)
 
   @@index([publishJobId])
   @@index([channel])
@@ -565,142 +385,45 @@ model StudioPublishResult {
   @@map("studio_publish_results")
 }
 
-// ============================================================================
-// NEW: CONTENT APPROVAL (For approval workflow)
-// ============================================================================
-
-enum StudioApprovalAction {
-  SUBMITTED     // Submitted for approval
-  APPROVED      // Approved
-  REJECTED      // Rejected with reason
-  REQUESTED_CHANGES // Needs changes
-  WITHDRAWN     // Creator withdrew
-}
-
 model StudioContentApproval {
-  id              String              @id @default(cuid())
-  // References ScheduledContent.id
-  contentId       String
-
-  action          StudioApprovalAction
-
-  // Reviewer (user ID)
-  reviewerId      String?
-
-  // Feedback
-  notes           String?         @db.Text
-
-  // Immutable timestamp
-  createdAt       DateTime        @default(now())
+  id         String               @id @default(cuid())
+  contentId  String
+  action     StudioApprovalAction
+  reviewerId String?
+  notes      String?
+  createdAt  DateTime             @default(now())
 
   @@index([contentId])
   @@index([reviewerId])
   @@map("studio_content_approvals")
 }
 
-// ============================================================================
-// NEW: CONTENT COMMENTS
-// ============================================================================
-
 model StudioContentComment {
-  id              String          @id @default(cuid())
-  // References ScheduledContent.id
-  contentId       String
-
-  authorId        String
-  body            String          @db.Text
-
-  // Reply threading
-  parentId        String?
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id        String   @id @default(cuid())
+  contentId String
+  authorId  String
+  body      String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([contentId])
   @@map("studio_content_comments")
 }
 
-// ============================================================================
-// NEW: AUDIT LOG (IMMUTABLE) - Separate from existing AuditLog
-// ============================================================================
-
-enum StudioAuditAction {
-  // Workspace
-  WORKSPACE_CREATED
-  WORKSPACE_UPDATED
-  WORKSPACE_DELETED
-  MEMBER_INVITED
-  MEMBER_JOINED
-  MEMBER_REMOVED
-  MEMBER_ROLE_CHANGED
-
-  // Integration
-  INTEGRATION_CONNECTED
-  INTEGRATION_DISCONNECTED
-  INTEGRATION_REVOKED
-  INTEGRATION_REFRESHED
-  INTEGRATION_ERROR
-  INTEGRATION_TESTED
-
-  // Content
-  CONTENT_CREATED
-  CONTENT_UPDATED
-  CONTENT_DELETED
-  CONTENT_SUBMITTED
-  CONTENT_APPROVED
-  CONTENT_REJECTED
-  CONTENT_SCHEDULED
-  CONTENT_PUBLISHED
-  CONTENT_FAILED
-
-  // Assets
-  ASSET_UPLOADED
-  ASSET_GENERATED
-  ASSET_DELETED
-
-  // Video Jobs
-  VIDEO_JOB_CREATED
-  VIDEO_JOB_COMPLETED
-  VIDEO_JOB_FAILED
-
-  // Publishing
-  PUBLISH_JOB_CREATED
-  PUBLISH_JOB_COMPLETED
-  PUBLISH_JOB_FAILED
-
-  // Settings
-  BRAND_GUARDRAILS_UPDATED
-  SETTINGS_UPDATED
-
-  // Auth
-  USER_SIGNED_IN
-  USER_SIGNED_OUT
-}
-
 model StudioAuditLog {
-  id              String          @id @default(cuid())
-  workspaceId     String?
-  workspace       StudioWorkspace?  @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-
-  action          StudioAuditAction
-
-  // Actor
-  userId          String?
-  userEmail       String?     // Denormalized
-
-  // Target
-  resourceType    String?     // content | integration | asset | etc.
-  resourceId      String?
-
-  // Details (immutable snapshot)
-  details         Json        @default("{}")
-
-  // Request context
-  ipAddress       String?
-  userAgent       String?
-
-  // NO updatedAt - immutable
-  createdAt       DateTime    @default(now())
+  id           String            @id @default(cuid())
+  workspaceId  String?
+  action       StudioAuditAction
+  userId       String?
+  userEmail    String?
+  resourceType String?
+  resourceId   String?
+  details      Json              @default("{}")
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime          @default(now())
+  workspace    StudioWorkspace?  @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
   @@index([action])
@@ -710,41 +433,22 @@ model StudioAuditLog {
   @@map("studio_audit_logs")
 }
 
-// ============================================================================
-// NEW: MODEL REGISTRY (For AI model selection)
-// ============================================================================
-
 model StudioModelRegistry {
-  id              String    @id @default(cuid())
-
-  // Model identity
-  provider        String    // openai | anthropic | google
-  modelId         String    // claude-3-opus-20240229
-  displayName     String    // Claude 3 Opus
-
-  // Capabilities
-  capabilities    String[]  @default([])  // ["text", "vision", "function_calling"]
-
-  // Quality tier
-  tier            String    @default("balanced")  // fast | balanced | premium
-
-  // Pricing (per 1M tokens)
-  inputPricePer1M   Float?
-  outputPricePer1M  Float?
-
-  // Limits
-  maxInputTokens  Int?
-  maxOutputTokens Int?
-
-  // Availability
-  isEnabled       Boolean   @default(true)
-  isDefault       Boolean   @default(false)
-
-  // Ordering
-  sortOrder       Int       @default(0)
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id               String   @id @default(cuid())
+  provider         String
+  modelId          String
+  displayName      String
+  capabilities     String[] @default([])
+  tier             String   @default("balanced")
+  inputPricePer1M  Float?
+  outputPricePer1M Float?
+  maxInputTokens   Int?
+  maxOutputTokens  Int?
+  isEnabled        Boolean  @default(true)
+  isDefault        Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@unique([provider, modelId])
   @@index([provider])
@@ -752,47 +456,27 @@ model StudioModelRegistry {
   @@map("studio_model_registry")
 }
 
-// ============================================================================
-// NEW: USAGE TRACKING
-// ============================================================================
-
 model StudioUsageRecord {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   workspaceId     String
-
-  // What was used
-  resourceType    String    // ai_tokens | video_generation | storage | publish
-  provider        String?   // openai | anthropic | runway | etc.
-  model           String?   // claude-3-opus | gpt-4 | etc.
-
-  // Quantities
+  resourceType    String
+  provider        String?
+  model           String?
   inputTokens     Int?
   outputTokens    Int?
   durationSeconds Float?
   sizeBytes       Int?
-
-  // Cost
   estimatedCost   Float?
-
-  // Reference
-  referenceType   String?   // content | video_job | asset
+  referenceType   String?
   referenceId     String?
-
-  // Period
-  period          String    // 2024-01 (for aggregation)
-
-  createdAt       DateTime  @default(now())
+  period          String
+  createdAt       DateTime @default(now())
 
   @@index([workspaceId])
   @@index([resourceType])
   @@index([period])
   @@map("studio_usage_records")
 }
-
-// ============================================================================
-// EXISTING MODELS - PRESERVED FROM DATABASE
-// These are all existing tables that serve other products
-// ============================================================================
 
 model Agent {
   id          Int           @id @default(autoincrement())
@@ -918,7 +602,6 @@ model ObservabilityEvent {
   Tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
-// ScheduledContent - Core content model for Marketing Studio
 model ScheduledContent {
   id             String        @id
   title          String
@@ -1521,6 +1204,154 @@ model verifications {
   @@index([status])
   @@index([userId])
   @@index([verificationId])
+}
+
+enum StudioWorkspaceRole {
+  OWNER
+  ADMIN
+  APPROVER
+  CREATOR
+  VIEWER
+}
+
+enum StudioIntegrationType {
+  YOUTUBE
+  TIKTOK
+  LINKEDIN
+  X_TWITTER
+  FACEBOOK
+  INSTAGRAM
+  THREADS
+  PINTEREST
+  OPENAI
+  ANTHROPIC
+  ELEVENLABS
+  HEYGEN
+  RUNWAY
+  MIDJOURNEY
+  INVIDEO
+  GEMINI
+}
+
+enum StudioIntegrationStatus {
+  PENDING
+  CONNECTED
+  DISCONNECTED
+  REVOKED
+  ERROR
+  EXPIRED
+}
+
+enum StudioAssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  THUMBNAIL
+  DOCUMENT
+}
+
+enum StudioAssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+  DELETED
+}
+
+enum StudioAssetProvider {
+  UPLOAD
+  DALLE
+  MIDJOURNEY
+  RUNWAY
+  HEYGEN
+  ELEVENLABS
+  SORA
+  PIKA
+  INVIDEO
+  TEMPLATE
+}
+
+enum StudioVideoJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StudioVideoJobType {
+  TEXT_TO_VIDEO
+  AVATAR_VIDEO
+  SCRIPT_TO_VIDEO
+  IMAGE_TO_VIDEO
+  VOICEOVER
+  THUMBNAIL
+}
+
+enum StudioPublishJobStatus {
+  PENDING
+  VALIDATING
+  PUBLISHING
+  VERIFYING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum StudioPublishResultStatus {
+  PENDING
+  PUBLISHING
+  VERIFYING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum StudioApprovalAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  REQUESTED_CHANGES
+  WITHDRAWN
+}
+
+enum StudioAuditAction {
+  WORKSPACE_CREATED
+  WORKSPACE_UPDATED
+  WORKSPACE_DELETED
+  MEMBER_INVITED
+  MEMBER_JOINED
+  MEMBER_REMOVED
+  MEMBER_ROLE_CHANGED
+  INTEGRATION_CONNECTED
+  INTEGRATION_DISCONNECTED
+  INTEGRATION_REVOKED
+  INTEGRATION_REFRESHED
+  INTEGRATION_ERROR
+  INTEGRATION_TESTED
+  CONTENT_CREATED
+  CONTENT_UPDATED
+  CONTENT_DELETED
+  CONTENT_SUBMITTED
+  CONTENT_APPROVED
+  CONTENT_REJECTED
+  CONTENT_SCHEDULED
+  CONTENT_PUBLISHED
+  CONTENT_FAILED
+  ASSET_UPLOADED
+  ASSET_GENERATED
+  ASSET_DELETED
+  VIDEO_JOB_CREATED
+  VIDEO_JOB_COMPLETED
+  VIDEO_JOB_FAILED
+  PUBLISH_JOB_CREATED
+  PUBLISH_JOB_COMPLETED
+  PUBLISH_JOB_FAILED
+  BRAND_GUARDRAILS_UPDATED
+  SETTINGS_UPDATED
+  USER_SIGNED_IN
+  USER_SIGNED_OUT
 }
 
 enum BlogPostStatus {

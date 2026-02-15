@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const provider = getVideoProviderOrThrow(providerName)
 
     // Use model-specific costPerSecond if a model is selected
-    let costPerSecond = provider.config.costPerSecond
+    let costPerSecond = provider.config.costPerSecond ?? 0
     if (modelId && provider.config.models?.length) {
       const model = provider.config.models.find(m => m.id === modelId)
       if (model) costPerSecond = model.costPerSecond

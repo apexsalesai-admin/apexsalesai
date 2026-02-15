@@ -12,6 +12,7 @@ import { seoAnalysisJob } from '../jobs/seo'
 import { pollVideoRender } from './video-render'
 import { scheduleContentPublish } from './content-schedule'
 import { factCheckContent } from './fact-check'
+import { publishToChannel } from './publish-to-channel'
 
 /**
  * All registered Inngest functions.
@@ -24,6 +25,7 @@ export const functions = [
   // Publishing
   publishContentJob,
   scheduleContentPublish,
+  publishToChannel,
 
   // Video Generation
   generateVideoJob,
@@ -53,3 +55,4 @@ export { seoAnalysisJob }
 export { pollVideoRender }
 export { scheduleContentPublish }
 export { factCheckContent }
+export { publishToChannel }

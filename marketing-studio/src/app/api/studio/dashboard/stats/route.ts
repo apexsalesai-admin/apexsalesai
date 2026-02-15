@@ -92,6 +92,7 @@ export async function GET() {
     }
     for (const row of contentCounts) {
       contentStats.total += row._count
+      if (!row.status) continue
       const status = row.status.toLowerCase()
       if (status === 'draft') contentStats.draft = row._count
       else if (status === 'scheduled') contentStats.scheduled = row._count
@@ -103,6 +104,7 @@ export async function GET() {
     const publishStats = { total: 0, completed: 0, failed: 0, pending: 0 }
     for (const row of publishJobCounts) {
       publishStats.total += row._count
+      if (!row.status) continue
       const status = row.status.toLowerCase()
       if (status === 'completed') publishStats.completed = row._count
       else if (status === 'failed') publishStats.failed = row._count

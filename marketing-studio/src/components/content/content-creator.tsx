@@ -336,6 +336,13 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   // Preview State
   const [activePreviewChannel, setActivePreviewChannel] = useState<string | null>(null)
 
+  // Channel Adaptation State
+  const [isAdapting, setIsAdapting] = useState(false)
+
+  // Script Analysis State
+  const [scriptAnalysis, setScriptAnalysis] = useState<Record<string, unknown> | null>(null)
+  const [isAnalyzingScript, setIsAnalyzingScript] = useState(false)
+
   // Video Render & Media Upload State
   const [videoRenderState, setVideoRenderState] = useState<VideoRenderState>(createEmptyVideoRenderState())
   const [isUploading, setIsUploading] = useState(false)
@@ -742,6 +749,66 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
 
   const getCharacterLimit = (channelId: string): number => {
     return CHANNELS.find(c => c.id === channelId)?.charLimit || 5000
+  }
+
+  // Adapt content for all selected channels via AI
+  const adaptForChannels = async (contentId: string) => {
+    if (isAdapting || draft.channels.length === 0) return
+    setIsAdapting(true)
+    try {
+      // Map IntegrationType to platform registry keys
+      const platformMap: Record<string, string> = {
+        LINKEDIN: 'linkedin', YOUTUBE: 'youtube', X_TWITTER: 'x',
+        FACEBOOK: 'facebook', TIKTOK: 'tiktok', INSTAGRAM: 'instagram',
+      }
+      const platforms = draft.channels
+        .map(ch => platformMap[ch] || ch.toLowerCase())
+        .filter(Boolean)
+
+      const res = await fetch('/api/studio/publish/adapt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentId, platforms }),
+      })
+      const data = await res.json()
+      if (data.success && data.adaptations) {
+        const newVariations = data.adaptations.map((a: { platform: string; title: string | null; body: string }) => ({
+          channel: a.platform.toUpperCase(),
+          title: a.title || draft.title,
+          body: a.body,
+        }))
+        setDraft(prev => ({ ...prev, variations: newVariations }))
+      }
+    } catch (err) {
+      console.error('[ContentCreator] Adapt failed:', err)
+    } finally {
+      setIsAdapting(false)
+    }
+  }
+
+  // Analyze video script via AI
+  const analyzeScript = async () => {
+    const script = draft.videoScript || draft.body
+    if (!script?.trim() || isAnalyzingScript) return
+    setIsAnalyzingScript(true)
+    setScriptAnalysis(null)
+    try {
+      const res = await fetch('/api/studio/mia/analyze-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script,
+          platform: draft.channels[0] || 'youtube',
+          duration: draft.contentType === 'reel' ? 15 : 30,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) setScriptAnalysis(data.analysis)
+    } catch (err) {
+      console.error('[ContentCreator] Script analysis failed:', err)
+    } finally {
+      setIsAnalyzingScript(false)
+    }
   }
 
   const insertAtCursor = (text: string) => {
@@ -1853,7 +1920,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                           </div>
                         )}
 
-                        {/* Suggestions */}
+                        {/* Suggestions with Apply */}
                         {seoAnalysis.suggestions && seoAnalysis.suggestions.length > 0 && (
                           <div>
                             <h5 className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
@@ -1862,9 +1929,27 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             </h5>
                             <ul className="space-y-2">
                               {seoAnalysis.suggestions.slice(0, 3).map((suggestion, i) => (
-                                <li key={i} className="text-xs text-slate-600 flex items-start space-x-2">
+                                <li key={i} className="text-xs text-slate-600 flex items-start space-x-2 group">
                                   <Check className="w-3 h-3 text-emerald-500 mt-0.5 flex-shrink-0" />
-                                  <span>{suggestion}</span>
+                                  <span className="flex-1">{suggestion}</span>
+                                  <button
+                                    onClick={() => {
+                                      const lower = suggestion.toLowerCase()
+                                      if (lower.includes('title') || lower.includes('headline')) {
+                                        setDraft(prev => ({ ...prev, title: `${prev.title} — Optimized` }))
+                                      } else if (lower.includes('keyword')) {
+                                        const words = suggestion.match(/"([^"]+)"/g)
+                                        if (words?.length) {
+                                          const newKw = words.map(w => w.replace(/"/g, ''))
+                                          setSeoKeywords(prev => Array.from(new Set([...prev, ...newKw])))
+                                        }
+                                      }
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 hover:bg-purple-200 transition-all flex-shrink-0"
+                                    title="Apply this suggestion"
+                                  >
+                                    Apply
+                                  </button>
                                 </li>
                               ))}
                             </ul>
@@ -2164,30 +2249,47 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                   </div>
                 </div>
 
-                {/* Channel Tabs */}
-                <div className="flex justify-center space-x-2">
-                  {draft.channels.map(channelId => {
-                    const channel = CHANNELS.find(c => c.id === channelId)
-                    if (!channel) return null
-                    const Icon = channel.icon
-                    const isActive = activePreviewChannel === channelId
+                {/* Channel Tabs + Adapt Button */}
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="flex space-x-2">
+                    {draft.channels.map(channelId => {
+                      const channel = CHANNELS.find(c => c.id === channelId)
+                      if (!channel) return null
+                      const Icon = channel.icon
+                      const isActive = activePreviewChannel === channelId
 
-                    return (
-                      <button
-                        key={channelId}
-                        onClick={() => setActivePreviewChannel(channelId)}
-                        className={cn(
-                          'flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all',
-                          isActive
-                            ? `bg-gradient-to-r ${channel.gradient} text-white shadow-lg`
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        )}
-                      >
-                        <Icon className="w-5 h-5" />
-                        <span>{channel.name}</span>
-                      </button>
-                    )
-                  })}
+                      return (
+                        <button
+                          key={channelId}
+                          onClick={() => setActivePreviewChannel(channelId)}
+                          className={cn(
+                            'flex items-center space-x-2 px-5 py-3 rounded-xl font-medium transition-all',
+                            isActive
+                              ? `bg-gradient-to-r ${channel.gradient} text-white shadow-lg`
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          )}
+                        >
+                          <Icon className="w-5 h-5" />
+                          <span>{channel.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {draft.channels.length >= 2 && (
+                    <button
+                      onClick={() => adaptForChannels(draft.title)}
+                      disabled={isAdapting}
+                      className="flex items-center space-x-2 px-4 py-3 rounded-xl font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 transition-all disabled:opacity-50"
+                      title="AI-adapt content for each channel"
+                    >
+                      {isAdapting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Layers className="w-4 h-4" />
+                      )}
+                      <span className="text-sm">{isAdapting ? 'Adapting...' : 'Adapt'}</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Preview Content */}
@@ -2224,6 +2326,86 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                     )
                   })}
                 </div>
+
+                {/* Video Script Display + Analyze (Step 3 — video/reel only) */}
+                {(draft.contentType === 'video' || draft.contentType === 'reel') && draft.videoScript && (
+                  <div className="max-w-2xl mx-auto mt-8 space-y-4">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-slate-900 flex items-center space-x-2">
+                          <FileText className="w-4 h-4 text-purple-600" />
+                          <span>Video Script</span>
+                        </h4>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => copyToClipboard(draft.videoScript || '')}
+                            className="text-xs text-slate-500 hover:text-slate-700 flex items-center space-x-1"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Copy</span>
+                          </button>
+                          <button
+                            onClick={analyzeScript}
+                            disabled={isAnalyzingScript}
+                            className="text-xs font-medium px-3 py-1 rounded-full bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors flex items-center space-x-1 disabled:opacity-50"
+                          >
+                            {isAnalyzingScript ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Brain className="w-3 h-3" />
+                            )}
+                            <span>{isAnalyzingScript ? 'Analyzing...' : 'Analyze Script'}</span>
+                          </button>
+                        </div>
+                      </div>
+                      <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
+                        {draft.videoScript}
+                      </pre>
+                    </div>
+
+                    {/* Script Analysis Results */}
+                    {scriptAnalysis && (
+                      <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200">
+                        <h4 className="font-semibold text-slate-900 mb-3 flex items-center space-x-2">
+                          <Brain className="w-4 h-4 text-purple-600" />
+                          <span>Script Analysis</span>
+                          <span className={cn(
+                            'ml-2 text-xs font-bold px-2 py-0.5 rounded-full',
+                            (scriptAnalysis.overallScore as number) >= 70
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : (scriptAnalysis.overallScore as number) >= 50
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-red-100 text-red-700'
+                          )}>
+                            {scriptAnalysis.overallScore as number}/100
+                          </span>
+                        </h4>
+                        <div className="grid grid-cols-3 gap-3 mb-3">
+                          {[
+                            { label: 'Hook', score: scriptAnalysis.hookScore as number },
+                            { label: 'Pacing', score: scriptAnalysis.pacingScore as number },
+                            { label: 'CTA', score: scriptAnalysis.ctaScore as number },
+                          ].map(item => (
+                            <div key={item.label} className="text-center p-2 bg-white rounded-xl">
+                              <div className="text-lg font-bold text-purple-700">{item.score}/10</div>
+                              <div className="text-xs text-slate-500">{item.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {(scriptAnalysis.suggestions as string[])?.length > 0 && (
+                          <ul className="space-y-1">
+                            {(scriptAnalysis.suggestions as string[]).map((s, i) => (
+                              <li key={i} className="text-xs text-slate-600 flex items-start space-x-2">
+                                <Lightbulb className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                                <span>{s}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Video Preview (Step 3 — video/reel only) */}
                 {(draft.contentType === 'video' || draft.contentType === 'reel') && (

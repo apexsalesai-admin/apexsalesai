@@ -163,6 +163,18 @@ export type StudioEvents = {
     }
   }
 
+  // Direct channel publishing (P25-A — PublishingChannel model)
+  'studio/publish.to-channel': {
+    data: {
+      publicationId: string
+      channelId: string
+      userId: string
+      contentId: string
+      variantId?: string
+      text: string
+    }
+  }
+
   // Workflow events
   'studio/workflow.execute': {
     data: {

@@ -659,6 +659,8 @@ export function SeoToolkit({
                       type="warning"
                       title="Improve Title"
                       suggestion="Add your primary keyword to the title and aim for 50-60 characters."
+                      onApply={() => runOptimizeAction('generate-title')}
+                      applyLabel="Generate SEO Title"
                     />
                   )}
                   {seoScore.meta < 60 && (
@@ -666,6 +668,8 @@ export function SeoToolkit({
                       type="error"
                       title="Add Meta Description"
                       suggestion="Write a compelling meta description with your target keyword."
+                      onApply={generateMetaDescription}
+                      applyLabel="Generate Meta"
                     />
                   )}
                   {contentAnalysis.wordCount < 300 && (
@@ -673,6 +677,8 @@ export function SeoToolkit({
                       type="warning"
                       title="Increase Content Length"
                       suggestion="Longer content (1000+ words) typically ranks better. Consider adding more detail."
+                      onApply={() => runOptimizeAction('improve-readability')}
+                      applyLabel="Expand Content"
                     />
                   )}
                   {contentAnalysis.avgSentenceLength > 25 && (
@@ -680,6 +686,8 @@ export function SeoToolkit({
                       type="tip"
                       title="Simplify Sentences"
                       suggestion="Break down long sentences for better readability. Aim for 15-20 words per sentence."
+                      onApply={() => runOptimizeAction('improve-readability')}
+                      applyLabel="Simplify Now"
                     />
                   )}
                   {keywordAnalysis.every(k => k.density < 1) && keywords.length > 0 && (
@@ -687,6 +695,8 @@ export function SeoToolkit({
                       type="warning"
                       title="Increase Keyword Usage"
                       suggestion="Your keywords appear too infrequently. Aim for 1-3% keyword density."
+                      onApply={() => runOptimizeAction('suggest-keywords')}
+                      applyLabel="Suggest Keywords"
                     />
                   )}
                   {seoScore.overall >= 80 && (
@@ -943,10 +953,14 @@ function SuggestionCard({
   type,
   title,
   suggestion,
+  onApply,
+  applyLabel,
 }: {
   type: 'success' | 'warning' | 'error' | 'tip'
   title: string
   suggestion: string
+  onApply?: () => void
+  applyLabel?: string
 }) {
   const styles = {
     success: 'bg-emerald-50 border-emerald-200',
@@ -966,9 +980,18 @@ function SuggestionCard({
     <div className={cn('p-3 rounded-lg border', styles[type])}>
       <div className="flex items-start space-x-2">
         {icons[type]}
-        <div>
+        <div className="flex-1">
           <p className="font-medium text-sm text-slate-900">{title}</p>
           <p className="text-xs text-slate-600 mt-1">{suggestion}</p>
+          {onApply && type !== 'success' && (
+            <button
+              onClick={onApply}
+              className="mt-2 text-xs font-medium px-3 py-1 rounded-full bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors flex items-center space-x-1"
+            >
+              <Zap className="w-3 h-3" />
+              <span>{applyLabel || 'Apply Fix'}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
