@@ -282,9 +282,10 @@ async function checkBrandVoiceConfigured(
  * Queries the `publishingChannel` table (where OAuth channels are stored).
  */
 async function checkPlatformConnected(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _workspaceId?: string
+  workspaceId?: string
 ): Promise<ReadinessCheck> {
+  // workspaceId accepted for API compatibility but publishingChannel uses userId, not workspaceId
+  void workspaceId
   console.log(LOG_PREFIX, 'Checking platform integrations')
 
   try {
