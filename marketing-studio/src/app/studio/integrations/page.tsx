@@ -79,6 +79,7 @@ export default function IntegrationsPage() {
   // OAuth status from query params
   const oauthConnected = searchParams.get('connected')
   const oauthError = searchParams.get('error')
+  const oauthDetail = searchParams.get('detail')
 
   // Connect modal state
   const [connectModal, setConnectModal] = useState<IntegrationStatus | null>(null)
@@ -241,11 +242,16 @@ export default function IntegrationsPage() {
         </div>
       )}
       {oauthError && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-600" />
-          <span className="text-sm font-medium text-red-800">
-            OAuth failed: {oauthError.replace(/_/g, ' ')}
-          </span>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <span className="text-sm font-medium text-red-800">
+              Connection failed: {oauthError.replace(/_/g, ' ')}
+            </span>
+          </div>
+          {oauthDetail && (
+            <p className="mt-2 ml-8 text-xs text-red-600 font-mono break-all">{oauthDetail}</p>
+          )}
         </div>
       )}
 
