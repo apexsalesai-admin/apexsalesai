@@ -58,10 +58,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Step 4: Exchange authorization code for tokens
-    const clientId = process.env.YOUTUBE_CLIENT_ID
-    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET
+    const clientId = process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET
     if (!clientId || !clientSecret) {
-      return fail('config_missing', 'YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET not set')
+      return fail('config_missing', 'YOUTUBE_CLIENT_ID/GOOGLE_CLIENT_ID or YOUTUBE_CLIENT_SECRET/GOOGLE_CLIENT_SECRET not set')
     }
 
     const redirectUri = `${baseUrl}/api/studio/channels/callback/youtube`

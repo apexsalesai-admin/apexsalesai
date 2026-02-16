@@ -7,6 +7,12 @@ export async function GET() {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const clientId = process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID
+    if (!clientId) {
+      console.error('[YouTube Connect] Missing YOUTUBE_CLIENT_ID or GOOGLE_CLIENT_ID')
+      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/studio/integrations?error=youtube_config&detail=missing_client_id`)
+    }
+
     const state = Buffer.from(JSON.stringify({
       userId: session.user.id,
       platform: 'youtube',
@@ -17,7 +23,7 @@ export async function GET() {
 
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: process.env.YOUTUBE_CLIENT_ID || '',
+      client_id: clientId,
       redirect_uri: redirectUri,
       scope: 'openid email profile https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
       access_type: 'offline',
