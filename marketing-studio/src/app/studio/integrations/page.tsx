@@ -22,6 +22,8 @@ import {
   Image as ImageIcon,
   Linkedin,
   Trash2,
+  Youtube,
+  Twitter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MiaContextHint } from '@/components/studio/MiaContextHint'
@@ -262,13 +264,29 @@ export default function IntegrationsPage() {
             <Upload className="w-5 h-5 text-purple-600" />
             <span>Publishing Channels</span>
           </h2>
-          <a
-            href="/api/studio/channels/connect/linkedin"
-            className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-[#0A66C2] text-white rounded-lg hover:bg-[#004182] transition-colors"
-          >
-            <Linkedin className="w-4 h-4" />
-            <span>Connect LinkedIn</span>
-          </a>
+          <div className="flex items-center space-x-2">
+            <a
+              href="/api/studio/channels/connect/linkedin"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-[#0A66C2] text-white rounded-lg hover:bg-[#004182] transition-colors"
+            >
+              <Linkedin className="w-4 h-4" />
+              <span>LinkedIn</span>
+            </a>
+            <a
+              href="/api/studio/channels/connect/youtube"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-[#FF0000] text-white rounded-lg hover:bg-[#CC0000] transition-colors"
+            >
+              <Youtube className="w-4 h-4" />
+              <span>YouTube</span>
+            </a>
+            <a
+              href="/api/studio/channels/connect/x"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-black text-white rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <Twitter className="w-4 h-4" />
+              <span>X / Twitter</span>
+            </a>
+          </div>
         </div>
 
         {channelsLoading ? (
@@ -279,13 +297,14 @@ export default function IntegrationsPage() {
           <div className="p-8 bg-slate-50 rounded-xl border border-slate-200 text-center">
             <Upload className="w-10 h-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 text-sm">No publishing channels connected yet.</p>
-            <p className="text-slate-400 text-xs mt-1">Connect LinkedIn to publish directly from Marketing Studio.</p>
+            <p className="text-slate-400 text-xs mt-1">Connect LinkedIn, YouTube, or X to publish directly from Marketing Studio.</p>
           </div>
         ) : (
           <div className="grid gap-3">
             {channels.map(channel => {
-              const platformIcons: Record<string, typeof Linkedin> = { linkedin: Linkedin }
+              const platformIcons: Record<string, typeof Linkedin> = { linkedin: Linkedin, youtube: Youtube, x: Twitter }
               const PlatformIcon = platformIcons[channel.platform] || Upload
+              const platformColors: Record<string, string> = { linkedin: 'bg-[#0A66C2]', youtube: 'bg-[#FF0000]', x: 'bg-black' }
               const healthColors = {
                 healthy: 'bg-emerald-500',
                 expiring_soon: 'bg-amber-500',
@@ -296,7 +315,7 @@ export default function IntegrationsPage() {
               return (
                 <div key={channel.id} className="p-4 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-[#0A66C2] rounded-lg flex items-center justify-center">
+                    <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', platformColors[channel.platform] || 'bg-slate-500')}>
                       <PlatformIcon className="w-5 h-5 text-white" />
                     </div>
                     <div>
@@ -317,7 +336,7 @@ export default function IntegrationsPage() {
                   <div className="flex items-center space-x-2">
                     {channel.tokenHealth === 'expired' && (
                       <a
-                        href="/api/studio/channels/connect/linkedin"
+                        href={`/api/studio/channels/connect/${channel.platform}`}
                         className="text-xs font-medium px-3 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center space-x-1"
                       >
                         <RefreshCw className="w-3 h-3" />

@@ -92,11 +92,12 @@ export const PLATFORM_REGISTRY: Record<string, PlatformConfig> = {
     supportsThreads: false,
     supportsDrafts: true,
     supportsAnalytics: true,
-    isImplemented: false,
+    isImplemented: true,
     oauth: {
       authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
-      scopes: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly'],
+      scopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly'],
+      additionalParams: { access_type: 'offline', prompt: 'consent' },
     },
     adaptation: {
       toneShift: 'Conversational, hook-first. Open with a question or bold statement. Optimize for watch time.',
@@ -126,11 +127,12 @@ export const PLATFORM_REGISTRY: Record<string, PlatformConfig> = {
     supportsThreads: true,
     supportsDrafts: true,
     supportsAnalytics: true,
-    isImplemented: false,
+    isImplemented: true,
     oauth: {
       authUrl: 'https://twitter.com/i/oauth2/authorize',
       tokenUrl: 'https://api.x.com/2/oauth2/token',
       scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
+      additionalParams: { pkce: 'true' },
     },
     adaptation: {
       toneShift: 'Punchy, concise, opinionated. Lead with the insight. Threads for depth.',

@@ -630,7 +630,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
 
       setDraft(prev => ({
         ...prev,
-        title: content.title,
+        title: content.title || prev.title || aiTopic,
         body: content.body,
         hashtags: content.hashtags || [],
         callToAction: content.callToAction || '',
@@ -2428,7 +2428,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                              title: draft.title || 'Untitled Video',
+                              title: draft.title || aiTopic || draft.body?.split('\n')[0]?.slice(0, 100) || 'Untitled Video',
                               body: draft.body || draft.videoScript || 'Video content',
                               contentType: draft.contentType?.toUpperCase() || 'VIDEO',
                               channels: draft.channels?.length ? draft.channels : ['youtube'],

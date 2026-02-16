@@ -39,6 +39,7 @@ import { MiaCopilotPanel } from '@/components/studio/MiaCopilotPanel'
 import { useMiaCopilot } from '@/hooks/useMiaCopilot'
 import { MiaContextHint } from '@/components/studio/MiaContextHint'
 import type { RenderResult } from '@/lib/video/types/render-result'
+import { CrossPostWizard } from '@/components/studio/publishing/cross-post-wizard'
 
 interface ContentDetail {
   id: string
@@ -140,8 +141,12 @@ export default function ContentDetailPage() {
   const [activeTab, setActiveTab] = useState<'preview' | 'variations' | 'seo' | 'video'>('preview')
   const [selectedVariation, setSelectedVariation] = useState<string | null>(null)
   const [seoKeywords, setSeoKeywords] = useState<string[]>([])
+  const [contentVersion, setContentVersion] = useState(0)
   const [isPublishing, setIsPublishing] = useState(false)
   const [publishResults, setPublishResults] = useState<unknown[]>([])
+
+  // Cross-Post Wizard state
+  const [showCrossPostWizard, setShowCrossPostWizard] = useState(false)
 
   // Quick Action state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -734,6 +739,10 @@ export default function ContentDetailPage() {
       const data = await response.json()
       if (data.success) {
         setContent(data.data)
+        setContentVersion(v => v + 1)
+        if (data.data.hashtags) {
+          setSeoKeywords(data.data.hashtags.map((h: string) => h.replace('#', '')))
+        }
         setShowEditModal(false)
       }
     } catch (e) {
@@ -912,7 +921,14 @@ export default function ContentDetailPage() {
             </>
           )}
           {(content.status === 'APPROVED' || content.status === 'SCHEDULED') && (
-            <div className="relative group">
+            <div className="relative group flex items-center space-x-2">
+              <button
+                onClick={() => setShowCrossPostWizard(true)}
+                className="px-4 py-2 border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Cross-Post</span>
+              </button>
               <button
                 onClick={handlePublish}
                 disabled={isPublishing || !!isPublishDisabledForVideo}
@@ -1122,6 +1138,7 @@ export default function ContentDetailPage() {
                 action={{ label: 'Learn about SEO', href: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide' }}
               />
               <SeoToolkit
+                key={contentVersion}
                 title={content.title}
                 content={content.body}
                 keywords={seoKeywords}
@@ -1836,6 +1853,19 @@ export default function ContentDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cross-Post Wizard */}
+      {showCrossPostWizard && content && (
+        <CrossPostWizard
+          contentId={content.id}
+          content={{ title: content.title, body: content.body, channels: content.channels }}
+          onClose={() => setShowCrossPostWizard(false)}
+          onPublished={() => {
+            setShowCrossPostWizard(false)
+            setContent(prev => prev ? { ...prev, status: 'PUBLISHING' } : null)
+          }}
+        />
       )}
 
       {/* YouTube Publish Modal */}

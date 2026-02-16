@@ -278,39 +278,36 @@ async function checkBrandVoiceConfigured(
 }
 
 /**
- * Check if any platform integrations are connected with healthy tokens.
- * Verifies both DB status=CONNECTED AND that the token exists and is not expired.
+ * Check if any publishing channels are connected with healthy tokens.
+ * Queries the `publishingChannel` table (where OAuth channels are stored).
  */
 async function checkPlatformConnected(
-  workspaceId?: string
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _workspaceId?: string
 ): Promise<ReadinessCheck> {
   console.log(LOG_PREFIX, 'Checking platform integrations')
 
   try {
     const now = new Date()
-    const whereClause = {
-      status: 'CONNECTED' as const,
-      ...(workspaceId ? { workspaceId } : {}),
-    }
 
-    const integrations = await prisma.studioIntegration.findMany({
-      where: whereClause,
+    const channels = await prisma.publishingChannel.findMany({
+      where: { isActive: true },
       select: {
         id: true,
-        type: true,
-        accessTokenEncrypted: true,
+        platform: true,
+        accessToken: true,
         tokenExpiresAt: true,
       },
     })
 
-    // Count integrations that have a token and aren't expired
-    const healthyCount = integrations.filter((i) => {
-      const hasToken = !!i.accessTokenEncrypted
-      const isExpired = i.tokenExpiresAt ? i.tokenExpiresAt < now : false
+    // Count channels that have a token and aren't expired
+    const healthyCount = channels.filter((c) => {
+      const hasToken = !!c.accessToken
+      const isExpired = c.tokenExpiresAt ? c.tokenExpiresAt < now : false
       return hasToken && !isExpired
     }).length
 
-    const totalConnected = integrations.length
+    const totalConnected = channels.length
 
     let message: string
     if (healthyCount > 0) {
@@ -478,7 +475,7 @@ export async function getOnboardingSteps(opts: ReadinessOptions | string = {}): 
       title: 'Create First Content',
       description: 'Generate your first AI-powered marketing content',
       completed: readiness.checks[7]?.status === 'ready',
-      href: '/studio/create',
+      href: '/studio/content/new',
       order: 3,
     },
     {
