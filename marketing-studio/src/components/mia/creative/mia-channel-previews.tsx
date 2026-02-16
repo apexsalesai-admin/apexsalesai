@@ -22,13 +22,17 @@ export function YouTubePreview({ title, body, hashtags, theme }: ChannelPreviewP
         <span className="text-white font-bold text-sm">YouTube</span>
       </div>
 
-      {/* Thumbnail placeholder */}
-      <div className="aspect-video bg-slate-800 relative flex items-center justify-center">
-        <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
-          <Play className="w-8 h-8 text-white fill-white ml-1" />
+      {/* Video thumbnail — shows body excerpt as script preview */}
+      <div className="aspect-video bg-slate-800 relative flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 p-4 flex items-center justify-center">
+          <p className="text-slate-400 text-xs leading-relaxed text-center line-clamp-4">
+            {body || 'Your video content will appear here'}
+          </p>
         </div>
-        <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded">
-          0:30
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+            <Play className="w-7 h-7 text-white/80 fill-white/80 ml-0.5" />
+          </div>
         </div>
       </div>
 
@@ -203,10 +207,15 @@ export function TikTokPreview({ body, hashtags, theme }: ChannelPreviewProps) {
     <div className="rounded-2xl overflow-hidden bg-black max-w-[320px] mx-auto">
       {/* Phone frame style — vertical */}
       <div className="relative aspect-[9/16] bg-gradient-to-b from-slate-900 to-black flex flex-col justify-end">
-        {/* Play button centered */}
+        {/* Script text preview + play overlay */}
+        <div className="absolute inset-x-0 top-1/4 px-6 flex items-center justify-center">
+          <p className="text-white/50 text-xs leading-relaxed text-center line-clamp-3">
+            {body || 'Your video script will appear here'}
+          </p>
+        </div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm">
-            <Play className="w-8 h-8 text-white fill-white ml-1" />
+          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm">
+            <Play className="w-7 h-7 text-white fill-white ml-0.5" />
           </div>
         </div>
 

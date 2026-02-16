@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { prisma, withRetry } from '@/lib/db'
 import { ContentStatus, ContentType } from '@prisma/client'
 import { log, logError } from '@/lib/dev-mode'
 
@@ -11,9 +11,9 @@ export async function GET(
   try {
     const { id } = await params
 
-    const content = await prisma.scheduledContent.findUnique({
-      where: { id },
-    })
+    const content = await withRetry(() =>
+      prisma.scheduledContent.findUnique({ where: { id } })
+    )
 
     if (!content) {
       return NextResponse.json(

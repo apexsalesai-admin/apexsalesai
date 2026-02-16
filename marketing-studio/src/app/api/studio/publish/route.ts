@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { inngest } from '@/lib/inngest/client'
-import { prisma } from '@/lib/db'
+import { prisma, withRetry } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
 import { getOrCreateWorkspace } from '@/lib/workspace'
 
@@ -103,10 +103,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify content exists
-    const content = await prisma.scheduledContent.findUnique({
+    const content = await withRetry(() => prisma.scheduledContent.findUnique({
       where: { id: contentId },
       select: { id: true, title: true, status: true },
-    })
+    }))
 
     if (!content) {
       console.error('[API:Publish] Content not found', { contentId })

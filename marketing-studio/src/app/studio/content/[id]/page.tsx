@@ -529,18 +529,24 @@ export default function ContentDetailPage() {
     }
   }
 
-  const handleResetToDraft = async () => {
+  const handleResetToDraft = async (force = false) => {
     if (!content) return
     setIsResettingStatus(true)
     try {
       const response = await fetch('/api/studio/publish/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentId: content.id }),
+        body: JSON.stringify({ contentId: content.id, force }),
       })
       const data = await response.json()
       if (data.success) {
         setContent(prev => prev ? { ...prev, status: 'DRAFT' } : null)
+      } else if (data.retryAfterSeconds && !force) {
+        const minutes = Math.ceil(data.retryAfterSeconds / 60)
+        if (confirm(`Publishing may still be in progress (~${minutes} min remaining). Force reset now?`)) {
+          setIsResettingStatus(false)
+          return handleResetToDraft(true)
+        }
       } else {
         alert(data.error || 'Failed to reset status')
       }
@@ -996,7 +1002,7 @@ export default function ContentDetailPage() {
           )}
           {content.status === 'PUBLISHING' && (
             <button
-              onClick={handleResetToDraft}
+              onClick={() => handleResetToDraft()}
               disabled={isResettingStatus}
               className="px-4 py-2 border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
             >

@@ -427,6 +427,57 @@ export function SeoToolkit({
               })}
             </div>
 
+            {/* Mia SEO Coaching */}
+            <div className={cn(
+              'p-4 rounded-xl border',
+              seoScore.overall >= 80
+                ? 'bg-emerald-50 border-emerald-200'
+                : seoScore.overall >= 60
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-red-50 border-red-200'
+            )}>
+              <div className="flex items-start space-x-3">
+                <Sparkles className={cn(
+                  'w-5 h-5 mt-0.5 flex-shrink-0',
+                  seoScore.overall >= 80 ? 'text-emerald-600' :
+                  seoScore.overall >= 60 ? 'text-amber-600' : 'text-red-600'
+                )} />
+                <div>
+                  <p className={cn(
+                    'font-semibold text-sm',
+                    seoScore.overall >= 80 ? 'text-emerald-800' :
+                    seoScore.overall >= 60 ? 'text-amber-800' : 'text-red-800'
+                  )}>
+                    {seoScore.overall >= 80
+                      ? 'Great job! Your content is well-optimized.'
+                      : seoScore.overall >= 60
+                        ? 'Almost there — a few improvements will boost visibility.'
+                        : 'Your content needs optimization before publishing.'}
+                  </p>
+                  <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                    {seoScore.title < 70 && (
+                      <li>• <strong>Title:</strong> Aim for 30-60 characters with a primary keyword near the front.</li>
+                    )}
+                    {seoScore.meta < 70 && (
+                      <li>• <strong>Meta:</strong> Add a compelling 120-160 character description with your keyword.</li>
+                    )}
+                    {seoScore.keywords < 70 && (
+                      <li>• <strong>Keywords:</strong> Use your target keyword 2-3 times naturally in the body.</li>
+                    )}
+                    {seoScore.readability < 70 && (
+                      <li>• <strong>Readability:</strong> Shorten sentences and use simpler words for a wider audience.</li>
+                    )}
+                    {seoScore.structure < 70 && (
+                      <li>• <strong>Structure:</strong> Add headings, lists, and shorter paragraphs for scannability.</li>
+                    )}
+                    {seoScore.overall >= 80 && (
+                      <li>All categories score 70+. Your content is ready to publish and rank well.</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
             {/* Content Stats */}
             <div className="grid grid-cols-4 gap-4">
               <div className="p-4 bg-purple-50 rounded-xl">

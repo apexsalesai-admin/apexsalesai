@@ -6,6 +6,12 @@ import { useSearchParams } from 'next/navigation'
 import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+interface PublishResultEntry {
+  channel: string
+  success: boolean
+  error?: string
+}
+
 interface ScheduledContent {
   id: string
   title: string
@@ -18,6 +24,7 @@ interface ScheduledContent {
   publishedAt: string | null
   aiGenerated: boolean
   errorMessage: string | null
+  publishResults?: PublishResultEntry[]
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof FileText }> = {
@@ -376,9 +383,14 @@ function ContentPageInner() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {item.channels.map((channel) => (
-                          <ChannelBadge key={channel} type={channel} />
-                        ))}
+                        {(item.status === 'PUBLISHED' || item.status === 'FAILED') && item.publishResults?.length
+                          ? item.publishResults.map((pr) => (
+                              <ChannelBadge key={pr.channel} type={pr.channel} published={pr.success} failed={!pr.success} />
+                            ))
+                          : item.channels.map((channel) => (
+                              <ChannelBadge key={channel} type={channel} />
+                            ))
+                        }
                       </div>
                     </td>
                     <td className="px-4 py-4">
@@ -488,7 +500,7 @@ function StatCard({
   )
 }
 
-function ChannelBadge({ type }: { type: string }) {
+function ChannelBadge({ type, published, failed }: { type: string; published?: boolean; failed?: boolean }) {
   const colors: Record<string, string> = {
     YOUTUBE: 'bg-red-100 text-red-700',
     TIKTOK: 'bg-slate-900 text-white',
@@ -499,7 +511,13 @@ function ChannelBadge({ type }: { type: string }) {
   }
 
   return (
-    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', colors[type] || 'bg-slate-100 text-slate-700')}>
+    <span className={cn(
+      'px-2 py-0.5 rounded text-xs font-medium inline-flex items-center gap-1',
+      colors[type] || 'bg-slate-100 text-slate-700',
+      failed && 'ring-1 ring-red-300'
+    )}>
+      {published && <CheckCircle className="w-3 h-3" />}
+      {failed && <XCircle className="w-3 h-3" />}
       {type.replace('_', ' ')}
     </span>
   )

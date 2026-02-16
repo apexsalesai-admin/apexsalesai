@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { prisma, withRetry } from '@/lib/db'
 import { getBestProvider } from '@/lib/ai-gateway'
 import {
   PLATFORM_REGISTRY,
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Load content
-    const content = await prisma.scheduledContent.findUnique({ where: { id: contentId } })
+    const content = await withRetry(() => prisma.scheduledContent.findUnique({ where: { id: contentId } }))
     if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 })
 
     const adaptationInput: AdaptationInput = {
