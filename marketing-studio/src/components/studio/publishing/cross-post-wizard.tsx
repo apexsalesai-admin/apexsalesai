@@ -131,8 +131,11 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
       if (data.success && data.adaptations) {
         setAdaptations(data.adaptations)
         setEditedAdaptations({})
+        if (data.warnings?.length) {
+          setAdaptError(`Partial: ${data.warnings.map((w: { platform: string; error: string }) => `${w.platform}: ${w.error}`).join('; ')}`)
+        }
       } else {
-        setAdaptError(data.error || 'Adaptation failed')
+        setAdaptError(data.error || `Adaptation failed (${res.status})`)
       }
     } catch (e) {
       setAdaptError('Network error during adaptation')
@@ -171,7 +174,7 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contentId,
-          channels: content.channels.length > 0 ? content.channels : selectedPlatforms.map(p => p.toUpperCase()),
+          channels: selectedPlatforms.map(p => p.toUpperCase()),
         }),
       })
       const data = await res.json()
@@ -470,7 +473,7 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
           {step === 2 && (
             <button
               onClick={() => setStep(3)}
-              disabled={isAdapting || !!adaptError}
+              disabled={isAdapting || (!!adaptError && adaptations.length === 0)}
               className="flex items-center space-x-2 px-6 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <span>Review</span>

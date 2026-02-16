@@ -120,17 +120,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Send event to Inngest (workspace already verified by assertWorkspaceAccess)
-    const { ids } = await inngest.send({
-      name: 'studio/publish.content',
-      data: {
-        workspaceId,
-        contentId,
-        channels,
-      },
+    // Update content status to indicate publishing is in progress
+    await prisma.scheduledContent.update({
+      where: { id: contentId },
+      data: { status: 'PUBLISHING' },
     })
 
-    const eventId = ids[0]
+    // Send event to Inngest — if this fails, revert status to DRAFT
+    let eventId: string
+    try {
+      const { ids } = await inngest.send({
+        name: 'studio/publish.content',
+        data: {
+          workspaceId,
+          contentId,
+          channels,
+        },
+      })
+      eventId = ids[0]
+    } catch (inngestErr) {
+      console.error('[API:Publish] Inngest send failed, reverting status:', inngestErr)
+      await prisma.scheduledContent.update({
+        where: { id: contentId },
+        data: { status: content.status },
+      }).catch(() => {})
+      return NextResponse.json(
+        { success: false, error: 'Failed to queue publishing job. Please try again.' },
+        { status: 502 }
+      )
+    }
 
     console.log('[API:Publish] Event sent to Inngest', {
       eventId,
@@ -138,14 +156,6 @@ export async function POST(request: NextRequest) {
       contentId,
       channels,
       durationMs: Date.now() - startTime,
-    })
-
-    // Update content status to indicate publishing is in progress
-    await prisma.scheduledContent.update({
-      where: { id: contentId },
-      data: {
-        status: 'PUBLISHING',
-      },
     })
 
     return NextResponse.json({

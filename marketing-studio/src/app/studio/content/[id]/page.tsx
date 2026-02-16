@@ -112,6 +112,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   SCHEDULED: { label: 'Scheduled', color: 'text-blue-700', bgColor: 'bg-blue-100' },
   PENDING_APPROVAL: { label: 'Pending Approval', color: 'text-amber-700', bgColor: 'bg-amber-100' },
   APPROVED: { label: 'Approved', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
+  PUBLISHING: { label: 'Publishing', color: 'text-purple-700', bgColor: 'bg-purple-100' },
   PUBLISHED: { label: 'Published', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
   FAILED: { label: 'Failed', color: 'text-red-700', bgColor: 'bg-red-100' },
 }
@@ -147,6 +148,7 @@ export default function ContentDetailPage() {
 
   // Cross-Post Wizard state
   const [showCrossPostWizard, setShowCrossPostWizard] = useState(false)
+  const [isResettingStatus, setIsResettingStatus] = useState(false)
 
   // Quick Action state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -524,6 +526,29 @@ export default function ContentDetailPage() {
       alert('Publishing failed. Please try again.')
     } finally {
       setIsPublishing(false)
+    }
+  }
+
+  const handleResetToDraft = async () => {
+    if (!content) return
+    setIsResettingStatus(true)
+    try {
+      const response = await fetch('/api/studio/publish/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentId: content.id }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setContent(prev => prev ? { ...prev, status: 'DRAFT' } : null)
+      } else {
+        alert(data.error || 'Failed to reset status')
+      }
+    } catch (e) {
+      console.error('Failed to reset status:', e)
+      alert('Failed to reset status. Please try again.')
+    } finally {
+      setIsResettingStatus(false)
     }
   }
 
@@ -967,6 +992,20 @@ export default function ContentDetailPage() {
             >
               <Play className="w-4 h-4" />
               <span>YouTube</span>
+            </button>
+          )}
+          {content.status === 'PUBLISHING' && (
+            <button
+              onClick={handleResetToDraft}
+              disabled={isResettingStatus}
+              className="px-4 py-2 border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50"
+            >
+              {isResettingStatus ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <AlertCircle className="w-4 h-4" />
+              )}
+              <span>Reset to Draft</span>
             </button>
           )}
           {content.status === 'PUBLISHED' && (

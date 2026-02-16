@@ -109,56 +109,87 @@ export async function POST(req: NextRequest) {
       creatorVoice,
     }
 
-    // Adapt for each platform in parallel
+    // Adapt for each platform in parallel — each wrapped in try/catch for resilience
     const results: AdaptationOutput[] = []
     const variants: { platform: string; variantId: string }[] = []
+    const errors: { platform: string; error: string }[] = []
 
     await Promise.all(
       platforms.map(async (platformId) => {
         const platformConfig = PLATFORM_REGISTRY[platformId]
         if (!platformConfig) return
 
-        const systemPrompt = buildAdaptationSystemPrompt(platformConfig, creatorVoice)
-        const userPrompt = buildAdaptationUserPrompt(adaptationInput)
+        let adapted: AdaptationOutput
 
-        const raw = await callAIWithSystem(systemPrompt, userPrompt)
-        const parsed = parseJSON(raw) as Partial<AdaptationOutput>
+        try {
+          const systemPrompt = buildAdaptationSystemPrompt(platformConfig, creatorVoice)
+          const userPrompt = buildAdaptationUserPrompt(adaptationInput)
 
-        const adapted: AdaptationOutput = {
-          platform: platformId,
-          title: parsed.title ?? null,
-          body: parsed.body ?? content.body,
-          hashtags: parsed.hashtags ?? [],
-          callToAction: parsed.callToAction ?? '',
-          mediaType: parsed.mediaType ?? 'text',
-          aspectRatio: platformConfig.aspectRatios[0]?.ratio ?? '1:1',
-          charCount: (parsed.body ?? content.body).length,
-          charLimit: platformConfig.maxTextLength,
-          adaptationNotes: parsed.adaptationNotes ?? '',
-          threadParts: parsed.threadParts,
+          const raw = await callAIWithSystem(systemPrompt, userPrompt)
+          const parsed = parseJSON(raw) as Partial<AdaptationOutput>
+
+          adapted = {
+            platform: platformId,
+            title: parsed.title ?? null,
+            body: parsed.body ?? content.body,
+            hashtags: parsed.hashtags ?? [],
+            callToAction: parsed.callToAction ?? '',
+            mediaType: parsed.mediaType ?? 'text',
+            aspectRatio: platformConfig.aspectRatios[0]?.ratio ?? '1:1',
+            charCount: (parsed.body ?? content.body).length,
+            charLimit: platformConfig.maxTextLength,
+            adaptationNotes: parsed.adaptationNotes ?? '',
+            threadParts: parsed.threadParts,
+          }
+        } catch (aiErr) {
+          console.error(`[API:publish/adapt] AI failed for ${platformId}:`, aiErr)
+          // Fallback: simple truncation to platform character limit
+          const maxLen = platformConfig.maxTextLength || 5000
+          const truncBody = content.body.length > maxLen
+            ? content.body.slice(0, maxLen - 3) + '...'
+            : content.body
+
+          adapted = {
+            platform: platformId,
+            title: content.title,
+            body: truncBody,
+            hashtags: (content.hashtags as string[]) || [],
+            callToAction: content.callToAction || '',
+            mediaType: 'text',
+            aspectRatio: platformConfig.aspectRatios[0]?.ratio ?? '1:1',
+            charCount: truncBody.length,
+            charLimit: platformConfig.maxTextLength,
+            adaptationNotes: 'AI adaptation unavailable — using original content (truncated to fit)',
+            threadParts: undefined,
+          }
+          errors.push({ platform: platformId, error: aiErr instanceof Error ? aiErr.message : 'AI provider error' })
         }
 
         results.push(adapted)
 
         // Save as ContentVariant
-        const variant = await prisma.contentVariant.create({
-          data: {
-            contentId,
-            platform: platformId,
-            title: adapted.title,
-            body: adapted.body,
-            hashtags: adapted.hashtags,
-            callToAction: adapted.callToAction,
-            mediaType: adapted.mediaType,
-            charCount: adapted.charCount,
-            charLimit: adapted.charLimit,
-            aspectRatio: adapted.aspectRatio,
-            threadParts: adapted.threadParts || [],
-            adaptationNotes: adapted.adaptationNotes,
-          },
-        })
-
-        variants.push({ platform: platformId, variantId: variant.id })
+        try {
+          const variant = await prisma.contentVariant.create({
+            data: {
+              contentId,
+              platform: platformId,
+              title: adapted.title,
+              body: adapted.body,
+              hashtags: adapted.hashtags,
+              callToAction: adapted.callToAction,
+              mediaType: adapted.mediaType,
+              charCount: adapted.charCount,
+              charLimit: adapted.charLimit,
+              aspectRatio: adapted.aspectRatio,
+              threadParts: adapted.threadParts || [],
+              adaptationNotes: adapted.adaptationNotes,
+            },
+          })
+          variants.push({ platform: platformId, variantId: variant.id })
+        } catch (dbErr) {
+          console.error(`[API:publish/adapt] DB save failed for ${platformId}:`, dbErr)
+          errors.push({ platform: platformId, error: 'Failed to save variant' })
+        }
       })
     )
 
@@ -166,11 +197,12 @@ export async function POST(req: NextRequest) {
       success: true,
       adaptations: results,
       variants,
+      ...(errors.length > 0 && { warnings: errors }),
     })
   } catch (error) {
     console.error('[API:publish/adapt] error:', error)
     return NextResponse.json(
-      { success: false, error: 'Adaptation failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Adaptation failed' },
       { status: 500 }
     )
   }

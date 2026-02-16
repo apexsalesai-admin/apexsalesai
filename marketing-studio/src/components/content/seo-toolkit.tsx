@@ -228,7 +228,10 @@ export function SeoToolkit({
     setIsSearching(true)
     setSearchError(null)
     try {
-      const query = keywords.length > 0 ? keywords.slice(0, 3).join(' ') : title
+      // Build query from keywords + title context for brand-scoped results
+      const keywordPart = keywords.length > 0 ? keywords.slice(0, 3).join(' ') : ''
+      const titlePart = title.trim().slice(0, 60)
+      const query = keywordPart ? `${keywordPart} ${titlePart}`.trim() : titlePart
       const res = await fetch('/api/studio/integrations/brave/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,13 +351,25 @@ export function SeoToolkit({
               <p className="text-sm text-white/80">Optimize your content for maximum reach</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <div className={cn(
               'w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold',
               seoScore.overall >= 80 ? 'bg-emerald-500' :
               seoScore.overall >= 60 ? 'bg-amber-500' : 'bg-red-500'
             )}>
               {seoScore.overall}
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-medium">
+                {seoScore.overall >= 80 ? 'Excellent' :
+                 seoScore.overall >= 60 ? 'Good' :
+                 seoScore.overall >= 40 ? 'Needs Work' : 'Poor'}
+              </p>
+              <p className="text-xs text-white/70">
+                {seoScore.overall >= 80 ? 'Ready to publish!' :
+                 seoScore.overall >= 60 ? 'A few tweaks will help' :
+                 seoScore.overall >= 40 ? 'Check the Optimize tab' : 'Use Optimize to improve'}
+              </p>
             </div>
           </div>
         </div>
