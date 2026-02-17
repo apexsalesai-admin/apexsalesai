@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Heart, MessageSquare, Share2, Bookmark, ThumbsUp, Repeat2, Send, Play, Music } from 'lucide-react'
 
 interface ChannelPreviewProps {
@@ -64,6 +65,35 @@ export function YouTubePreview({ title, body, hashtags, theme }: ChannelPreviewP
   )
 }
 
+// ─── LinkedIn Post Body with Show Full Content toggle ────────────────────────
+
+function LinkedInPostBody({ title, body, isDark }: { title: string; body: string; isDark: boolean }) {
+  const [showFull, setShowFull] = useState(false)
+  const shouldTruncate = body.length > 300
+
+  return (
+    <>
+      {title && (
+        <h4 className={`font-bold text-sm mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{title}</h4>
+      )}
+      <div className="relative">
+        <p className={`text-sm leading-relaxed whitespace-pre-wrap ${!showFull && shouldTruncate ? 'line-clamp-3' : ''} ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+          {body}
+        </p>
+        {shouldTruncate && (
+          <button
+            onClick={() => setShowFull(!showFull)}
+            className="text-sm text-blue-600 font-medium hover:underline mt-1"
+          >
+            {showFull ? '← Show less' : 'Show full content ↓'}
+          </button>
+        )}
+        {!shouldTruncate && body.length > 0 && null}
+      </div>
+    </>
+  )
+}
+
 // ─── LinkedIn Preview ─────────────────────────────────────────────────────────
 
 export function LinkedInPreview({ title, body, hashtags, theme }: ChannelPreviewProps) {
@@ -92,15 +122,7 @@ export function LinkedInPreview({ title, body, hashtags, theme }: ChannelPreview
         </div>
 
         {/* Post content */}
-        {title && (
-          <h4 className={`font-bold text-sm mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{title}</h4>
-        )}
-        <div className="relative">
-          <p className={`text-sm leading-relaxed line-clamp-3 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-            {body}
-          </p>
-          <button className="text-sm text-slate-400 font-medium">...see more</button>
-        </div>
+        <LinkedInPostBody title={title} body={body} isDark={isDark} />
 
         {hashtags.length > 0 && (
           <p className="text-sm text-blue-600 mt-2">{hashtags.map((t) => `#${t}`).join(' ')}</p>

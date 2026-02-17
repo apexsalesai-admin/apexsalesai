@@ -56,10 +56,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const updated = await prisma.scheduledContent.update({
+    const updated = await withRetry(() => prisma.scheduledContent.update({
       where: { id: contentId },
       data: { status: 'DRAFT' },
-    })
+    }))
 
     console.log('[API:publish/reset] Reset content to DRAFT', { contentId, force: !!force })
 

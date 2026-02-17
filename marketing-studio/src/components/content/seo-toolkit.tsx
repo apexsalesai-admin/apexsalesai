@@ -143,6 +143,11 @@ export function SeoToolkit({
   const [appliedField, setAppliedField] = useState<string | null>(null)
   const [isExpandingContent, setIsExpandingContent] = useState(false)
 
+  // Keyword feedback loop state
+  const [rejectedKeywords, setRejectedKeywords] = useState<string[]>([])
+  const [keywordFeedback, setKeywordFeedback] = useState('')
+  const [keywordIteration, setKeywordIteration] = useState(0)
+
   // Calculate content analysis
   const contentAnalysis: ContentAnalysis = {
     wordCount: content.split(/\s+/).filter(w => w.length > 0).length,
@@ -231,7 +236,11 @@ export function SeoToolkit({
       // Build query from keywords + title context for brand-scoped results
       const keywordPart = keywords.length > 0 ? keywords.slice(0, 3).join(' ') : ''
       const titlePart = title.trim().slice(0, 60)
-      const query = keywordPart ? `${keywordPart} ${titlePart}`.trim() : titlePart
+      // Extract likely brand name from title (first proper noun or first 2 words)
+      const brandHint = title.split(/\s+/).slice(0, 2).join(' ')
+      const query = keywordPart
+        ? `${keywordPart} ${titlePart}`.trim()
+        : `${brandHint} ${titlePart}`.trim()
       const res = await fetch('/api/studio/integrations/brave/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -295,14 +304,14 @@ export function SeoToolkit({
     }
   }
 
-  const runOptimizeAction = useCallback(async (action: string) => {
+  const runOptimizeAction = useCallback(async (action: string, extra?: Record<string, unknown>) => {
     setOptimizeLoading(action)
     setOptimizeError(null)
     try {
       const res = await fetch('/api/studio/seo/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, title, content, keywords }),
+        body: JSON.stringify({ action, title, content, keywords, ...extra }),
       })
       const data = await res.json()
       if (data.success) {
@@ -862,7 +871,14 @@ export function SeoToolkit({
                   )}
 
                   <button
-                    onClick={() => runOptimizeAction('suggest-keywords')}
+                    onClick={() => {
+                      setKeywordIteration(prev => prev + 1)
+                      runOptimizeAction('suggest-keywords', {
+                        rejectedKeywords,
+                        feedbackNote: keywordFeedback || undefined,
+                        iteration: keywordIteration + 1,
+                      })
+                    }}
                     disabled={optimizeLoading !== null}
                     className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl text-left transition-colors flex items-center space-x-3 disabled:opacity-50"
                   >
@@ -872,35 +888,66 @@ export function SeoToolkit({
                       <Hash className="w-5 h-5 text-blue-600" />
                     )}
                     <div>
-                      <p className="font-medium text-slate-900">Suggest Keywords</p>
-                      <p className="text-xs text-slate-500">Find related keywords to target</p>
+                      <p className="font-medium text-slate-900">
+                        {keywordIteration > 0 ? `Try Different Angle (Attempt ${keywordIteration + 1})` : 'Suggest Keywords'}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {keywordIteration > 0 ? 'Generate genuinely different keywords' : 'Find related keywords to target'}
+                      </p>
                     </div>
                   </button>
                   {/* Keyword Suggestions Results */}
                   {optimizeResults['suggest-keywords'] && (
-                    <div className="ml-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="ml-2 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
                       <div className="flex flex-wrap gap-1.5">
-                        {(optimizeResults['suggest-keywords'].keywords ?? []).map((k, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              if (!keywords.includes(k.keyword)) {
-                                onKeywordsChange?.([...keywords, k.keyword])
-                              }
-                            }}
-                            className={cn(
-                              'text-xs px-2 py-1 rounded-full border transition-colors',
-                              keywords.includes(k.keyword)
-                                ? 'bg-blue-200 border-blue-300 text-blue-800 cursor-default'
-                                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                        {(optimizeResults['suggest-keywords'].keywords ?? [])
+                          .filter(k => !rejectedKeywords.includes(k.keyword))
+                          .map((k, i) => (
+                          <div key={i} className="inline-flex items-center gap-0.5">
+                            <button
+                              onClick={() => {
+                                if (!keywords.includes(k.keyword)) {
+                                  onKeywordsChange?.([...keywords, k.keyword])
+                                }
+                              }}
+                              className={cn(
+                                'text-xs px-2 py-1 rounded-l-full border-y border-l transition-colors',
+                                keywords.includes(k.keyword)
+                                  ? 'bg-blue-200 border-blue-300 text-blue-800 cursor-default'
+                                  : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                              )}
+                              title={keywords.includes(k.keyword) ? 'Already added' : 'Click to add'}
+                            >
+                              {keywords.includes(k.keyword) ? <Check className="w-3 h-3 inline mr-0.5" /> : '+ '}
+                              {k.keyword}
+                              {k.type && <span className="ml-1 opacity-60">({k.type})</span>}
+                            </button>
+                            {!keywords.includes(k.keyword) && (
+                              <button
+                                onClick={() => setRejectedKeywords(prev => [...prev, k.keyword])}
+                                className="text-xs px-1.5 py-1 rounded-r-full border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                title="Not relevant — exclude from future suggestions"
+                              >
+                                ✕
+                              </button>
                             )}
-                            title={keywords.includes(k.keyword) ? 'Already added' : 'Click to add'}
-                          >
-                            {keywords.includes(k.keyword) ? <Check className="w-3 h-3 inline mr-0.5" /> : '+ '}
-                            {k.keyword}
-                            {k.type && <span className="ml-1 opacity-60">({k.type})</span>}
-                          </button>
+                          </div>
                         ))}
+                      </div>
+                      {/* Feedback + Regenerate */}
+                      <div className="pt-2 border-t border-blue-200">
+                        <input
+                          type="text"
+                          value={keywordFeedback}
+                          onChange={e => setKeywordFeedback(e.target.value)}
+                          placeholder="e.g., 'More enterprise cybersecurity keywords'"
+                          className="w-full px-3 py-1.5 text-xs border border-blue-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                        />
+                        {rejectedKeywords.length > 0 && (
+                          <p className="mt-1 text-[10px] text-slate-400">
+                            {rejectedKeywords.length} keyword{rejectedKeywords.length > 1 ? 's' : ''} excluded from future suggestions
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}

@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
 
     // Resolve workspace: use provided ID or resolve from session user
     const workspace = validation.data.workspaceId
-      ? await prisma.studioWorkspace.findUnique({
+      ? await withRetry(() => prisma.studioWorkspace.findUnique({
           where: { id: validation.data.workspaceId },
           select: { id: true, name: true },
-        })
+        }))
       : await getOrCreateWorkspace(session.user.id)
 
     if (!workspace) {
@@ -121,10 +121,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update content status to indicate publishing is in progress
-    await prisma.scheduledContent.update({
+    await withRetry(() => prisma.scheduledContent.update({
       where: { id: contentId },
       data: { status: 'PUBLISHING' },
-    })
+    }))
 
     // Send event to Inngest — if this fails, revert status to DRAFT
     let eventId: string
@@ -201,12 +201,12 @@ export async function GET(request: NextRequest) {
   try {
     if (jobId) {
       // Fetch specific job with results
-      const job = await prisma.studioPublishJob.findUnique({
+      const job = await withRetry(() => prisma.studioPublishJob.findUnique({
         where: { id: jobId },
         include: {
           results: true,
         },
-      })
+      }))
 
       if (!job) {
         return NextResponse.json(
@@ -236,14 +236,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch jobs for content
-    const jobs = await prisma.studioPublishJob.findMany({
+    const jobs = await withRetry(() => prisma.studioPublishJob.findMany({
       where: { contentId: contentId! },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: {
         results: true,
       },
-    })
+    }))
 
     return NextResponse.json({
       success: true,

@@ -174,7 +174,7 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contentId,
-          channels: selectedPlatforms.map(p => p.toUpperCase()),
+          channels: Array.from(selectedChannelIds),
         }),
       })
       const data = await res.json()

@@ -17,6 +17,9 @@ interface OptimizeRequest {
   title: string
   content: string
   keywords: string[]
+  rejectedKeywords?: string[]
+  feedbackNote?: string
+  iteration?: number
 }
 
 const PROMPTS: Record<Action, (req: OptimizeRequest) => string> = {
@@ -35,20 +38,36 @@ Requirements:
 Return ONLY a JSON object (no markdown):
 {"titles": ["Title 1", "Title 2", "Title 3"]}`,
 
-  'suggest-keywords': ({ title, content, keywords }) => `You are an SEO expert. Suggest 8 related keywords/phrases for this content.
+  'suggest-keywords': ({ title, content, keywords, rejectedKeywords, feedbackNote, iteration }) => {
+    let prompt = `You are an SEO expert. Suggest 8 related keywords/phrases for this content.
 
 Title: "${title}"
-Existing keywords: ${keywords.join(', ') || 'none'}
+Existing keywords (already selected — DO NOT repeat): ${keywords.join(', ') || 'none'}
 Content excerpt: ${content.slice(0, 500)}
 
 Requirements:
 - Mix of short-tail and long-tail keywords
 - Include semantic variations
 - Consider search intent (informational, transactional, navigational)
-- Don't repeat existing keywords
+- Don't repeat existing keywords`
 
-Return ONLY a JSON object (no markdown):
-{"keywords": [{"keyword": "phrase", "type": "long-tail|short-tail", "intent": "informational|transactional|navigational"}]}`,
+    if (rejectedKeywords && rejectedKeywords.length > 0) {
+      prompt += `\n\nPreviously rejected by user (DO NOT suggest these or similar): ${rejectedKeywords.join(', ')}`
+    }
+
+    if (feedbackNote) {
+      prompt += `\n\nUser feedback: "${feedbackNote}"\nAdjust suggestions based on this direction.`
+    }
+
+    if (iteration && iteration > 1) {
+      prompt += `\n\nThis is attempt #${iteration}. Previous suggestions were not satisfactory. Try a COMPLETELY different approach — explore adjacent topics, long-tail conversational queries, competitor terms, or trending patterns. DO NOT reorder or rephrase previous suggestions.`
+    }
+
+    prompt += `\n\nReturn ONLY a JSON object (no markdown):
+{"keywords": [{"keyword": "phrase", "type": "long-tail|short-tail", "intent": "informational|transactional|navigational"}]}`
+
+    return prompt
+  },
 
   'improve-readability': ({ content }) => `You are a writing clarity expert. Rewrite the following content to improve readability.
 
@@ -140,13 +159,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body: OptimizeRequest = await request.json()
-    const { action, title, content, keywords } = body
+    const { action, title, content, keywords, rejectedKeywords, feedbackNote, iteration } = body
 
     if (!PROMPTS[action]) {
       return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 })
     }
 
-    const prompt = PROMPTS[action]({ action, title, content, keywords })
+    const prompt = PROMPTS[action]({ action, title, content, keywords, rejectedKeywords, feedbackNote, iteration })
     const raw = await callAI(prompt)
     const result = parseJSON(raw)
 

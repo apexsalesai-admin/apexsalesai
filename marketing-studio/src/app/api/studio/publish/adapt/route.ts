@@ -77,7 +77,21 @@ function parseJSON(raw: string): unknown {
   if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7)
   if (cleaned.startsWith('```')) cleaned = cleaned.slice(3)
   if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3)
-  return JSON.parse(cleaned.trim())
+  // Replace literal undefined values that AI might generate
+  cleaned = cleaned.trim().replace(/:\s*undefined/g, ': null')
+  return JSON.parse(cleaned)
+}
+
+/** Replace undefined values with null recursively to prevent JSON serialization issues */
+function sanitizeForJson<T>(obj: T): T {
+  if (obj === undefined) return null as T
+  if (obj === null || typeof obj !== 'object') return obj
+  if (Array.isArray(obj)) return obj.map(sanitizeForJson) as T
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    result[key] = value === undefined ? null : sanitizeForJson(value)
+  }
+  return result as T
 }
 
 export async function POST(req: NextRequest) {
@@ -169,7 +183,7 @@ export async function POST(req: NextRequest) {
 
         // Save as ContentVariant
         try {
-          const variant = await prisma.contentVariant.create({
+          const variant = await withRetry(() => prisma.contentVariant.create({
             data: {
               contentId,
               platform: platformId,
@@ -184,7 +198,7 @@ export async function POST(req: NextRequest) {
               threadParts: adapted.threadParts || [],
               adaptationNotes: adapted.adaptationNotes,
             },
-          })
+          }))
           variants.push({ platform: platformId, variantId: variant.id })
         } catch (dbErr) {
           console.error(`[API:publish/adapt] DB save failed for ${platformId}:`, dbErr)
@@ -195,7 +209,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      adaptations: results,
+      adaptations: sanitizeForJson(results),
       variants,
       ...(errors.length > 0 && { warnings: errors }),
     })

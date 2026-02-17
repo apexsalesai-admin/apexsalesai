@@ -532,8 +532,52 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
     }
   }
 
-  const handleNext = () => {
+  // Auto-save draft ID for persistence across step transitions
+  const [draftId, setDraftId] = useState<string | null>(null)
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
+
+  const saveDraft = async () => {
+    const payload = {
+      title: draft.title || 'Untitled Draft',
+      body: draft.body,
+      contentType: draft.contentType,
+      channels: draft.channels.map(c => c.toString()),
+      hashtags: draft.hashtags,
+      callToAction: draft.callToAction,
+      status: 'DRAFT',
+    }
+    try {
+      setIsSavingDraft(true)
+      if (draftId) {
+        await fetch(`/api/content/${draftId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        const res = await fetch('/api/content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (data.success && data.data?.id) {
+          setDraftId(data.data.id)
+        }
+      }
+    } catch (err) {
+      console.error('[ContentCreator] Draft save failed:', err)
+    } finally {
+      setIsSavingDraft(false)
+    }
+  }
+
+  const handleNext = async () => {
     if (step < totalSteps && canProceed()) {
+      // Auto-save draft when advancing to Preview (step 3)
+      if (step === 2) {
+        await saveDraft()
+      }
       setStep(step + 1)
     }
   }
@@ -1141,7 +1185,7 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                 contentType={draft.contentType}
                 goal={contentGoal}
                 profile={activeProfile}
-                onComplete={(result: MiaCreativeResult) => {
+                onComplete={async (result: MiaCreativeResult) => {
                   const safeTitle = result.title || result.body?.split('\n')[0]?.slice(0, 100) || 'Untitled'
                   setDraft(prev => ({
                     ...prev,
@@ -1152,6 +1196,8 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                     videoScript: prev.contentType === 'video' || prev.contentType === 'reel' ? result.body : prev.videoScript,
                   }))
                   setGenerationCount(prev => prev + 1)
+                  // Auto-save draft before advancing to preview
+                  await saveDraft()
                   setStep(3)
                 }}
                 onSwitchToManual={() => setMiaCreativeMode(false)}

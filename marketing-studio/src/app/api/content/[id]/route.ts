@@ -68,10 +68,9 @@ export async function PUT(
     if (scheduledFor !== undefined) updateData.scheduledFor = scheduledFor ? new Date(scheduledFor) : null
     if (status !== undefined) updateData.status = status.toUpperCase() as ContentStatus
 
-    const content = await prisma.scheduledContent.update({
-      where: { id },
-      data: updateData,
-    })
+    const content = await withRetry(() =>
+      prisma.scheduledContent.update({ where: { id }, data: updateData })
+    )
 
     return NextResponse.json({
       success: true,
@@ -131,10 +130,9 @@ export async function PATCH(
 
     log('CONTENT', `PATCH ${id}:`, Object.keys(updateData).join(', '))
 
-    const content = await prisma.scheduledContent.update({
-      where: { id },
-      data: updateData,
-    })
+    const content = await withRetry(() =>
+      prisma.scheduledContent.update({ where: { id }, data: updateData })
+    )
 
     return NextResponse.json({
       success: true,
@@ -159,7 +157,7 @@ export async function DELETE(
     const { id } = await params
 
     // Verify exists before deleting
-    const existing = await prisma.scheduledContent.findUnique({ where: { id } })
+    const existing = await withRetry(() => prisma.scheduledContent.findUnique({ where: { id } }))
     if (!existing) {
       return NextResponse.json(
         { success: false, error: 'Content not found' },
@@ -169,9 +167,7 @@ export async function DELETE(
 
     log('CONTENT', `DELETE ${id}: "${existing.title}"`)
 
-    await prisma.scheduledContent.delete({
-      where: { id },
-    })
+    await withRetry(() => prisma.scheduledContent.delete({ where: { id } }))
 
     return NextResponse.json({
       success: true,

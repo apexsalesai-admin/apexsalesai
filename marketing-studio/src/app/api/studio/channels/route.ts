@@ -52,12 +52,12 @@ export async function DELETE(req: NextRequest) {
     const { channelId } = await req.json()
     if (!channelId) return NextResponse.json({ error: 'channelId required' }, { status: 400 })
 
-    const channel = await prisma.publishingChannel.findFirst({
+    const channel = await withRetry(() => prisma.publishingChannel.findFirst({
       where: { id: channelId, userId: session.user.id },
-    })
+    }))
     if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
 
-    await prisma.publishingChannel.delete({ where: { id: channelId } })
+    await withRetry(() => prisma.publishingChannel.delete({ where: { id: channelId } }))
 
     return NextResponse.json({ success: true })
   } catch (error) {
