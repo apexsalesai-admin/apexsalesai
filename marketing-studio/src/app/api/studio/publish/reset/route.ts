@@ -32,14 +32,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Content not found' }, { status: 404 })
     }
 
-    if (content.createdById !== session.user.id) {
+    // P25-B-FIX4: Allow reset if createdById is null (legacy content without owner)
+    if (content.createdById && content.createdById !== session.user.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 })
     }
 
-    if (content.status !== 'PUBLISHING') {
+    if (content.status !== 'PUBLISHING' && content.status !== 'FAILED') {
       return NextResponse.json({
         success: false,
-        error: `Content is not stuck — current status is ${content.status}`,
+        error: `Content is not stuck — current status is ${content.status}. Only PUBLISHING or FAILED content can be reset.`,
       }, { status: 400 })
     }
 

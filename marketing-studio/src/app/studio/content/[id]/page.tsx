@@ -814,9 +814,12 @@ export default function ContentDetailPage() {
         setContent(data.data)
         setShowRescheduleModal(false)
         setRescheduleDate('')
+      } else {
+        alert(data.error || 'Failed to reschedule')
       }
     } catch (e) {
       console.error('Failed to reschedule:', e)
+      alert('Failed to reschedule. Please try again.')
     } finally {
       setIsRescheduling(false)
     }
