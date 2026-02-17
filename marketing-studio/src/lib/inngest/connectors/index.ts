@@ -281,6 +281,132 @@ export const redditConnector: PlatformConnector = {
 }
 
 /**
+ * X/Twitter Connector
+ * Posts tweets via X API v2, with automatic thread support for long content
+ */
+export const xConnector: PlatformConnector = {
+  platform: 'X_TWITTER',
+
+  async publish(payload: PublishPayload, accessToken?: string): Promise<PublishResult> {
+    const startTime = Date.now()
+
+    console.log('[Connector:X] Publishing content', {
+      titleLength: payload.title.length,
+      bodyLength: payload.body.length,
+      hasAccessToken: !!accessToken,
+    })
+
+    // If no access token, simulate successful publish for development
+    if (!accessToken) {
+      console.log('[Connector:X] No access token - simulating publish')
+      const simulatedTweetId = `x_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+
+      return {
+        success: true,
+        externalPostId: simulatedTweetId,
+        permalink: `https://x.com/i/status/${simulatedTweetId}`,
+        platformResponse: {
+          simulated: true,
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - startTime,
+        },
+      }
+    }
+
+    // Production: Post to X API v2
+    try {
+      const fullText = `${payload.title}\n\n${payload.body}${payload.hashtags?.length ? '\n\n' + payload.hashtags.join(' ') : ''}`
+      const parts = splitXThread(fullText)
+      const tweetIds: string[] = []
+      let lastTweetId: string | undefined
+
+      for (const part of parts) {
+        const tweetPayload: Record<string, unknown> = { text: part }
+        if (lastTweetId) {
+          tweetPayload.reply = { in_reply_to_tweet_id: lastTweetId }
+        }
+
+        const response = await fetch('https://api.x.com/2/tweets', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(tweetPayload),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`X API error: ${response.status} - ${errorText}`)
+        }
+
+        const data = await response.json()
+        const tweetId = data.data?.id
+        if (tweetId) {
+          tweetIds.push(tweetId)
+          lastTweetId = tweetId
+        }
+      }
+
+      const firstTweetId = tweetIds[0]
+      return {
+        success: true,
+        externalPostId: firstTweetId,
+        permalink: firstTweetId ? `https://x.com/i/status/${firstTweetId}` : undefined,
+        platformResponse: {
+          tweetIds,
+          isThread: tweetIds.length > 1,
+          durationMs: Date.now() - startTime,
+        },
+      }
+    } catch (error) {
+      console.error('[Connector:X] Publish failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformResponse: {
+          error: true,
+          durationMs: Date.now() - startTime,
+        },
+      }
+    }
+  },
+}
+
+/** Split text into ≤280 char parts respecting sentence/word boundaries */
+function splitXThread(text: string): string[] {
+  if (text.length <= 280) return [text]
+
+  const parts: string[] = []
+  const sentences = text.split(/(?<=[.!?])\s+/)
+  let current = ''
+
+  for (const sentence of sentences) {
+    if (current.length + sentence.length + 1 <= 280) {
+      current = current ? `${current} ${sentence}` : sentence
+    } else {
+      if (current) parts.push(current)
+      if (sentence.length > 280) {
+        const words = sentence.split(/\s+/)
+        current = ''
+        for (const word of words) {
+          if (current.length + word.length + 1 <= 280) {
+            current = current ? `${current} ${word}` : word
+          } else {
+            if (current) parts.push(current)
+            current = word
+          }
+        }
+      } else {
+        current = sentence
+      }
+    }
+  }
+  if (current) parts.push(current)
+  return parts
+}
+
+/**
  * Get connector for a platform
  */
 export function getConnector(platform: string): PlatformConnector | null {
@@ -291,6 +417,10 @@ export function getConnector(platform: string): PlatformConnector | null {
       return linkedinConnector
     case 'YOUTUBE':
       return youtubeConnector
+    case 'X_TWITTER':
+    case 'TWITTER':
+    case 'X':
+      return xConnector
     case 'REDDIT':
     case 'FACEBOOK': // Fallback for Reddit using FACEBOOK enum
       return redditConnector
