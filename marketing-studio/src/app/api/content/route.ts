@@ -15,9 +15,6 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== 'all') {
       where.status = status.toUpperCase()
-    } else {
-      // Default: exclude auto-saved drafts from the main content list
-      where.status = { not: 'DRAFT' }
     }
 
     if (startDate || endDate) {
