@@ -351,6 +351,7 @@ export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop')
   const [previewTheme, setPreviewTheme] = useState<'light' | 'dark'>('light')
+  const [showFullContent, setShowFullContent] = useState(false)
 
   // Optimal Times
   const [optimalTimes, setOptimalTimes] = useState<{ day: string; time: string; score: number }[]>([])
@@ -2372,6 +2373,46 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                     )
                   })}
                 </div>
+
+                {/* Full Content Toggle (Step 3) */}
+                {draft.body && draft.body.length > 300 && (
+                  <div className="max-w-2xl mx-auto mt-4">
+                    <button
+                      onClick={() => setShowFullContent(!showFullContent)}
+                      className="flex items-center space-x-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      {showFullContent ? (
+                        <>
+                          <ChevronUp className="w-4 h-4" />
+                          <span>Show Platform Preview</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-4 h-4" />
+                          <span>Show Full Content</span>
+                        </>
+                      )}
+                    </button>
+                    {showFullContent && (
+                      <div className="mt-3 p-5 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <h4 className="font-semibold text-slate-900 mb-2">{draft.title}</h4>
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {draft.body}
+                        </div>
+                        {draft.hashtags.length > 0 && (
+                          <p className="text-sm text-blue-600 mt-3">
+                            {draft.hashtags.map(t => `#${t}`).join(' ')}
+                          </p>
+                        )}
+                        {draft.callToAction && (
+                          <p className="text-sm font-medium text-purple-600 mt-2">
+                            {draft.callToAction}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Video Script Display + Analyze (Step 3 — video/reel only) */}
                 {(draft.contentType === 'video' || draft.contentType === 'reel') && draft.videoScript && (
