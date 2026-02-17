@@ -45,24 +45,17 @@ export const linkedinConnector: PlatformConnector = {
       hasAccessToken: !!accessToken,
     })
 
-    // If no access token, simulate successful publish for development
+    // P25-B-FIX4: Fail clearly when no access token (was silently simulating success)
     if (!accessToken) {
-      console.log('[Connector:LinkedIn] No access token - simulating publish')
-      const simulatedPostId = `li_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-
+      console.error('[Connector:LinkedIn] No access token — cannot publish')
       return {
-        success: true,
-        externalPostId: simulatedPostId,
-        permalink: `https://linkedin.com/feed/update/${simulatedPostId}`,
-        platformResponse: {
-          simulated: true,
-          timestamp: new Date().toISOString(),
-          durationMs: Date.now() - startTime,
-        },
+        success: false,
+        error: 'No LinkedIn access token. Please connect your LinkedIn account in Integrations.',
+        platformResponse: { error: 'no_access_token', durationMs: Date.now() - startTime },
       }
     }
 
-    // Production: Call LinkedIn Marketing API
+    // Call LinkedIn Marketing API
     try {
       const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
         method: 'POST',
@@ -135,24 +128,17 @@ export const youtubeConnector: PlatformConnector = {
       hasMedia: !!payload.mediaUrls?.length,
     })
 
-    // If no access token, simulate successful publish for development
+    // P25-B-FIX4: Fail clearly when no access token
     if (!accessToken) {
-      console.log('[Connector:YouTube] No access token - simulating publish')
-      const simulatedVideoId = `yt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-
+      console.error('[Connector:YouTube] No access token — cannot publish')
       return {
-        success: true,
-        externalPostId: simulatedVideoId,
-        permalink: `https://youtube.com/watch?v=${simulatedVideoId}`,
-        platformResponse: {
-          simulated: true,
-          timestamp: new Date().toISOString(),
-          durationMs: Date.now() - startTime,
-        },
+        success: false,
+        error: 'No YouTube access token. Please connect your YouTube account in Integrations.',
+        platformResponse: { error: 'no_access_token', durationMs: Date.now() - startTime },
       }
     }
 
-    // Production: For community posts (text-only)
+    // For community posts (text-only)
     try {
       // Note: YouTube Data API for community posts requires specific scopes
       // This is a simplified implementation
@@ -215,24 +201,17 @@ export const redditConnector: PlatformConnector = {
       hasAccessToken: !!accessToken,
     })
 
-    // If no access token, simulate successful publish for development
+    // P25-B-FIX4: Fail clearly when no access token
     if (!accessToken) {
-      console.log('[Connector:Reddit] No access token - simulating publish')
-      const simulatedPostId = `t3_${Math.random().toString(36).slice(2, 9)}`
-
+      console.error('[Connector:Reddit] No access token — cannot publish')
       return {
-        success: true,
-        externalPostId: simulatedPostId,
-        permalink: `https://reddit.com/r/marketing/comments/${simulatedPostId}`,
-        platformResponse: {
-          simulated: true,
-          timestamp: new Date().toISOString(),
-          durationMs: Date.now() - startTime,
-        },
+        success: false,
+        error: 'No Reddit access token. Please connect your Reddit account in Integrations.',
+        platformResponse: { error: 'no_access_token', durationMs: Date.now() - startTime },
       }
     }
 
-    // Production: Submit to Reddit
+    // Submit to Reddit
     try {
       const response = await fetch('https://oauth.reddit.com/api/submit', {
         method: 'POST',
@@ -296,24 +275,17 @@ export const xConnector: PlatformConnector = {
       hasAccessToken: !!accessToken,
     })
 
-    // If no access token, simulate successful publish for development
+    // P25-B-FIX4: Fail clearly when no access token
     if (!accessToken) {
-      console.log('[Connector:X] No access token - simulating publish')
-      const simulatedTweetId = `x_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-
+      console.error('[Connector:X] No access token — cannot publish')
       return {
-        success: true,
-        externalPostId: simulatedTweetId,
-        permalink: `https://x.com/i/status/${simulatedTweetId}`,
-        platformResponse: {
-          simulated: true,
-          timestamp: new Date().toISOString(),
-          durationMs: Date.now() - startTime,
-        },
+        success: false,
+        error: 'No X/Twitter access token. Please connect your X account in Integrations.',
+        platformResponse: { error: 'no_access_token', durationMs: Date.now() - startTime },
       }
     }
 
-    // Production: Post to X API v2
+    // Post to X API v2
     try {
       const fullText = `${payload.title}\n\n${payload.body}${payload.hashtags?.length ? '\n\n' + payload.hashtags.join(' ') : ''}`
       const parts = splitXThread(fullText)

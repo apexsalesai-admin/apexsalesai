@@ -15,7 +15,7 @@ export const seoAnalysisJob = inngest.createFunction(
     name: 'SEO Content Analysis',
     retries: 2,
     concurrency: {
-      limit: 20, // SEO queries are lightweight
+      limit: 5,
     },
   },
   { event: 'studio/seo.analyze' },

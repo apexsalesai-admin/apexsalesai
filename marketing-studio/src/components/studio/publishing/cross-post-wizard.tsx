@@ -169,12 +169,21 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
     setPublishResult(null)
 
     try {
+      // P25-B-FIX4: Send platform names (LINKEDIN, X_TWITTER) not channel CUIDs
+      const PLATFORM_NAME_MAP: Record<string, string> = {
+        linkedin: 'LINKEDIN',
+        x: 'X_TWITTER',
+        youtube: 'YOUTUBE',
+      }
+      const channelPlatforms = selectedChannels.map(
+        c => PLATFORM_NAME_MAP[c.platform] || c.platform.toUpperCase()
+      )
       const res = await fetch('/api/studio/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contentId,
-          channels: Array.from(selectedChannelIds),
+          channels: Array.from(new Set(channelPlatforms)),
         }),
       })
       const data = await res.json()

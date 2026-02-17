@@ -4,37 +4,35 @@
  * Handles async publishing of ScheduledContent to multiple platforms.
  * Uses existing StudioPublishJob and StudioPublishResult Prisma models.
  *
+ * P25-B-FIX4: Reads tokens from PublishingChannel (not StudioIntegration).
+ * Uses the production-hardened publishers from publishers/linkedin and publishers/x.
+ *
  * Workflow:
  * 1. Load content from database
  * 2. Create publish job record
- * 3. Create per-channel publish result records
- * 4. Execute publishing connector for each channel
- * 5. Update result status per channel
- * 6. Update overall job status
+ * 3. For each channel, look up PublishingChannel, decrypt token, publish
+ * 4. Update result status per channel
+ * 5. Update overall job + content status
  */
 
 import { inngest } from '../../client'
 import { prisma } from '@/lib/db'
-import { publishToPlatform } from '../../connectors'
-import { safeDecrypt } from '@/lib/encryption'
+import { publishToLinkedIn } from '@/lib/studio/publishing/publishers/linkedin'
+import { publishToX } from '@/lib/studio/publishing/publishers/x'
 import type { JobResult, PublishJobOutput } from '../../types'
 import { StudioIntegrationType } from '@prisma/client'
 
-// Map channel strings to StudioIntegrationType enum values
-function mapChannelToIntegrationType(channel: string): StudioIntegrationType | null {
-  const mapping: Record<string, StudioIntegrationType> = {
-    'LINKEDIN': 'LINKEDIN',
-    'YOUTUBE': 'YOUTUBE',
-    'TIKTOK': 'TIKTOK',
-    'X_TWITTER': 'X_TWITTER',
-    'TWITTER': 'X_TWITTER',
-    'FACEBOOK': 'FACEBOOK',
-    'INSTAGRAM': 'INSTAGRAM',
-    'THREADS': 'THREADS',
-    'PINTEREST': 'PINTEREST',
-    'REDDIT': 'FACEBOOK', // Using FACEBOOK as proxy
-  }
-  return mapping[channel.toUpperCase()] || null
+// Map channel strings to PublishingChannel platform names + Prisma enum
+const PLATFORM_MAP: Record<string, { dbPlatform: string; integrationType: StudioIntegrationType }> = {
+  'LINKEDIN':  { dbPlatform: 'linkedin', integrationType: 'LINKEDIN' },
+  'linkedin':  { dbPlatform: 'linkedin', integrationType: 'LINKEDIN' },
+  'X_TWITTER': { dbPlatform: 'x',        integrationType: 'X_TWITTER' },
+  'TWITTER':   { dbPlatform: 'x',        integrationType: 'X_TWITTER' },
+  'X':         { dbPlatform: 'x',        integrationType: 'X_TWITTER' },
+  'x':         { dbPlatform: 'x',        integrationType: 'X_TWITTER' },
+  'twitter':   { dbPlatform: 'x',        integrationType: 'X_TWITTER' },
+  'YOUTUBE':   { dbPlatform: 'youtube',   integrationType: 'YOUTUBE' },
+  'youtube':   { dbPlatform: 'youtube',   integrationType: 'YOUTUBE' },
 }
 
 export const publishContentJob = inngest.createFunction(
@@ -43,28 +41,26 @@ export const publishContentJob = inngest.createFunction(
     name: 'Publish Content to Platforms',
     retries: 3,
     concurrency: {
-      limit: 10,
+      limit: 5,
     },
   },
   { event: 'studio/publish.content' },
   async ({ event, step }): Promise<JobResult<PublishJobOutput>> => {
     const startTime = Date.now()
-    const { contentId, channels, workspaceId } = event.data as {
+    const { contentId, channels, workspaceId, userId } = event.data as {
       contentId: string
       channels: string[]
       workspaceId: string
+      userId?: string
     }
 
-    // Structured logging
-    const logContext = {
-      jobId: '',
+    console.log('[Inngest:Publish] Job started', {
       workspaceId,
       contentId,
       channels,
+      hasUserId: !!userId,
       eventId: event.id,
-    }
-
-    console.log('[Inngest:Publish] Job started', logContext)
+    })
 
     // Step 1: Load content from database
     const content = await step.run('load-content', async () => {
@@ -73,15 +69,8 @@ export const publishContentJob = inngest.createFunction(
       })
 
       if (!record) {
-        console.error('[Inngest:Publish] Content not found', { contentId })
         throw new Error(`Content not found: ${contentId}`)
       }
-
-      console.log('[Inngest:Publish] Content loaded', {
-        contentId,
-        title: record.title,
-        status: record.status,
-      })
 
       return {
         id: record.id,
@@ -89,10 +78,15 @@ export const publishContentJob = inngest.createFunction(
         body: record.body,
         hashtags: record.hashtags as string[],
         callToAction: record.callToAction,
-        channels: record.channels as string[],
-        status: record.status,
+        createdById: record.createdById,
       }
     })
+
+    // Resolve userId: prefer event data, fall back to content creator
+    const resolvedUserId = userId || content.createdById
+    if (!resolvedUserId) {
+      console.error('[Inngest:Publish] No userId available — cannot look up channels')
+    }
 
     // Step 2: Create publish job record
     const publishJob = await step.run('create-publish-job', async () => {
@@ -100,156 +94,162 @@ export const publishContentJob = inngest.createFunction(
         data: {
           workspaceId,
           contentId,
-          status: 'PENDING',
-          targetChannels: channels,
-          scheduledFor: new Date(),
-        },
-      })
-
-      console.log('[Inngest:Publish] Job record created', {
-        jobId: job.id,
-        status: job.status,
-      })
-
-      return { jobId: job.id }
-    })
-
-    logContext.jobId = publishJob.jobId
-
-    // Step 3: Create publish result records for each channel
-    const resultRecords = await step.run('create-result-records', async () => {
-      const records = await Promise.all(
-        channels.map(async (channel) => {
-          const integrationType = mapChannelToIntegrationType(channel)
-
-          if (!integrationType) {
-            console.warn('[Inngest:Publish] Unknown channel type', { channel })
-            return null
-          }
-
-          const result = await prisma.studioPublishResult.create({
-            data: {
-              publishJobId: publishJob.jobId,
-              channel: integrationType,
-              status: 'PENDING',
-              platformResponse: {},
-            },
-          })
-
-          return {
-            id: result.id,
-            channel,
-            integrationType,
-          }
-        })
-      )
-
-      const validRecords = records.filter(Boolean) as {
-        id: string
-        channel: string
-        integrationType: StudioIntegrationType
-      }[]
-
-      console.log('[Inngest:Publish] Result records created', {
-        count: validRecords.length,
-        channels: validRecords.map((r) => r.channel),
-      })
-
-      return validRecords
-    })
-
-    // Step 4: Update job status to PUBLISHING
-    await step.run('update-job-publishing', async () => {
-      await prisma.studioPublishJob.update({
-        where: { id: publishJob.jobId },
-        data: {
           status: 'PUBLISHING',
+          targetChannels: channels,
           startedAt: new Date(),
         },
       })
+      return { jobId: job.id }
     })
 
-    // Step 5: Execute publishing for each channel
+    // Build content text
+    let text = content.title
+    if (content.body) text += `\n\n${content.body}`
+    if (content.hashtags?.length) {
+      text += '\n\n' + content.hashtags.map((h: string) => (h.startsWith('#') ? h : `#${h}`)).join(' ')
+    }
+    if (content.callToAction) text += `\n\n${content.callToAction}`
+
+    // Step 3: Publish to each channel
     const publishResults = await step.run('publish-to-platforms', async () => {
-      const results = await Promise.all(
-        resultRecords.map(async (record) => {
-          // Update result to PUBLISHING
-          await prisma.studioPublishResult.update({
-            where: { id: record.id },
-            data: { status: 'PUBLISHING' },
+      const results: Array<{
+        channel: string
+        success: boolean
+        postId?: string
+        permalink?: string
+        error?: string
+      }> = []
+
+      for (const channel of channels) {
+        const mapped = PLATFORM_MAP[channel]
+
+        if (!mapped) {
+          results.push({ channel, success: false, error: `Unsupported platform: ${channel}` })
+          continue
+        }
+
+        // Look up PublishingChannel by userId + platform
+        let pubChannel: { id: string; accessToken: string | null; metadata: unknown } | null = null
+        if (resolvedUserId) {
+          pubChannel = await prisma.publishingChannel.findFirst({
+            where: { userId: resolvedUserId, platform: mapped.dbPlatform, isActive: true },
+            orderBy: { connectedAt: 'desc' },
+            select: { id: true, accessToken: true, metadata: true },
           })
+        }
 
-          // Get access token from integration (if available)
-          // Note: Tokens are encrypted in production - decryption would be needed
-          const integration = await prisma.studioIntegration.findFirst({
-            where: {
-              workspaceId,
-              type: record.integrationType,
-              status: 'CONNECTED',
-            },
+        if (!pubChannel || !pubChannel.accessToken) {
+          results.push({
+            channel,
+            success: false,
+            error: `No connected ${channel} channel with valid token. Please connect your account.`,
           })
-
-          // Decrypt the OAuth token for real API publishing
-          const accessToken = integration?.accessTokenEncrypted
-            ? safeDecrypt(integration.accessTokenEncrypted) ?? undefined
-            : undefined
-
-          // Execute connector
-          const publishResult = await publishToPlatform(
-            record.channel,
-            {
-              title: content.title,
-              body: content.body,
-              hashtags: content.hashtags,
-              callToAction: content.callToAction || undefined,
-            },
-            accessToken
-          )
-
-          // Update result record
-          await prisma.studioPublishResult.update({
-            where: { id: record.id },
+          await prisma.studioPublishResult.create({
             data: {
-              status: publishResult.success ? 'SUCCESS' : 'FAILED',
-              externalPostId: publishResult.externalPostId,
-              permalink: publishResult.permalink,
-              platformResponse: JSON.parse(JSON.stringify(publishResult.platformResponse)),
+              publishJobId: publishJob.jobId,
+              channel: mapped.integrationType,
+              status: 'FAILED',
+              errorMessage: 'No connected channel or missing token',
+              platformResponse: { error: 'no_channel_or_token' },
             },
-          })
+          }).catch(() => {})
+          continue
+        }
 
-          console.log('[Inngest:Publish] Channel result', {
-            channel: record.channel,
-            success: publishResult.success,
-            externalPostId: publishResult.externalPostId,
-            error: publishResult.error,
-          })
+        // Execute platform-specific publish
+        let publishResult: { success: boolean; postId?: string; postUrl?: string; error?: string }
 
-          return {
-            channel: record.channel,
-            success: publishResult.success,
-            postId: publishResult.externalPostId,
-            permalink: publishResult.permalink,
-            error: publishResult.error,
+        try {
+          if (mapped.dbPlatform === 'linkedin') {
+            const metadata = pubChannel.metadata as Record<string, string> | null
+            const personUrn = metadata?.personUrn
+            if (!personUrn) {
+              publishResult = { success: false, error: 'Missing LinkedIn person URN' }
+            } else {
+              const result = await publishToLinkedIn({
+                accessToken: pubChannel.accessToken,
+                personUrn,
+                text,
+              })
+              publishResult = {
+                success: result.success,
+                postId: result.postId,
+                postUrl: result.postUrl,
+                error: result.error,
+              }
+            }
+          } else if (mapped.dbPlatform === 'x') {
+            const result = await publishToX({
+              accessToken: pubChannel.accessToken,
+              text,
+            })
+            publishResult = {
+              success: result.success,
+              postId: result.tweetId,
+              postUrl: result.postUrl,
+              error: result.error,
+            }
+          } else {
+            publishResult = { success: false, error: `${channel} publishing not yet implemented` }
           }
+        } catch (err) {
+          publishResult = {
+            success: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          }
+        }
+
+        // Record result
+        await prisma.studioPublishResult.create({
+          data: {
+            publishJobId: publishJob.jobId,
+            channel: mapped.integrationType,
+            status: publishResult.success ? 'SUCCESS' : 'FAILED',
+            externalPostId: publishResult.postId || null,
+            permalink: publishResult.postUrl || null,
+            publishedAt: publishResult.success ? new Date() : null,
+            errorMessage: publishResult.error || null,
+            platformResponse: JSON.parse(JSON.stringify(publishResult)),
+          },
+        }).catch(() => {})
+
+        // Update channel status
+        if (publishResult.success) {
+          await prisma.publishingChannel.update({
+            where: { id: pubChannel.id },
+            data: { lastPublishedAt: new Date(), lastError: null },
+          }).catch(() => {})
+        } else {
+          await prisma.publishingChannel.update({
+            where: { id: pubChannel.id },
+            data: { lastError: publishResult.error || 'Publish failed' },
+          }).catch(() => {})
+        }
+
+        results.push({
+          channel,
+          success: publishResult.success,
+          postId: publishResult.postId,
+          permalink: publishResult.postUrl,
+          error: publishResult.error,
         })
-      )
+
+        console.log('[Inngest:Publish] Channel result', {
+          channel,
+          success: publishResult.success,
+          error: publishResult.error,
+        })
+      }
 
       return results
     })
 
-    // Step 6: Update final job status
-    await step.run('update-job-final', async () => {
-      const allSuccess = publishResults.every((r) => r.success)
-      const anySuccess = publishResults.some((r) => r.success)
+    // Step 4: Update final statuses
+    await step.run('update-final-status', async () => {
+      const allSuccess = publishResults.length > 0 && publishResults.every(r => r.success)
+      const anySuccess = publishResults.some(r => r.success)
 
-      let finalStatus: 'COMPLETED' | 'PARTIAL' | 'FAILED'
-      if (allSuccess) {
-        finalStatus = 'COMPLETED'
-      } else if (anySuccess) {
-        finalStatus = 'PARTIAL'
-      } else {
-        finalStatus = 'FAILED'
-      }
+      const finalStatus = allSuccess ? 'COMPLETED' : anySuccess ? 'PARTIAL' : 'FAILED'
 
       await prisma.studioPublishJob.update({
         where: { id: publishJob.jobId },
@@ -258,43 +258,28 @@ export const publishContentJob = inngest.createFunction(
           completedAt: new Date(),
           errorSummary: allSuccess
             ? null
-            : publishResults
-                .filter((r) => !r.success)
-                .map((r) => `${r.channel}: ${r.error}`)
-                .join('; '),
+            : publishResults.filter(r => !r.success).map(r => `${r.channel}: ${r.error}`).join('; '),
         },
       })
 
-      // Also update the ScheduledContent status
       await prisma.scheduledContent.update({
         where: { id: contentId },
         data: {
-          status: allSuccess ? 'PUBLISHED' : anySuccess ? 'FAILED' : 'FAILED',
+          status: allSuccess ? 'PUBLISHED' : 'FAILED',
           publishedAt: allSuccess ? new Date() : null,
           publishResults: publishResults,
           errorMessage: allSuccess
             ? null
-            : publishResults
-                .filter((r) => !r.success)
-                .map((r) => `${r.channel}: ${r.error}`)
-                .join('; '),
+            : publishResults.filter(r => !r.success).map(r => `${r.channel}: ${r.error}`).join('; '),
         },
       })
 
       console.log('[Inngest:Publish] Job completed', {
         jobId: publishJob.jobId,
         status: finalStatus,
-        successCount: publishResults.filter((r) => r.success).length,
-        failCount: publishResults.filter((r) => !r.success).length,
+        successCount: publishResults.filter(r => r.success).length,
+        failCount: publishResults.filter(r => !r.success).length,
       })
-    })
-
-    const durationMs = Date.now() - startTime
-
-    console.log('[Inngest:Publish] Job finished', {
-      ...logContext,
-      durationMs,
-      status: 'completed',
     })
 
     return {
@@ -303,7 +288,7 @@ export const publishContentJob = inngest.createFunction(
         contentId,
         results: publishResults,
       },
-      durationMs,
+      durationMs: Date.now() - startTime,
       timestamp: new Date().toISOString(),
     }
   }
