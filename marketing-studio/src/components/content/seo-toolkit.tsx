@@ -127,6 +127,18 @@ export function SeoToolkit({
   const [searchResults, setSearchResults] = useState<Array<{ title: string; url: string; description: string }>>([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [brandName, setBrandName] = useState<string>('')
+
+  // Fetch brand name from CreatorProfile for competitive research scoping
+  useEffect(() => {
+    fetch('/api/studio/profile')
+      .then(r => r.json())
+      .then(data => {
+        const name = data?.data?.brandName || data?.data?.company || ''
+        if (name) setBrandName(name)
+      })
+      .catch(() => {})
+  }, [])
 
   // SEO Optimize actions state
   type OptimizeData = {
@@ -233,14 +245,12 @@ export function SeoToolkit({
     setIsSearching(true)
     setSearchError(null)
     try {
-      // Build query from keywords + title context for brand-scoped results
+      // Build query scoped to user's brand for relevant competitive research
+      const brand = brandName || 'LYFYE'
       const keywordPart = keywords.length > 0 ? keywords.slice(0, 3).join(' ') : ''
-      const titlePart = title.trim().slice(0, 60)
-      // Extract likely brand name from title (first proper noun or first 2 words)
-      const brandHint = title.split(/\s+/).slice(0, 2).join(' ')
       const query = keywordPart
-        ? `${keywordPart} ${titlePart}`.trim()
-        : `${brandHint} ${titlePart}`.trim()
+        ? `"${brand}" ${keywordPart}`.trim()
+        : `"${brand}" ${title.trim().slice(0, 60)}`.trim()
       const res = await fetch('/api/studio/integrations/brave/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -372,12 +382,12 @@ export function SeoToolkit({
               <p className="text-sm font-medium">
                 {seoScore.overall >= 80 ? 'Excellent' :
                  seoScore.overall >= 60 ? 'Good' :
-                 seoScore.overall >= 40 ? 'Needs Work' : 'Poor'}
+                 seoScore.overall >= 40 ? 'Needs Work' : 'Not Ready'}
               </p>
               <p className="text-xs text-white/70">
-                {seoScore.overall >= 80 ? 'Ready to publish!' :
-                 seoScore.overall >= 60 ? 'A few tweaks will help' :
-                 seoScore.overall >= 40 ? 'Check the Optimize tab' : 'Use Optimize to improve'}
+                {seoScore.overall >= 80 ? 'Ready to publish and rank!' :
+                 seoScore.overall >= 60 ? 'Almost there — check Optimize' :
+                 seoScore.overall >= 40 ? 'Apply Optimize suggestions first' : 'Use Optimize tab to improve'}
               </p>
             </div>
           </div>
@@ -442,26 +452,33 @@ export function SeoToolkit({
               seoScore.overall >= 80
                 ? 'bg-emerald-50 border-emerald-200'
                 : seoScore.overall >= 60
-                  ? 'bg-amber-50 border-amber-200'
-                  : 'bg-red-50 border-red-200'
+                  ? 'bg-yellow-50 border-yellow-200'
+                  : seoScore.overall >= 40
+                    ? 'bg-orange-50 border-orange-200'
+                    : 'bg-red-50 border-red-200'
             )}>
               <div className="flex items-start space-x-3">
                 <Sparkles className={cn(
                   'w-5 h-5 mt-0.5 flex-shrink-0',
                   seoScore.overall >= 80 ? 'text-emerald-600' :
-                  seoScore.overall >= 60 ? 'text-amber-600' : 'text-red-600'
+                  seoScore.overall >= 60 ? 'text-yellow-600' :
+                  seoScore.overall >= 40 ? 'text-orange-600' : 'text-red-600'
                 )} />
                 <div>
                   <p className={cn(
                     'font-semibold text-sm',
                     seoScore.overall >= 80 ? 'text-emerald-800' :
-                    seoScore.overall >= 60 ? 'text-amber-800' : 'text-red-800'
+                    seoScore.overall >= 60 ? 'text-yellow-800' :
+                    seoScore.overall >= 40 ? 'text-orange-800' : 'text-red-800'
                   )}>
+                    <span className="font-bold">Mia:</span>{' '}
                     {seoScore.overall >= 80
-                      ? 'Great job! Your content is well-optimized.'
+                      ? 'Excellent! Your content is well-optimized for search engines. Consider adapting it for your publishing channels.'
                       : seoScore.overall >= 60
-                        ? 'Almost there — a few improvements will boost visibility.'
-                        : 'Your content needs optimization before publishing.'}
+                        ? 'Good foundation. Apply the suggestions in the Optimize tab to push above 80 — that\'s where content starts ranking consistently.'
+                        : seoScore.overall >= 40
+                          ? 'Your content needs optimization before publishing. Start with the Optimize tab — the title and meta description changes alone can boost your score by 15-20 points.'
+                          : 'This content isn\'t ready for publishing yet. Switch to the Optimize tab and apply the AI suggestions — I can help you improve the title, add keywords, and strengthen your meta description.'}
                   </p>
                   <ul className="mt-2 space-y-1 text-xs text-slate-700">
                     {seoScore.title < 70 && (
@@ -710,6 +727,10 @@ export function SeoToolkit({
               )}
               {searchResults.length > 0 && (
                 <div className="divide-y divide-slate-100">
+                  <div className="px-4 py-2 bg-orange-50 text-xs text-orange-700 flex items-center gap-1">
+                    <Search className="w-3 h-3" />
+                    <span>Competitive research for: <strong>{brandName || 'LYFYE'}</strong></span>
+                  </div>
                   {searchResults.map((r, i) => (
                     <div key={i} className="p-3 hover:bg-slate-50 transition-colors">
                       <a

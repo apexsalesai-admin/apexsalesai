@@ -46,6 +46,7 @@ function ContentPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [resettingId, setResettingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [sortField, setSortField] = useState<'title' | 'status' | 'scheduledFor' | 'createdAt'>('createdAt')
@@ -167,6 +168,29 @@ function ContentPageInner() {
       alert(err instanceof Error ? err.message : 'Failed to delete content')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  // Reset stuck publishing status
+  const handleResetStatus = async (id: string) => {
+    setResettingId(id)
+    try {
+      const response = await fetch('/api/studio/publish/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentId: id, force: true }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setContent(prev => prev.map(c => c.id === id ? { ...c, status: 'DRAFT' } : c))
+      } else {
+        alert(data.error || 'Failed to reset status')
+      }
+    } catch (err) {
+      console.error('Error resetting status:', err)
+      alert('Failed to reset status. Please try again.')
+    } finally {
+      setResettingId(null)
     }
   }
 
@@ -383,24 +407,37 @@ function ContentPageInner() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {(item.status === 'PUBLISHED' || item.status === 'FAILED') && item.publishResults?.length
+                        {item.publishResults?.length
                           ? item.publishResults.map((pr) => (
                               <ChannelBadge key={pr.channel} type={pr.channel} published={pr.success} failed={!pr.success} />
                             ))
-                          : item.channels.map((channel) => (
-                              <ChannelBadge key={channel} type={channel} />
-                            ))
+                          : (item.status === 'PUBLISHING' || item.status === 'SCHEDULED') && item.channels.length > 0
+                            ? item.channels.map((channel) => (
+                                <ChannelBadge key={channel} type={channel} />
+                              ))
+                            : <span className="text-xs text-slate-400">-</span>
                         }
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={cn(
-                        'inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium',
-                        statusConfig.color
-                      )}>
-                        <StatusIcon className="w-3 h-3" />
-                        <span>{statusConfig.label}</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium',
+                          statusConfig.color
+                        )}>
+                          <StatusIcon className="w-3 h-3" />
+                          <span>{statusConfig.label}</span>
+                        </span>
+                        {(item.status === 'PUBLISHING' || item.status === 'FAILED') && (
+                          <button
+                            onClick={() => handleResetStatus(item.id)}
+                            disabled={resettingId === item.id}
+                            className="text-[10px] text-amber-600 hover:text-amber-800 underline disabled:opacity-50"
+                          >
+                            {resettingId === item.id ? 'Resetting...' : 'Reset'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-600">
                       {item.scheduledFor ? (

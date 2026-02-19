@@ -95,24 +95,50 @@ function sanitizeForJson<T>(obj: T): T {
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[ADAPT] Request received')
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const body = await req.json()
-    const { contentId, platforms, creatorVoice } = body as {
-      contentId: string
-      platforms: string[]
-      creatorVoice?: string
+    if (!session?.user?.id) {
+      console.log('[ADAPT] No session')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!contentId || !platforms?.length) {
-      return NextResponse.json({ error: 'contentId and platforms[] are required' }, { status: 400 })
+    let body: { contentId?: string; platforms?: string[]; creatorVoice?: string }
+    try {
+      body = await req.json()
+      console.log('[ADAPT] Payload:', JSON.stringify({ contentId: body.contentId, platforms: body.platforms }))
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const { contentId, platforms, creatorVoice } = body
+
+    if (!contentId) {
+      return NextResponse.json({ error: 'contentId is required' }, { status: 400 })
+    }
+    if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+      return NextResponse.json({ error: 'platforms array is required' }, { status: 400 })
     }
 
     // Load content
-    const content = await withRetry(() => prisma.scheduledContent.findUnique({ where: { id: contentId } }))
-    if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 })
+    let content
+    try {
+      content = await withRetry(() => prisma.scheduledContent.findUnique({ where: { id: contentId } }))
+    } catch (dbError) {
+      console.error('[ADAPT] Database error:', dbError)
+      return NextResponse.json({ error: 'Database error fetching content' }, { status: 500 })
+    }
+
+    if (!content) {
+      console.log('[ADAPT] Content not found:', contentId)
+      return NextResponse.json({ error: 'Content not found' }, { status: 404 })
+    }
+
+    if (!content.body?.trim() && !content.title?.trim()) {
+      return NextResponse.json({ error: 'Content has no body text to adapt' }, { status: 400 })
+    }
+
+    console.log('[ADAPT] Source content length:', content.body.length, 'Platforms:', platforms)
 
     const adaptationInput: AdaptationInput = {
       title: content.title,
@@ -207,6 +233,7 @@ export async function POST(req: NextRequest) {
       })
     )
 
+    console.log('[ADAPT] Complete. Platforms:', results.map(r => r.platform), 'Errors:', errors.length)
     return NextResponse.json({
       success: true,
       adaptations: sanitizeForJson(results),
@@ -214,9 +241,9 @@ export async function POST(req: NextRequest) {
       ...(errors.length > 0 && { warnings: errors }),
     })
   } catch (error) {
-    console.error('[API:publish/adapt] error:', error)
+    console.error('[ADAPT] Unhandled error:', error instanceof Error ? error.stack : error)
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Adaptation failed' },
+      { success: false, error: error instanceof Error ? error.message : 'Adaptation failed — unexpected server error' },
       { status: 500 }
     )
   }

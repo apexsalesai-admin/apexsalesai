@@ -23,18 +23,16 @@ export function YouTubePreview({ title, body, hashtags, theme }: ChannelPreviewP
         <span className="text-white font-bold text-sm">YouTube</span>
       </div>
 
-      {/* Video thumbnail — shows body excerpt as script preview */}
-      <div className="aspect-video bg-slate-800 relative flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 p-4 flex items-center justify-center">
-          <p className="text-slate-400 text-xs leading-relaxed text-center line-clamp-4">
-            {body || 'Your video content will appear here'}
-          </p>
+      {/* Video description preview — shows actual content */}
+      <div className="bg-slate-900 p-4 border-b border-slate-800">
+        <div className="flex items-center gap-2 mb-2">
+          <Play className="w-4 h-4 text-purple-400" />
+          <span className="text-purple-400 text-xs font-medium">Video Description Preview</span>
         </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
-            <Play className="w-7 h-7 text-white/80 fill-white/80 ml-0.5" />
-          </div>
-        </div>
+        <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">
+          {body || 'Your video description will appear here'}
+        </p>
+        <p className="text-slate-600 text-[10px] mt-2">Video will be rendered after publishing via Video Studio</p>
       </div>
 
       {/* Info */}
@@ -229,16 +227,15 @@ export function TikTokPreview({ body, hashtags, theme }: ChannelPreviewProps) {
     <div className="rounded-2xl overflow-hidden bg-black max-w-[320px] mx-auto">
       {/* Phone frame style — vertical */}
       <div className="relative aspect-[9/16] bg-gradient-to-b from-slate-900 to-black flex flex-col justify-end">
-        {/* Script text preview + play overlay */}
-        <div className="absolute inset-x-0 top-1/4 px-6 flex items-center justify-center">
-          <p className="text-white/50 text-xs leading-relaxed text-center line-clamp-3">
+        {/* Script text preview */}
+        <div className="absolute inset-x-0 top-8 px-6">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Play className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-purple-400 text-[10px] font-medium">Script Preview</span>
+          </div>
+          <p className="text-white/70 text-xs leading-relaxed line-clamp-6">
             {body || 'Your video script will appear here'}
           </p>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm">
-            <Play className="w-7 h-7 text-white fill-white ml-0.5" />
-          </div>
         </div>
 
         {/* Right sidebar — engagement icons */}

@@ -69,6 +69,7 @@ function buildPublishText(content: {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
+  let contentId: string | undefined
 
   try {
     // Auth gate
@@ -99,7 +100,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { contentId, channels } = validation.data
+    contentId = validation.data.contentId
+    const channels = validation.data.channels
     const userId = session.user.id
 
     // Resolve workspace: use provided ID or resolve from session user
@@ -410,6 +412,18 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[API:Publish] Error:', error)
+
+    // CRITICAL: Reset content status from PUBLISHING to FAILED on unhandled errors
+    // This prevents content getting stuck in PUBLISHING state indefinitely
+    if (contentId) {
+      await prisma.scheduledContent.update({
+        where: { id: contentId },
+        data: {
+          status: 'FAILED',
+          errorMessage: error instanceof Error ? error.message : 'Internal server error',
+        },
+      }).catch((e) => console.error('[API:Publish] Failed to reset content status:', e))
+    }
 
     return NextResponse.json(
       {
