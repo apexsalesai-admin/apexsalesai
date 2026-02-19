@@ -114,14 +114,21 @@ export const generateVideoJob = inngest.createFunction(
       const config = job.config
       const model = config.model as string | undefined
 
-      console.log(`[${providerName.toUpperCase()}:SUBMIT]`, { jobId, model: model || 'default', ratio: eventAspect, duration: eventDuration, provider: providerName })
+      // Ensure prompt is never empty — fall back to config fields or a generic prompt
+      const prompt = job.inputPrompt?.trim()
+        || (config.script as string)?.trim()
+        || (config.visualPrompt as string)?.trim()
+        || (config.title as string)?.trim()
+        || 'A professional cinematic video'
+
+      console.log(`[${providerName.toUpperCase()}:SUBMIT]`, { jobId, model: model || 'default', ratio: eventAspect, duration: eventDuration, provider: providerName, promptLength: prompt.length })
 
       let result: { providerJobId: string; status: string; metadata?: Record<string, unknown> }
 
       if (newProvider) {
         // Use new provider registry
         const submitResult = await newProvider.submit({
-          prompt: job.inputPrompt,
+          prompt,
           durationSeconds: eventDuration,
           aspectRatio: eventAspect,
           model,
@@ -132,7 +139,7 @@ export const generateVideoJob = inngest.createFunction(
         // Backward compat: use legacy provider
         const legacyProvider = getProvider('runway')
         const submitResult = await legacyProvider.submit({
-          prompt: job.inputPrompt,
+          prompt,
           duration: eventDuration,
           aspectRatio: eventAspect as '16:9' | '9:16' | '1:1',
           model,

@@ -260,6 +260,7 @@ export async function publishLinkedInTextPost(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0',
+        'LinkedIn-Version': '202601',
       },
       body: JSON.stringify(ugcPayload),
       signal: AbortSignal.timeout(API_TIMEOUT_MS),

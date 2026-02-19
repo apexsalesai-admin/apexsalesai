@@ -134,12 +134,14 @@ async function generateRunwayVideo(
   // veo3.1 supports 4, 6, or 8 second durations
   const runwayDuration = duration <= 4 ? 4 : duration <= 6 ? 6 : 8
 
-  // Map aspect ratio to resolution format
-  const ratioMap: Record<string, string> = {
-    '16:9': '1280:720', '9:16': '720:1280', '1:1': '1080:1080', '4:5': '720:1280',
-  }
-  const mappedRatio = ratioMap[ratio] || '1280:720'
+  // Map aspect ratio to Runway format — only 1280:720 or 720:1280 are valid
+  const portraitRatios = ['9:16', '720:1280', '4:5', '3:4']
+  const mappedRatio: '1280:720' | '720:1280' = portraitRatios.includes(ratio) ? '720:1280' : '1280:720'
 
+  // Validate promptText — must be a non-empty string
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    throw new Error('Runway requires a non-empty prompt. No script or description was provided.')
+  }
   // Runway enforces 1000-char limit on promptText
   let promptText = prompt
   if (promptText.length > RUNWAY_MAX_PROMPT) {

@@ -63,6 +63,7 @@ export const linkedinConnector: PlatformConnector = {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
           'X-Restli-Protocol-Version': '2.0.0',
+          'LinkedIn-Version': '202601',
         },
         body: JSON.stringify({
           author: 'urn:li:person:me',

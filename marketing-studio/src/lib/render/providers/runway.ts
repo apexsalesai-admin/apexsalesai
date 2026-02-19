@@ -20,26 +20,32 @@ function getModel(): string {
   return process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'gen4.5'
 }
 
-/** Map user-friendly aspect ratios to Runway's resolution format */
-function mapAspectRatio(ratio: string): string {
-  const mapping: Record<string, string> = {
-    '16:9': '1280:720',
-    '9:16': '720:1280',
-    '1:1': '960:960',
-    '4:3': '1104:832',
-    '3:4': '832:1104',
-    '1280:720': '1280:720',
-    '720:1280': '720:1280',
-    '1080:1080': '960:960',
-    '960:960': '960:960',
-    '1104:832': '1104:832',
-    '832:1104': '832:1104',
+/**
+ * Normalize aspect ratio to Runway API format.
+ * Runway text-to-video only accepts "1280:720" (landscape) or "720:1280" (portrait).
+ */
+function mapAspectRatio(ratio: string): '1280:720' | '720:1280' {
+  if (!ratio) return '1280:720'
+  const normalized = ratio.toLowerCase().trim()
+
+  // Portrait formats → 720:1280
+  if (
+    normalized === '9:16' ||
+    normalized === '720:1280' ||
+    normalized === '1080:1920' ||
+    normalized === '3:4' ||
+    normalized === '832:1104' ||
+    normalized === 'portrait' ||
+    normalized === 'vertical'
+  ) {
+    return '720:1280'
   }
-  const mapped = mapping[ratio]
-  if (!mapped) {
-    console.warn(`[Runway] Unknown aspect ratio "${ratio}", falling back to 1280:720`)
+
+  // Everything else (landscape, square, unknown) → 1280:720
+  if (normalized !== '16:9' && normalized !== '1280:720' && normalized !== '1:1' && normalized !== '4:3') {
+    console.warn(`[Runway] Unrecognized ratio "${ratio}", defaulting to 1280:720`)
   }
-  return mapped || '1280:720'
+  return '1280:720'
 }
 
 /** Clamp duration to valid Runway range: 2-10 seconds (integer) */
@@ -65,8 +71,13 @@ export class RunwayProvider implements RenderProvider {
   async submit(req: RenderRequest): Promise<RenderSubmitResult> {
     const apiKey = req.apiKey || getApiKey()
 
-    // Runway enforces a 1000-character limit on promptText
+    // Validate promptText — must be a non-empty string
     let promptText = req.prompt
+    if (!promptText || typeof promptText !== 'string' || promptText.trim().length === 0) {
+      console.warn('[RUNWAY:API:PROMPT] promptText was empty/undefined, this will fail')
+      throw new Error('Runway requires a non-empty promptText. No script or description was provided.')
+    }
+    // Runway enforces a 1000-character limit on promptText
     if (promptText.length > MAX_PROMPT_LENGTH) {
       console.warn('[RUNWAY:API:TRUNCATE]', { original: promptText.length, truncated: MAX_PROMPT_LENGTH })
       promptText = promptText.slice(0, MAX_PROMPT_LENGTH)

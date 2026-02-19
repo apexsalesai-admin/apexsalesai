@@ -36,7 +36,7 @@ export async function publishToLinkedIn(params: LinkedInPublishParams): Promise<
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0',
-        'LinkedIn-Version': '202402',
+        'LinkedIn-Version': '202601',
       },
       body: JSON.stringify(payload),
     })

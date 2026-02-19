@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
           },
           body: JSON.stringify({
             model: 'gen4.5',
-            prompt: prompt.slice(0, 512),
+            promptText: prompt.slice(0, 512) || 'A professional cinematic video',
             duration: testDuration,
-            ratio: '16:9',
+            ratio: '1280:720',
           }),
         })
 
