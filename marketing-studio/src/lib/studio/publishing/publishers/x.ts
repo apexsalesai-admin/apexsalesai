@@ -54,18 +54,39 @@ function splitIntoThread(text: string): string[] {
 }
 
 export async function publishToX(params: XPublishParams): Promise<XPublishResult> {
+  console.log('[X:PUBLISH:START]', {
+    hasAccessToken: !!params.accessToken,
+    tokenLength: params.accessToken?.length,
+    textLength: params.text?.length,
+    hasImage: !!params.imageUrl,
+  })
+
   const token = decrypt(params.accessToken)
   const parts = splitIntoThread(params.text)
+
+  console.log('[X:PUBLISH:PREP]', {
+    decryptedTokenLength: token?.length,
+    tokenPrefix: token?.slice(0, 8) + '...',
+    threadParts: parts.length,
+  })
 
   try {
     const tweetIds: string[] = []
     let lastTweetId: string | undefined
 
-    for (const part of parts) {
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
       const payload: Record<string, unknown> = { text: part }
       if (lastTweetId) {
         payload.reply = { in_reply_to_tweet_id: lastTweetId }
       }
+
+      console.log('[X:PUBLISH:REQUEST]', {
+        partIndex: i,
+        partLength: part.length,
+        isReply: !!lastTweetId,
+        endpoint: 'https://api.x.com/2/tweets',
+      })
 
       const response = await fetch('https://api.x.com/2/tweets', {
         method: 'POST',
@@ -74,6 +95,12 @@ export async function publishToX(params: XPublishParams): Promise<XPublishResult
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+      })
+
+      console.log('[X:PUBLISH:RESPONSE]', {
+        partIndex: i,
+        status: response.status,
+        statusText: response.statusText,
       })
 
       if (!response.ok) {
@@ -86,6 +113,13 @@ export async function publishToX(params: XPublishParams): Promise<XPublishResult
         else if (response.status === 429) errorType = 'RATE_LIMIT'
         else if (response.status >= 500) errorType = 'UPSTREAM'
 
+        console.error('[X:PUBLISH:ERROR]', {
+          partIndex: i,
+          status: response.status,
+          errorType,
+          body: errorBody,
+        })
+
         return {
           success: false,
           error: `X API ${response.status}: ${errorBody}`,
@@ -96,6 +130,12 @@ export async function publishToX(params: XPublishParams): Promise<XPublishResult
 
       const data = await response.json()
       const tweetId = data.data?.id
+
+      console.log('[X:PUBLISH:TWEET_CREATED]', {
+        partIndex: i,
+        tweetId,
+      })
+
       if (tweetId) {
         tweetIds.push(tweetId)
         lastTweetId = tweetId
@@ -103,6 +143,13 @@ export async function publishToX(params: XPublishParams): Promise<XPublishResult
     }
 
     const firstTweetId = tweetIds[0]
+
+    console.log('[X:PUBLISH:SUCCESS]', {
+      firstTweetId,
+      totalTweets: tweetIds.length,
+      isThread: tweetIds.length > 1,
+    })
+
     return {
       success: true,
       tweetId: firstTweetId,
@@ -110,6 +157,11 @@ export async function publishToX(params: XPublishParams): Promise<XPublishResult
       threadIds: tweetIds.length > 1 ? tweetIds : undefined,
     }
   } catch (err) {
+    console.error('[X:PUBLISH:EXCEPTION]', {
+      error: err instanceof Error ? err.message : 'Unknown',
+      stack: err instanceof Error ? err.stack : undefined,
+    })
+
     return {
       success: false,
       error: `Network error: ${err instanceof Error ? err.message : 'Unknown'}`,

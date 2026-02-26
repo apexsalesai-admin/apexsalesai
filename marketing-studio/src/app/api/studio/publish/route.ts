@@ -353,20 +353,38 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Final status updates ──────────────────────────────────────
-    const allSuccess = results.length > 0 && results.every(r => r.success)
-    const anySuccess = results.some(r => r.success)
+    const succeeded = results.filter(r => r.success)
+    const failed = results.filter(r => !r.success)
+    const allSuccess = results.length > 0 && failed.length === 0
+    const anySuccess = succeeded.length > 0
 
     const finalJobStatus = allSuccess ? 'COMPLETED' : anySuccess ? 'PARTIAL' : 'FAILED'
-    const finalContentStatus = allSuccess ? 'PUBLISHED' : 'FAILED'
+
+    // P25-B-FIX6: Use PUBLISHED when ANY channel succeeds.
+    // Per-channel detail lives in publishResults — UI reads that for granular status.
+    const finalContentStatus = anySuccess ? 'PUBLISHED' : 'FAILED'
+
+    // Build per-channel result objects with normalized shape
+    const publishResults = results.map(r => ({
+      channel: PLATFORM_MAP[r.channel]?.integrationType || r.channel,
+      success: r.success,
+      postId: r.postId || null,
+      postUrl: r.permalink || null,
+      error: r.error || null,
+      publishedAt: r.success ? new Date().toISOString() : null,
+    }))
+
+    // Build error message from failed channels only
+    const errorMessage = failed.length > 0
+      ? `Failed on: ${failed.map(f => `${f.channel} (${f.error || 'unknown error'})`).join(', ')}`
+      : null
 
     await prisma.studioPublishJob.update({
       where: { id: publishJob.id },
       data: {
         status: finalJobStatus,
         completedAt: new Date(),
-        errorSummary: allSuccess
-          ? null
-          : results.filter(r => !r.success).map(r => `${r.channel}: ${r.error}`).join('; '),
+        errorSummary: errorMessage,
       },
     })
 
@@ -374,11 +392,9 @@ export async function POST(request: NextRequest) {
       where: { id: contentId },
       data: {
         status: finalContentStatus,
-        publishedAt: allSuccess ? new Date() : null,
-        publishResults: results,
-        errorMessage: allSuccess
-          ? null
-          : results.filter(r => !r.success).map(r => `${r.channel}: ${r.error}`).join('; '),
+        publishedAt: anySuccess ? new Date() : null,
+        publishResults: publishResults,
+        errorMessage,
       },
     })
 
@@ -388,14 +404,16 @@ export async function POST(request: NextRequest) {
       jobId: publishJob.id,
       contentId,
       finalJobStatus,
+      finalContentStatus,
       durationMs,
-      successCount: results.filter(r => r.success).length,
-      failCount: results.filter(r => !r.success).length,
+      successCount: succeeded.length,
+      failCount: failed.length,
     })
 
     return NextResponse.json({
-      success: allSuccess || anySuccess,
+      success: anySuccess,
       jobId: publishJob.id,
+      status: finalContentStatus,
       message: allSuccess
         ? 'Published successfully'
         : anySuccess
@@ -406,8 +424,13 @@ export async function POST(request: NextRequest) {
         contentId,
         contentTitle: content.title,
         channels,
-        results,
+        results: publishResults,
         durationMs,
+      },
+      summary: {
+        total: results.length,
+        succeeded: succeeded.length,
+        failed: failed.length,
       },
     })
   } catch (error) {

@@ -14,6 +14,10 @@ import {
   Upload,
   AlertCircle,
   Sparkles,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -68,6 +72,19 @@ const STEPS = [
   { label: 'Review & Publish', step: 3 },
 ]
 
+function formatChannelName(channel: string): string {
+  const names: Record<string, string> = {
+    LINKEDIN: 'LinkedIn',
+    X_TWITTER: 'X (Twitter)',
+    YOUTUBE: 'YouTube',
+    FACEBOOK: 'Facebook',
+    TIKTOK: 'TikTok',
+    INSTAGRAM: 'Instagram',
+    THREADS: 'Threads',
+  }
+  return names[channel] || channel
+}
+
 export function CrossPostWizard({ contentId, content, onClose, onPublished }: CrossPostWizardProps) {
   const [step, setStep] = useState(1)
   const [channels, setChannels] = useState<Channel[]>([])
@@ -79,6 +96,13 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
   const [editedAdaptations, setEditedAdaptations] = useState<Record<string, Adaptation>>({})
   const [isPublishing, setIsPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [perChannelResults, setPerChannelResults] = useState<Array<{
+    channel: string
+    success: boolean
+    postUrl?: string | null
+    error?: string | null
+  }>>([])
+
 
   // Fetch connected channels
   useEffect(() => {
@@ -167,6 +191,7 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
   const handlePublish = async () => {
     setIsPublishing(true)
     setPublishResult(null)
+    setPerChannelResults([])
 
     try {
       // P25-B-FIX4: Send platform names (LINKEDIN, X_TWITTER) not channel CUIDs
@@ -187,9 +212,23 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
         }),
       })
       const data = await res.json()
+
+      // P25-B-FIX6: Parse per-channel results from API response
+      const channelResults = data.data?.results
+      if (Array.isArray(channelResults) && channelResults.length > 0) {
+        setPerChannelResults(channelResults)
+      }
+
+      const summary = data.summary
       if (data.success) {
-        setPublishResult({ success: true, message: `Publishing to ${selectedChannels.length} channel${selectedChannels.length > 1 ? 's' : ''}...` })
-        setTimeout(() => onPublished(), 2000)
+        const allOk = summary ? summary.failed === 0 : true
+        setPublishResult({
+          success: true,
+          message: allOk
+            ? `Published to ${summary?.succeeded ?? selectedChannels.length} channel${(summary?.succeeded ?? selectedChannels.length) > 1 ? 's' : ''} successfully`
+            : `Published to ${summary?.succeeded} of ${summary?.total} channels`,
+        })
+        setTimeout(() => onPublished(), allOk ? 2000 : 4000)
       } else {
         setPublishResult({ success: false, message: data.error || 'Publishing failed' })
       }
@@ -390,23 +429,83 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
           {step === 3 && (
             <div className="space-y-4">
               {publishResult ? (
-                <div className={cn(
-                  'p-4 rounded-xl border',
-                  publishResult.success ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
-                )}>
-                  <div className="flex items-center space-x-2">
-                    {publishResult.success ? (
-                      <Check className="w-5 h-5 text-emerald-600" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-red-600" />
-                    )}
-                    <span className={cn(
-                      'text-sm font-medium',
-                      publishResult.success ? 'text-emerald-800' : 'text-red-800'
-                    )}>
-                      {publishResult.message}
-                    </span>
-                  </div>
+                <div className="space-y-3">
+                  {/* Summary banner */}
+                  {(() => {
+                    const hasFailures = perChannelResults.some(r => !r.success)
+                    const hasSuccesses = perChannelResults.some(r => r.success)
+                    const isPartial = hasSuccesses && hasFailures
+
+                    return (
+                      <div className={cn(
+                        'p-4 rounded-xl border',
+                        isPartial ? 'bg-amber-50 border-amber-200' :
+                        publishResult.success ? 'bg-emerald-50 border-emerald-200' :
+                        'bg-red-50 border-red-200'
+                      )}>
+                        <div className="flex items-center space-x-2">
+                          {isPartial ? (
+                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                          ) : publishResult.success ? (
+                            <CheckCircle className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-600" />
+                          )}
+                          <span className={cn(
+                            'text-sm font-medium',
+                            isPartial ? 'text-amber-800' :
+                            publishResult.success ? 'text-emerald-800' : 'text-red-800'
+                          )}>
+                            {publishResult.message}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Per-channel results */}
+                  {perChannelResults.length > 0 && (
+                    <div className="space-y-2">
+                      {perChannelResults.map((result, idx) => (
+                        <div
+                          key={idx}
+                          className={cn(
+                            'flex items-center justify-between px-3 py-2 rounded-lg text-sm',
+                            result.success
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-red-50 text-red-800 border border-red-200'
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {result.success ? (
+                              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-red-600 shrink-0" />
+                            )}
+                            <span className="font-medium">{formatChannelName(result.channel)}</span>
+                          </div>
+                          <div className="text-xs">
+                            {result.success ? (
+                              result.postUrl ? (
+                                <a
+                                  href={result.postUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-600 hover:text-emerald-800 inline-flex items-center gap-1"
+                                >
+                                  View Post <ExternalLink className="w-3 h-3" />
+                                </a>
+                              ) : (
+                                <span className="text-emerald-600">Published</span>
+                              )
+                            ) : (
+                              <span className="text-red-600 max-w-[200px] truncate inline-block">{result.error || 'Failed'}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>

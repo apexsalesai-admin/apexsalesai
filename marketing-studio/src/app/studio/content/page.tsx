@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react'
+import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PublishResultEntry {
@@ -387,6 +387,11 @@ function ContentPageInner() {
                 const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.DRAFT
                 const StatusIcon = statusConfig.icon
 
+                // P25-B-FIX6: Detect partial success from publishResults
+                const hasAnySuccess = item.publishResults?.some(pr => pr.success)
+                const hasAnyFailure = item.publishResults?.some(pr => !pr.success)
+                const isPartialSuccess = item.status === 'PUBLISHED' && hasAnySuccess && hasAnyFailure
+
                 return (
                   <tr key={item.id} className="hover:bg-slate-50">
                     <td className="px-4 py-4">
@@ -421,14 +426,21 @@ function ContentPageInner() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={cn(
-                          'inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium',
-                          statusConfig.color
-                        )}>
-                          <StatusIcon className="w-3 h-3" />
-                          <span>{statusConfig.label}</span>
-                        </span>
-                        {(item.status === 'PUBLISHING' || item.status === 'FAILED') && (
+                        {isPartialSuccess ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>Partial</span>
+                          </span>
+                        ) : (
+                          <span className={cn(
+                            'inline-flex items-center space-x-1 px-2 py-1 rounded text-xs font-medium',
+                            statusConfig.color
+                          )}>
+                            <StatusIcon className="w-3 h-3" />
+                            <span>{statusConfig.label}</span>
+                          </span>
+                        )}
+                        {(item.status === 'PUBLISHING' || item.status === 'FAILED' || isPartialSuccess) && (
                           <button
                             onClick={() => handleResetStatus(item.id)}
                             disabled={resettingId === item.id}
@@ -547,15 +559,25 @@ function ChannelBadge({ type, published, failed }: { type: string; published?: b
     INSTAGRAM: 'bg-pink-100 text-pink-700',
   }
 
+  const displayNames: Record<string, string> = {
+    LINKEDIN: 'LinkedIn',
+    X_TWITTER: 'X',
+    YOUTUBE: 'YouTube',
+    FACEBOOK: 'Facebook',
+    TIKTOK: 'TikTok',
+    INSTAGRAM: 'Instagram',
+  }
+
   return (
     <span className={cn(
       'px-2 py-0.5 rounded text-xs font-medium inline-flex items-center gap-1',
       colors[type] || 'bg-slate-100 text-slate-700',
-      failed && 'ring-1 ring-red-300'
+      failed && 'ring-1 ring-red-300',
+      published && 'ring-1 ring-emerald-300'
     )}>
-      {published && <CheckCircle className="w-3 h-3" />}
-      {failed && <XCircle className="w-3 h-3" />}
-      {type.replace('_', ' ')}
+      {published && <CheckCircle className="w-3 h-3 text-emerald-600" />}
+      {failed && <XCircle className="w-3 h-3 text-red-500" />}
+      {displayNames[type] || type.replace('_', ' ')}
     </span>
   )
 }

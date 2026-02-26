@@ -41,6 +41,15 @@ import { MiaContextHint } from '@/components/studio/MiaContextHint'
 import type { RenderResult } from '@/lib/video/types/render-result'
 import { CrossPostWizard } from '@/components/studio/publishing/cross-post-wizard'
 
+interface PublishResultEntry {
+  channel: string
+  success: boolean
+  postId?: string | null
+  postUrl?: string | null
+  error?: string | null
+  publishedAt?: string | null
+}
+
 interface ContentDetail {
   id: string
   title: string
@@ -59,6 +68,8 @@ interface ContentDetail {
   publishedAt: string | null
   createdAt: string
   updatedAt: string
+  errorMessage?: string | null
+  publishResults?: PublishResultEntry[]
   videoScript?: string
   videoHook?: string
   thumbnailIdeas?: string[]
@@ -1017,12 +1028,23 @@ export default function ContentDetailPage() {
               <span>Reset to Draft</span>
             </button>
           )}
-          {content.status === 'PUBLISHED' && (
-            <span className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg flex items-center space-x-2">
-              <Check className="w-4 h-4" />
-              <span>Published</span>
-            </span>
-          )}
+          {content.status === 'PUBLISHED' && (() => {
+            const hasFailure = content.publishResults?.some(pr => !pr.success)
+            const hasSuccess = content.publishResults?.some(pr => pr.success)
+            const isPartial = hasSuccess && hasFailure
+
+            return isPartial ? (
+              <span className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>Partial</span>
+              </span>
+            ) : (
+              <span className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg flex items-center space-x-2">
+                <Check className="w-4 h-4" />
+                <span>Published</span>
+              </span>
+            )
+          })()}
           <button
             onClick={handleOpenEdit}
             className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
@@ -1040,18 +1062,68 @@ export default function ContentDetailPage() {
         </div>
       </div>
 
-      {/* Channels */}
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-slate-500">Publishing to:</span>
-        {content.channels.map(channel => (
-          <span
-            key={channel}
-            className={cn('px-3 py-1 rounded-lg text-sm font-medium', CHANNEL_COLORS[channel] || 'bg-slate-100 text-slate-700')}
-          >
-            {channel.replace('_', ' ')}
-          </span>
-        ))}
-      </div>
+      {/* Per-channel publish results (P25-B-FIX6) */}
+      {content.publishResults && content.publishResults.length > 0 ? (
+        <div className="space-y-2">
+          <span className="text-sm text-slate-500">Publish results:</span>
+          <div className="flex flex-wrap gap-2">
+            {content.publishResults.map((pr, idx) => {
+              const CHANNEL_DISPLAY: Record<string, string> = {
+                LINKEDIN: 'LinkedIn', X_TWITTER: 'X (Twitter)', YOUTUBE: 'YouTube',
+                FACEBOOK: 'Facebook', TIKTOK: 'TikTok', INSTAGRAM: 'Instagram',
+              }
+              return (
+                <div
+                  key={idx}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border',
+                    pr.success
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-red-50 text-red-800 border-red-200'
+                  )}
+                >
+                  {pr.success ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <X className="w-3.5 h-3.5 text-red-600" />
+                  )}
+                  <span>{CHANNEL_DISPLAY[pr.channel] || pr.channel}</span>
+                  {pr.success && pr.postUrl && (
+                    <a
+                      href={pr.postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 hover:text-emerald-800 underline text-xs"
+                    >
+                      View
+                    </a>
+                  )}
+                  {!pr.success && pr.error && (
+                    <span className="text-red-500 text-xs max-w-[200px] truncate" title={pr.error}>
+                      {pr.error}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {content.errorMessage && (
+            <p className="text-sm text-red-600 mt-1">{content.errorMessage}</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-slate-500">Publishing to:</span>
+          {content.channels.map(channel => (
+            <span
+              key={channel}
+              className={cn('px-3 py-1 rounded-lg text-sm font-medium', CHANNEL_COLORS[channel] || 'bg-slate-100 text-slate-700')}
+            >
+              {channel.replace('_', ' ')}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex space-x-1 border-b border-slate-200">
