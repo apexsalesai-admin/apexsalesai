@@ -20,8 +20,10 @@ import { authOptions } from '@/lib/auth'
 import { prisma, withRetry } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
 import { getOrCreateWorkspace } from '@/lib/workspace'
-import { publishToLinkedIn } from '@/lib/studio/publishing/publishers/linkedin'
-import { publishToX } from '@/lib/studio/publishing/publishers/x'
+import { publishToLinkedIn, refreshLinkedInToken } from '@/lib/studio/publishing/publishers/linkedin'
+import { publishToX, refreshXToken } from '@/lib/studio/publishing/publishers/x'
+import { refreshYouTubeToken } from '@/lib/studio/publishing/publishers/youtube'
+import { encrypt } from '@/lib/encryption'
 import { StudioIntegrationType } from '@prisma/client'
 
 // ── Platform mapping ────────────────────────────────────────────────
@@ -253,6 +255,66 @@ export async function POST(request: NextRequest) {
         continue
       }
 
+      // ── P25-B-FIX7: Token refresh before publish ─────────────
+      // OAuth 2.0 tokens expire (X: 2h, LinkedIn: 60d, YouTube: 1h).
+      // If the token is expired or expires within 5 minutes, refresh it.
+      let activeAccessToken = pubChannel.accessToken
+
+      const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000 // 5 minutes
+      const isExpired = pubChannel.tokenExpiresAt &&
+        new Date(pubChannel.tokenExpiresAt).getTime() < Date.now() + TOKEN_REFRESH_BUFFER_MS
+
+      if (isExpired && pubChannel.refreshToken) {
+        console.log(`[API:Publish] Token expired for ${channel}, attempting refresh...`, {
+          expiresAt: pubChannel.tokenExpiresAt,
+          platform: mapped.dbPlatform,
+        })
+
+        try {
+          let refreshResult: { accessToken: string; refreshToken?: string; expiresIn: number } | null = null
+
+          if (mapped.dbPlatform === 'x') {
+            refreshResult = await refreshXToken(pubChannel.refreshToken)
+          } else if (mapped.dbPlatform === 'linkedin') {
+            refreshResult = await refreshLinkedInToken(pubChannel.refreshToken)
+          } else if (mapped.dbPlatform === 'youtube') {
+            refreshResult = await refreshYouTubeToken(pubChannel.refreshToken)
+          }
+
+          if (refreshResult) {
+            // Encrypt and persist the new tokens
+            const newEncryptedAccess = encrypt(refreshResult.accessToken)
+            const newEncryptedRefresh = refreshResult.refreshToken
+              ? encrypt(refreshResult.refreshToken)
+              : pubChannel.refreshToken
+            const newExpiresAt = new Date(Date.now() + refreshResult.expiresIn * 1000)
+
+            await prisma.publishingChannel.update({
+              where: { id: pubChannel.id },
+              data: {
+                accessToken: newEncryptedAccess,
+                refreshToken: newEncryptedRefresh,
+                tokenExpiresAt: newExpiresAt,
+                lastError: null,
+              },
+            })
+
+            activeAccessToken = newEncryptedAccess
+
+            console.log(`[API:Publish] Token refreshed for ${channel}`, {
+              newExpiresAt: newExpiresAt.toISOString(),
+            })
+          } else {
+            console.warn(`[API:Publish] Token refresh returned null for ${channel} — using existing token`)
+          }
+        } catch (refreshErr) {
+          console.error(`[API:Publish] Token refresh failed for ${channel}:`, refreshErr)
+          // Continue with existing token — it might still work or will produce a clear error
+        }
+      } else if (isExpired && !pubChannel.refreshToken) {
+        console.warn(`[API:Publish] Token expired for ${channel} but no refresh token available`)
+      }
+
       // ── Platform-specific publish ─────────────────────────────
       let publishResult: {
         success: boolean
@@ -273,7 +335,7 @@ export async function POST(request: NextRequest) {
             }
           } else {
             const result = await publishToLinkedIn({
-              accessToken: pubChannel.accessToken,
+              accessToken: activeAccessToken,
               personUrn,
               text,
             })
@@ -286,7 +348,7 @@ export async function POST(request: NextRequest) {
           }
         } else if (mapped.dbPlatform === 'x') {
           const result = await publishToX({
-            accessToken: pubChannel.accessToken,
+            accessToken: activeAccessToken,
             text,
           })
           publishResult = {
