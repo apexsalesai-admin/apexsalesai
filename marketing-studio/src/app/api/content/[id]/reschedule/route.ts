@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { ContentStatus } from '@prisma/client'
 import { log, logError } from '@/lib/dev-mode'
+import { inngest } from '@/lib/inngest/client'
 
 export async function POST(
   request: NextRequest,
@@ -59,6 +60,25 @@ export async function POST(
         status: ContentStatus.SCHEDULED,
       },
     })
+
+    // Fire Inngest event so the scheduler wakes up at the right time
+    try {
+      await inngest.send({
+        name: 'studio/content.schedule.requested',
+        data: {
+          userId: request.headers.get('x-user-id') || 'system',
+          contentId: id,
+          title: content.title,
+          body: content.body,
+          channels: content.channels,
+          scheduledAt: parsedDate.toISOString(),
+          hashtags: content.hashtags,
+          callToAction: content.callToAction,
+        },
+      })
+    } catch (inngestErr) {
+      logError('CONTENT', 'Inngest schedule event failed (content still rescheduled in DB):', inngestErr)
+    }
 
     return NextResponse.json({
       success: true,

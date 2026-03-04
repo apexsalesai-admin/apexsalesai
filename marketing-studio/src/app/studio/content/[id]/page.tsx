@@ -33,6 +33,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from '@/components/ui/toaster'
 import { SeoToolkit } from '@/components/content/seo-toolkit'
 import { RenderArtifactPanel } from '@/components/studio/video/RenderArtifactPanel'
 import { MiaCopilotPanel } from '@/components/studio/MiaCopilotPanel'
@@ -530,11 +531,11 @@ export default function ContentDetailPage() {
         setContent(prev => prev ? { ...prev, status: 'PUBLISHING' } : null)
         setPublishResults([])
       } else {
-        alert(data.error || 'Publishing failed')
+        toast.error(data.error || 'Publishing failed')
       }
     } catch (e) {
       console.error('Failed to publish:', e)
-      alert('Publishing failed. Please try again.')
+      toast.error('Publishing failed. Please try again.')
     } finally {
       setIsPublishing(false)
     }
@@ -554,16 +555,15 @@ export default function ContentDetailPage() {
         setContent(prev => prev ? { ...prev, status: 'DRAFT' } : null)
       } else if (data.retryAfterSeconds && !force) {
         const minutes = Math.ceil(data.retryAfterSeconds / 60)
-        if (confirm(`Publishing may still be in progress (~${minutes} min remaining). Force reset now?`)) {
-          setIsResettingStatus(false)
-          return handleResetToDraft(true)
-        }
+        toast.warning(`Publishing may still be in progress (~${minutes} min remaining).`, {
+          action: { label: 'Force Reset', onClick: () => handleResetToDraft(true) },
+        })
       } else {
-        alert(data.error || 'Failed to reset status')
+        toast.error(data.error || 'Failed to reset status')
       }
     } catch (e) {
       console.error('Failed to reset status:', e)
-      alert('Failed to reset status. Please try again.')
+      toast.error('Failed to reset status. Please try again.')
     } finally {
       setIsResettingStatus(false)
     }
@@ -826,11 +826,11 @@ export default function ContentDetailPage() {
         setShowRescheduleModal(false)
         setRescheduleDate('')
       } else {
-        alert(data.error || 'Failed to reschedule')
+        toast.error(data.error || 'Failed to reschedule')
       }
     } catch (e) {
       console.error('Failed to reschedule:', e)
-      alert('Failed to reschedule. Please try again.')
+      toast.error('Failed to reschedule. Please try again.')
     } finally {
       setIsRescheduling(false)
     }

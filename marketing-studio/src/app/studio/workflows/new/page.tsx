@@ -44,8 +44,7 @@ export default function NewWorkflowPage() {
       return
     }
 
-    // In production, this would call the API to save the workflow
-    console.log('Creating workflow:', workflow)
+    // TODO: call API to persist workflow
 
     // Navigate to workflows page
     router.push('/studio/workflows')

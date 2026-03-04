@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { BarChart3, FileText, CheckCircle, Clock, AlertTriangle, Activity, Loader2, RefreshCw, Plug, Video } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 import { MiaContextHint } from '@/components/studio/MiaContextHint'
@@ -14,6 +15,13 @@ interface DashboardStats {
     approvalsPending: number
     integrationsConnected: number
     totalRenders: number
+  }
+  contentStats?: {
+    total: number
+    draft: number
+    scheduled: number
+    published: number
+    failed: number
   }
   recentActivity: Array<{
     id: string
@@ -126,12 +134,8 @@ export default function StudioDashboard() {
               <option>Last 90 days</option>
             </select>
           </div>
-          <div className="h-64 flex items-center justify-center bg-slate-50 rounded-lg border border-slate-200">
-            <div className="text-center text-slate-500">
-              <BarChart3 className="w-12 h-12 mx-auto mb-2" />
-              <p>Chart visualization</p>
-              <p className="text-sm">(Recharts integration ready)</p>
-            </div>
+          <div className="h-64">
+            <ContentPerformanceChart stats={stats?.contentStats} loading={statsLoading} />
           </div>
         </div>
 
@@ -215,6 +219,65 @@ export default function StudioDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+const CHART_COLORS: Record<string, string> = {
+  Draft: '#94a3b8',
+  Scheduled: '#f59e0b',
+  Published: '#10b981',
+  Failed: '#ef4444',
+}
+
+function ContentPerformanceChart({ stats, loading }: { stats?: DashboardStats['contentStats']; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-6 h-6 text-slate-300 animate-spin" />
+      </div>
+    )
+  }
+
+  const data = [
+    { name: 'Draft', value: stats?.draft ?? 0 },
+    { name: 'Scheduled', value: stats?.scheduled ?? 0 },
+    { name: 'Published', value: stats?.published ?? 0 },
+    { name: 'Failed', value: stats?.failed ?? 0 },
+  ]
+
+  const hasData = data.some(d => d.value > 0)
+
+  if (!hasData) {
+    return (
+      <div className="h-full flex items-center justify-center bg-slate-50 rounded-lg border border-slate-200">
+        <div className="text-center text-slate-500">
+          <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No content yet</p>
+          <Link href="/studio/content" className="text-xs text-apex-primary hover:underline mt-1 block">
+            Create your first post
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <Tooltip
+          contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+          cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+        />
+        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
+          {data.map((entry) => (
+            <Cell key={entry.name} fill={CHART_COLORS[entry.name] || '#94a3b8'} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from '@/components/ui/toaster'
 
 // Mock pending approvals data - in production from StudioContentApproval + ScheduledContent
 const MOCK_APPROVALS = [
@@ -192,20 +193,20 @@ export default function ApprovalsPage() {
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
     // In production: POST /api/content/[id]/approve
-    alert(`Content ${contentId} approved!`)
+    toast.success('Content approved successfully')
     setProcessingAction(null)
   }
 
   const handleReject = async (contentId: string) => {
     if (!rejectReason.trim()) {
-      alert('Please provide a reason for rejection')
+      toast.warning('Please provide a reason for rejection')
       return
     }
     setProcessingAction(contentId)
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
     // In production: POST /api/content/[id]/reject
-    alert(`Content ${contentId} rejected with reason: ${rejectReason}`)
+    toast.success('Content rejected')
     setProcessingAction(null)
     setShowRejectModal(false)
     setRejectReason('')

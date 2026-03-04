@@ -145,8 +145,14 @@ export default function ProvidersSettingsPage() {
     }
   }
 
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null)
+
   const handleDisconnect = async (provider: string) => {
-    if (!confirm(`Disconnect ${provider}? You can reconnect anytime.`)) return
+    if (confirmDisconnect !== provider) {
+      setConfirmDisconnect(provider)
+      return
+    }
+    setConfirmDisconnect(null)
     setDisconnecting(provider)
 
     try {
@@ -294,15 +300,21 @@ export default function ProvidersSettingsPage() {
                   </button>
                   <button
                     onClick={() => handleDisconnect(p.provider)}
+                    onBlur={() => { if (confirmDisconnect === p.provider) setConfirmDisconnect(null) }}
                     disabled={disconnecting === p.provider}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    className={cn(
+                      'flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50',
+                      confirmDisconnect === p.provider
+                        ? 'text-white bg-red-600 hover:bg-red-700'
+                        : 'text-red-600 hover:text-red-700 hover:bg-red-50'
+                    )}
                   >
                     {disconnecting === p.provider ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
-                    <span>Disconnect</span>
+                    <span>{confirmDisconnect === p.provider ? 'Confirm Disconnect' : 'Disconnect'}</span>
                   </button>
                 </>
               )}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { FileText, Clock, CheckCircle, XCircle, Eye, Edit, Trash2, Plus, Calendar, Loader2, RefreshCw, Search, ChevronUp, ChevronDown, ArrowUpDown, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from '@/components/ui/toaster'
 
 interface PublishResultEntry {
   channel: string
@@ -46,6 +47,7 @@ function ContentPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -148,10 +150,13 @@ function ContentPageInner() {
     fetchContent()
   }, [fetchContent])
 
-  // Delete content
+  // Delete content — first call sets confirmation, second executes
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this content?')) return
-
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id)
+      return
+    }
+    setConfirmDeleteId(null)
     setDeletingId(id)
     try {
       const response = await fetch(`/api/content/${id}`, { method: 'DELETE' })
@@ -165,7 +170,7 @@ function ContentPageInner() {
       setContent(prev => prev.filter(c => c.id !== id))
     } catch (err) {
       console.error('Error deleting content:', err)
-      alert(err instanceof Error ? err.message : 'Failed to delete content')
+      toast.error(err instanceof Error ? err.message : 'Failed to delete content')
     } finally {
       setDeletingId(null)
     }
@@ -184,11 +189,11 @@ function ContentPageInner() {
       if (data.success) {
         setContent(prev => prev.map(c => c.id === id ? { ...c, status: 'DRAFT' } : c))
       } else {
-        alert(data.error || 'Failed to reset status')
+        toast.error(data.error || 'Failed to reset status')
       }
     } catch (err) {
       console.error('Error resetting status:', err)
-      alert('Failed to reset status. Please try again.')
+      toast.error('Failed to reset status. Please try again.')
     } finally {
       setResettingId(null)
     }
@@ -479,9 +484,15 @@ function ContentPageInner() {
                         </Link>
                         <button
                           onClick={() => handleDelete(item.id)}
+                          onBlur={() => { if (confirmDeleteId === item.id) setConfirmDeleteId(null) }}
                           disabled={deletingId === item.id}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                          title="Delete content"
+                          className={cn(
+                            'p-1.5 rounded disabled:opacity-50 transition-colors',
+                            confirmDeleteId === item.id
+                              ? 'text-red-600 bg-red-50 ring-1 ring-red-300'
+                              : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                          )}
+                          title={confirmDeleteId === item.id ? 'Click again to confirm delete' : 'Delete content'}
                         >
                           {deletingId === item.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

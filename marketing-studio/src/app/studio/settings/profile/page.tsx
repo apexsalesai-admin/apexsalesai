@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Loader2, Trash2 } from 'lucide-react'
+import { toast } from '@/components/ui/toaster'
 import { ProfileSummaryCard } from '@/components/profile/profile-summary-card'
 import { CreatorProfileOnboarding } from '@/components/profile/creator-profile-onboarding'
 import type { CreatorProfile } from '@/lib/studio/creator-profile'
@@ -29,14 +30,28 @@ export default function ProfileSettingsPage() {
     fetchProfiles()
   }, [fetchProfiles])
 
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this profile?')) return
+    if (pendingDeleteId !== id) {
+      setPendingDeleteId(id)
+      toast('Delete this profile?', {
+        action: { label: 'Delete', onClick: () => executeDelete(id) },
+        onDismiss: () => setPendingDeleteId(null),
+      })
+      return
+    }
+  }
+
+  const executeDelete = async (id: string) => {
+    setPendingDeleteId(null)
     setDeleting(id)
     try {
       await fetch(`/api/studio/profile/${id}`, { method: 'DELETE' })
       setProfiles((prev) => prev.filter((p) => p.id !== id))
+      toast.success('Profile deleted')
     } catch {
-      // Silently fail
+      toast.error('Failed to delete profile')
     } finally {
       setDeleting(null)
     }
