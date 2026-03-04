@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Clock,
@@ -9,147 +9,32 @@ import {
   Eye,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare,
-  Filter,
   Search,
   ChevronRight,
   Video,
   FileText,
   AlertCircle,
-  User,
   Calendar,
-  ArrowLeft,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/toaster'
 
-// Mock pending approvals data - in production from StudioContentApproval + ScheduledContent
-const MOCK_APPROVALS = [
-  {
-    id: 'content_1',
-    title: 'Q1 Product Launch Announcement',
-    body: 'We are excited to announce our Q1 product launch! Join us for an exclusive reveal of our latest innovations that will transform how you work...',
-    contentType: 'VIDEO',
-    channels: ['YOUTUBE', 'LINKEDIN'],
-    createdBy: {
-      id: 'user_1',
-      name: 'Alex Rivera',
-      email: 'alex@lyfye.com',
-      avatar: null,
-    },
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 30 * 60 * 1000),
-    scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    priority: 'high',
-    status: 'PENDING_APPROVAL',
-    comments: [
-      {
-        id: 'comment_1',
-        author: 'Sarah Chen',
-        body: 'Great content! Just a small suggestion - can we add the CTA at the end?',
-        createdAt: new Date(Date.now() - 15 * 60 * 1000),
-      },
-    ],
-  },
-  {
-    id: 'content_2',
-    title: 'Weekly Tips: Productivity Hacks for Remote Teams',
-    body: 'Working remotely? Here are 5 productivity hacks that our team swears by: 1. Time blocking for deep work 2. Virtual coffee breaks 3. Async communication best practices...',
-    contentType: 'POST',
-    channels: ['X_TWITTER', 'LINKEDIN'],
-    createdBy: {
-      id: 'user_2',
-      name: 'Sarah Chen',
-      email: 'sarah@lyfye.com',
-      avatar: null,
-    },
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    scheduledFor: new Date(Date.now() + 48 * 60 * 60 * 1000),
-    priority: 'medium',
-    status: 'PENDING_APPROVAL',
-    comments: [],
-  },
-  {
-    id: 'content_3',
-    title: 'Behind the Scenes: Team Culture at Lyfye',
-    body: 'Ever wondered what makes our team tick? Take a peek behind the curtain as we share a day in the life at Lyfye. From morning standups to creative brainstorming sessions...',
-    contentType: 'VIDEO',
-    channels: ['TIKTOK', 'INSTAGRAM'],
-    createdBy: {
-      id: 'user_3',
-      name: 'Mike Johnson',
-      email: 'mike@lyfye.com',
-      avatar: null,
-    },
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    scheduledFor: null,
-    priority: 'low',
-    status: 'PENDING_APPROVAL',
-    comments: [],
-  },
-  {
-    id: 'content_4',
-    title: 'Customer Success Story: How TechCorp 10x Their Pipeline',
-    body: 'TechCorp came to us with a challenge: their sales pipeline was stagnant. Within 3 months of using our platform, they saw a 10x increase in qualified leads...',
-    contentType: 'ARTICLE',
-    channels: ['LINKEDIN'],
-    createdBy: {
-      id: 'user_4',
-      name: 'Emily Watson',
-      email: 'emily@lyfye.com',
-      avatar: null,
-    },
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    submittedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    scheduledFor: new Date(Date.now() + 72 * 60 * 60 * 1000),
-    priority: 'medium',
-    status: 'PENDING_APPROVAL',
-    comments: [
-      {
-        id: 'comment_2',
-        author: 'Alex Rivera',
-        body: 'We should get a quote from the TechCorp CEO to add credibility.',
-        createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
-      },
-      {
-        id: 'comment_3',
-        author: 'Sarah Chen',
-        body: 'Good idea! I\'ll reach out to their team today.',
-        createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      },
-    ],
-  },
-]
+interface ApprovalItem {
+  id: string
+  title: string
+  body: string
+  contentType: string
+  channels: string[]
+  status: string
+  scheduledFor: string | null
+  createdAt: string
+  createdById: string | null
+}
 
-// Recently reviewed items
-const RECENT_REVIEWS = [
-  {
-    id: 'content_5',
-    title: 'New Feature Announcement: AI Video Generation',
-    action: 'APPROVED',
-    reviewedBy: 'Admin',
-    reviewedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-  },
-  {
-    id: 'content_6',
-    title: 'Weekly Newsletter: Industry Trends',
-    action: 'APPROVED',
-    reviewedBy: 'Sarah Chen',
-    reviewedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-  },
-  {
-    id: 'content_7',
-    title: 'Promotional Post: Black Friday Sale',
-    action: 'REJECTED',
-    reviewedBy: 'Admin',
-    reviewedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    reason: 'Compliance issues with discount claims',
-  },
-]
-
-function formatRelativeTime(date: Date): string {
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const minutes = Math.floor(diff / (1000 * 60))
@@ -161,9 +46,9 @@ function formatRelativeTime(date: Date): string {
   return `${days}d ago`
 }
 
-function formatScheduledDate(date: Date | null): string {
-  if (!date) return 'Not scheduled'
-  return date.toLocaleDateString('en-US', {
+function formatScheduledDate(dateStr: string | null): string {
+  if (!dateStr) return 'Not scheduled'
+  return new Date(dateStr).toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -173,28 +58,65 @@ function formatScheduledDate(date: Date | null): string {
 }
 
 export default function ApprovalsPage() {
+  const [items, setItems] = useState<ApprovalItem[]>([])
+  const [recentlyReviewed, setRecentlyReviewed] = useState<Array<{ id: string; title: string; action: string }>>([])
+  const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [processingAction, setProcessingAction] = useState<string | null>(null)
 
-  const filteredApprovals = MOCK_APPROVALS.filter((item) => {
-    if (filter !== 'all' && item.priority !== filter) return false
+  const fetchPending = useCallback(async () => {
+    try {
+      const res = await fetch('/api/content?status=PENDING_APPROVAL')
+      const data = await res.json()
+      if (data.success) {
+        setItems(data.data || [])
+      }
+    } catch {
+      toast.error('Failed to load approvals')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPending()
+  }, [fetchPending])
+
+  const filteredApprovals = items.filter((item) => {
     if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
     return true
   })
 
-  const selectedContent = MOCK_APPROVALS.find((item) => item.id === selectedItem)
+  const selectedContent = items.find((item) => item.id === selectedItem)
 
   const handleApprove = async (contentId: string) => {
     setProcessingAction(contentId)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    // In production: POST /api/content/[id]/approve
-    toast.success('Content approved successfully')
-    setProcessingAction(null)
+    try {
+      const res = await fetch(`/api/content/${contentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED' }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        const approved = items.find(i => i.id === contentId)
+        setItems(prev => prev.filter(i => i.id !== contentId))
+        if (approved) {
+          setRecentlyReviewed(prev => [{ id: approved.id, title: approved.title, action: 'APPROVED' }, ...prev].slice(0, 5))
+        }
+        toast.success('Content approved')
+        setSelectedItem(null)
+      } else {
+        toast.error(data.error || 'Failed to approve')
+      }
+    } catch {
+      toast.error('Failed to approve content')
+    } finally {
+      setProcessingAction(null)
+    }
   }
 
   const handleReject = async (contentId: string) => {
@@ -203,14 +125,31 @@ export default function ApprovalsPage() {
       return
     }
     setProcessingAction(contentId)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    // In production: POST /api/content/[id]/reject
-    toast.success('Content rejected')
-    setProcessingAction(null)
-    setShowRejectModal(false)
-    setRejectReason('')
-    setSelectedItem(null)
+    try {
+      const res = await fetch(`/api/content/${contentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DRAFT' }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        const rejected = items.find(i => i.id === contentId)
+        setItems(prev => prev.filter(i => i.id !== contentId))
+        if (rejected) {
+          setRecentlyReviewed(prev => [{ id: rejected.id, title: rejected.title, action: 'REJECTED' }, ...prev].slice(0, 5))
+        }
+        toast.success('Content sent back to draft')
+        setShowRejectModal(false)
+        setRejectReason('')
+        setSelectedItem(null)
+      } else {
+        toast.error(data.error || 'Failed to reject')
+      }
+    } catch {
+      toast.error('Failed to reject content')
+    } finally {
+      setProcessingAction(null)
+    }
   }
 
   return (
@@ -231,46 +170,33 @@ export default function ApprovalsPage() {
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => { setLoading(true); fetchPending() }}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+          </button>
           <div className="flex items-center space-x-2 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200">
             <Clock className="w-4 h-4 text-amber-600" />
             <span className="text-sm font-medium text-amber-700">
-              {MOCK_APPROVALS.length} pending
+              {items.length} pending
             </span>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search content..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent w-64"
-            />
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-sm text-slate-500">Priority:</span>
-          {(['all', 'high', 'medium', 'low'] as const).map((priority) => (
-            <button
-              key={priority}
-              onClick={() => setFilter(priority)}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
-                filter === priority
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-slate-600 hover:bg-slate-100'
-              )}
-            >
-              {priority.charAt(0).toUpperCase() + priority.slice(1)}
-            </button>
-          ))}
+      {/* Search */}
+      <div className="flex items-center space-x-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search content..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent w-64"
+          />
         </div>
       </div>
 
@@ -279,7 +205,11 @@ export default function ApprovalsPage() {
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-lg font-semibold text-slate-900">Pending Review</h2>
 
-          {filteredApprovals.length === 0 ? (
+          {loading ? (
+            <div className="card flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
+            </div>
+          ) : filteredApprovals.length === 0 ? (
             <div className="card text-center py-12">
               <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">All caught up!</h3>
@@ -320,29 +250,15 @@ export default function ApprovalsPage() {
                       <p className="text-sm text-slate-500 line-clamp-2 mt-1">{item.body}</p>
                       <div className="flex items-center flex-wrap gap-2 mt-3">
                         <div className="flex items-center space-x-1 text-xs text-slate-500">
-                          <User className="w-3 h-3" />
-                          <span>{item.createdBy.name}</span>
-                        </div>
-                        <span className="text-slate-300">•</span>
-                        <div className="flex items-center space-x-1 text-xs text-slate-500">
                           <Clock className="w-3 h-3" />
-                          <span>Submitted {formatRelativeTime(item.submittedAt)}</span>
+                          <span>Created {formatRelativeTime(item.createdAt)}</span>
                         </div>
                         {item.scheduledFor && (
                           <>
-                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-300">&bull;</span>
                             <div className="flex items-center space-x-1 text-xs text-slate-500">
                               <Calendar className="w-3 h-3" />
                               <span>{formatScheduledDate(item.scheduledFor)}</span>
-                            </div>
-                          </>
-                        )}
-                        {item.comments.length > 0 && (
-                          <>
-                            <span className="text-slate-300">•</span>
-                            <div className="flex items-center space-x-1 text-xs text-slate-500">
-                              <MessageSquare className="w-3 h-3" />
-                              <span>{item.comments.length} comments</span>
                             </div>
                           </>
                         )}
@@ -350,15 +266,8 @@ export default function ApprovalsPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end space-y-2 shrink-0">
-                    <span
-                      className={cn(
-                        'text-xs font-medium px-2 py-1 rounded-full',
-                        item.priority === 'high' && 'bg-red-100 text-red-700',
-                        item.priority === 'medium' && 'bg-amber-100 text-amber-700',
-                        item.priority === 'low' && 'bg-slate-100 text-slate-700'
-                      )}
-                    >
-                      {item.priority} priority
+                    <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                      pending review
                     </span>
                     <div className="flex items-center space-x-1">
                       {item.channels.map((channel) => (
@@ -430,64 +339,53 @@ export default function ApprovalsPage() {
                   </div>
                   <span className="text-sm text-slate-600">Pending</span>
                 </div>
-                <span className="text-lg font-bold text-slate-900">{MOCK_APPROVALS.length}</span>
+                <span className="text-lg font-bold text-slate-900">{items.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="w-4 h-4 text-green-600" />
                   </div>
-                  <span className="text-sm text-slate-600">Approved Today</span>
+                  <span className="text-sm text-slate-600">Reviewed This Session</span>
                 </div>
-                <span className="text-lg font-bold text-slate-900">12</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                    <XCircle className="w-4 h-4 text-red-600" />
-                  </div>
-                  <span className="text-sm text-slate-600">Rejected Today</span>
-                </div>
-                <span className="text-lg font-bold text-slate-900">2</span>
+                <span className="text-lg font-bold text-slate-900">{recentlyReviewed.length}</span>
               </div>
             </div>
           </div>
 
-          {/* Recent Reviews */}
-          <div className="card">
-            <h3 className="font-semibold text-slate-900 mb-4">Recent Reviews</h3>
-            <div className="space-y-3">
-              {RECENT_REVIEWS.map((review) => (
-                <div
-                  key={review.id}
-                  className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg"
-                >
+          {/* Recent Reviews (this session) */}
+          {recentlyReviewed.length > 0 && (
+            <div className="card">
+              <h3 className="font-semibold text-slate-900 mb-4">Recent Reviews</h3>
+              <div className="space-y-3">
+                {recentlyReviewed.map((review) => (
                   <div
-                    className={cn(
-                      'w-6 h-6 rounded-full flex items-center justify-center shrink-0',
-                      review.action === 'APPROVED' ? 'bg-green-100' : 'bg-red-100'
-                    )}
+                    key={review.id}
+                    className="flex items-start space-x-3 p-3 bg-slate-50 rounded-lg"
                   >
-                    {review.action === 'APPROVED' ? (
-                      <CheckCircle className="w-3 h-3 text-green-600" />
-                    ) : (
-                      <XCircle className="w-3 h-3 text-red-600" />
-                    )}
+                    <div
+                      className={cn(
+                        'w-6 h-6 rounded-full flex items-center justify-center shrink-0',
+                        review.action === 'APPROVED' ? 'bg-green-100' : 'bg-red-100'
+                      )}
+                    >
+                      {review.action === 'APPROVED' ? (
+                        <CheckCircle className="w-3 h-3 text-green-600" />
+                      ) : (
+                        <XCircle className="w-3 h-3 text-red-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-900 truncate">{review.title}</p>
+                      <p className="text-xs text-slate-500">
+                        {review.action === 'APPROVED' ? 'Approved' : 'Rejected'} just now
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-900 truncate">{review.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {review.action === 'APPROVED' ? 'Approved' : 'Rejected'} by {review.reviewedBy} •{' '}
-                      {formatRelativeTime(review.reviewedAt)}
-                    </p>
-                    {review.reason && (
-                      <p className="text-xs text-red-600 mt-1">{review.reason}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Guidelines */}
           <div className="card bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">

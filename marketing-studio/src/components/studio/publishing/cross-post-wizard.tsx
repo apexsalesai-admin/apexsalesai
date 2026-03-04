@@ -203,12 +203,25 @@ export function CrossPostWizard({ contentId, content, onClose, onPublished }: Cr
       const channelPlatforms = selectedChannels.map(
         c => PLATFORM_NAME_MAP[c.platform] || c.platform.toUpperCase()
       )
+      // Build per-channel variations from adapted content (includes user edits)
+      const uniqueChannels = Array.from(new Set(channelPlatforms))
+      const publishVariations = uniqueChannels.map(ch => {
+        const pKey = ch === 'X_TWITTER' ? 'x' : ch.toLowerCase()
+        const adapted = getAdaptation(pKey)
+        return {
+          channel: ch,
+          body: adapted?.body,
+          title: adapted?.title,
+        }
+      }).filter(v => v.body) // only include channels with adapted text
+
       const res = await fetch('/api/studio/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contentId,
-          channels: Array.from(new Set(channelPlatforms)),
+          channels: uniqueChannels,
+          ...(publishVariations.length > 0 && { variations: publishVariations }),
         }),
       })
       const data = await res.json()

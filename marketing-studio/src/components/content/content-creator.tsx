@@ -202,7 +202,6 @@ interface ContentScore {
 }
 
 const CHANNELS = [
-  { id: 'YOUTUBE' as IntegrationType, name: 'YouTube', icon: Youtube, color: 'bg-red-500', gradient: 'from-red-500 to-red-600', charLimit: 5000, types: ['video'] },
   { id: 'LINKEDIN' as IntegrationType, name: 'LinkedIn', icon: Linkedin, color: 'bg-blue-600', gradient: 'from-blue-600 to-blue-700', charLimit: 3000, types: ['post', 'article'] },
   { id: 'X_TWITTER' as IntegrationType, name: 'X (Twitter)', icon: Twitter, color: 'bg-slate-900', gradient: 'from-slate-800 to-slate-900', charLimit: 280, types: ['post', 'thread'] },
   { id: 'TIKTOK' as IntegrationType, name: 'TikTok', icon: Video, color: 'bg-pink-600', gradient: 'from-pink-500 to-purple-600', charLimit: 2200, types: ['video', 'reel'] },

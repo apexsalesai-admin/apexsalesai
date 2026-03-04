@@ -169,7 +169,7 @@ export default function LabsPage() {
             </div>
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-slate-300" />
-              <span className="text-sm">1 Coming Soon</span>
+              <span className="text-sm">1 In Development</span>
             </div>
           </div>
         </div>
@@ -291,7 +291,7 @@ export default function LabsPage() {
                 ) : (
                   <span className="text-sm text-slate-400 flex items-center space-x-2">
                     <Lock className="w-4 h-4" />
-                    <span>Access coming soon</span>
+                    <span>In development</span>
                   </span>
                 )}
               </div>

@@ -47,6 +47,11 @@ const PublishRequestSchema = z.object({
   workspaceId: z.string().min(1).optional(),
   contentId: z.string().min(1, 'contentId is required'),
   channels: z.array(z.string()).min(1, 'At least one channel is required'),
+  variations: z.array(z.object({
+    channel: z.string(),
+    body: z.string().optional(),
+    title: z.string().optional(),
+  })).optional(),
 })
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -104,6 +109,7 @@ export async function POST(request: NextRequest) {
 
     contentId = validation.data.contentId
     const channels = validation.data.channels
+    const variations = validation.data.variations || []
     const userId = session.user.id
 
     // Resolve workspace: use provided ID or resolve from session user
@@ -184,7 +190,9 @@ export async function POST(request: NextRequest) {
     console.log('[API:Publish] Job created', { jobId: publishJob.id })
 
     // ── Execute publishing for each channel ───────────────────────
-    const text = buildPublishText({
+    // Build a per-channel variation map from the request (if provided by cross-post wizard)
+    const variationMap = new Map(variations.map(v => [v.channel, v]))
+    const defaultText = buildPublishText({
       title: content.title,
       body: content.body,
       hashtags: content.hashtags as string[],
@@ -203,6 +211,12 @@ export async function POST(request: NextRequest) {
     const uniqueChannels = Array.from(new Set(channels))
 
     for (const channel of uniqueChannels) {
+      // Use per-channel adapted text if provided, otherwise fall back to default
+      const variation = variationMap.get(channel)
+      const text = (variation?.body)
+        ? buildPublishText({ title: variation.title || content.title, body: variation.body, hashtags: content.hashtags as string[], callToAction: content.callToAction })
+        : defaultText
+
       const mapped = PLATFORM_MAP[channel]
 
       if (!mapped) {
