@@ -165,9 +165,16 @@ export function MiaSectionBlock({
       </div>
 
       {isGenerating ? (
-        <div className="flex items-center gap-2 py-8 justify-center">
-          <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
-          <span className="text-sm text-slate-500">Mia is writing...</span>
+        <div className="flex items-center gap-3 py-8 justify-center">
+          <div className="flex items-center gap-1.5 px-4 py-2 bg-purple-50 border border-purple-100 rounded-full">
+            <Sparkles className="w-4 h-4 text-purple-500 animate-pulse" />
+            <span className="text-sm text-purple-600 font-medium">Mia is writing</span>
+            <span className="flex gap-0.5 ml-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+          </div>
         </div>
       ) : section.content ? (
         <div className="space-y-4">
@@ -333,9 +340,14 @@ export function MiaSectionBlock({
                 </div>
               )}
               {section.isRevising && (
-                <div className="mt-3 flex items-center gap-2 px-3 py-2.5 text-xs text-purple-500">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Mia is revising based on your feedback...
+                <div className="mt-3 flex items-center gap-2 px-3 py-2.5 bg-purple-50 border border-purple-100 rounded-xl">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-pulse" />
+                  <span className="text-xs text-purple-600 font-medium">Mia is revising</span>
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-1 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
                 </div>
               )}
             </>

@@ -252,9 +252,18 @@ function PolishingPhase({
 }) {
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-        <p className="text-slate-500">Reviewing your draft...</p>
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
+          <Sparkles className="w-8 h-8 text-purple-500 animate-pulse" />
+        </div>
+        <div className="flex items-center gap-2">
+          <p className="text-slate-600 font-medium">Mia is reviewing your draft</p>
+          <span className="flex gap-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </span>
+        </div>
       </div>
     )
   }

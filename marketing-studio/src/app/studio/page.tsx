@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { BarChart3, FileText, CheckCircle, Clock, AlertTriangle, Activity, Loader2, RefreshCw, Plug, Video } from 'lucide-react'
+import { BarChart3, FileText, CheckCircle, Clock, AlertTriangle, Activity, Loader2, RefreshCw, Plug, Video, Sparkles, CalendarClock } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
 import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
@@ -53,11 +53,20 @@ export default function StudioDashboard() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-1">
-          Overview of your marketing performance and activity
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-slate-500 mt-1">
+            Overview of your marketing performance and activity
+          </p>
+        </div>
+        <Link
+          href="/studio/content/new"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-purple-500/25 transition-all"
+        >
+          <Sparkles className="w-4 h-4" />
+          Create with Mia
+        </Link>
       </div>
 
       {/* Mia Context Hint — Dashboard */}
@@ -173,51 +182,8 @@ export default function StudioDashboard() {
         </div>
       </div>
 
-      {/* Workflow Status */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">Active Workflows</h2>
-          <a href="/studio/workflows" className="text-sm text-apex-primary hover:underline">
-            View all workflows
-          </a>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm text-slate-500 border-b border-slate-200">
-                <th className="pb-3 font-medium">Workflow</th>
-                <th className="pb-3 font-medium">Status</th>
-                <th className="pb-3 font-medium">Trigger</th>
-                <th className="pb-3 font-medium">Target</th>
-                <th className="pb-3 font-medium">Last Run</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
-              <tr className="border-b border-slate-100">
-                <td className="py-3 font-medium text-slate-900">TikTok → YouTube Auto-Share</td>
-                <td className="py-3"><span className="badge-success">Active</span></td>
-                <td className="py-3 text-slate-600">TikTok new post</td>
-                <td className="py-3 text-slate-600">YouTube Shorts</td>
-                <td className="py-3 text-slate-500">5 min ago</td>
-              </tr>
-              <tr className="border-b border-slate-100">
-                <td className="py-3 font-medium text-slate-900">Blog → LinkedIn Share</td>
-                <td className="py-3"><span className="badge-success">Active</span></td>
-                <td className="py-3 text-slate-600">New blog post</td>
-                <td className="py-3 text-slate-600">LinkedIn</td>
-                <td className="py-3 text-slate-500">1 hour ago</td>
-              </tr>
-              <tr>
-                <td className="py-3 font-medium text-slate-900">YouTube → X Thread</td>
-                <td className="py-3"><span className="badge-warning">Paused</span></td>
-                <td className="py-3 text-slate-600">YouTube video</td>
-                <td className="py-3 text-slate-600">X Thread</td>
-                <td className="py-3 text-slate-500">2 days ago</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Upcoming Scheduled Posts */}
+      <UpcomingPostsWidget />
     </div>
   )
 }
@@ -491,6 +457,97 @@ function SystemReadinessWidget() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function UpcomingPostsWidget() {
+  const [posts, setPosts] = useState<Array<{
+    id: string
+    title: string
+    channels: string[]
+    scheduledAt: string
+    status: string
+  }>>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/content?status=SCHEDULED&limit=5')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setPosts(data.data || [])
+      })
+      .catch(err => console.error('[UpcomingPosts]', err))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const channelLabel = (ch: string) => {
+    if (ch === 'X_TWITTER') return 'X'
+    return ch.charAt(0) + ch.slice(1).toLowerCase()
+  }
+
+  const timeUntil = (date: string) => {
+    const diff = new Date(date).getTime() - Date.now()
+    if (diff < 0) return 'Overdue'
+    const hours = Math.floor(diff / 3600000)
+    if (hours < 1) return `${Math.ceil(diff / 60000)}m`
+    if (hours < 24) return `${hours}h`
+    return `${Math.floor(hours / 24)}d`
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-semibold text-slate-900">Upcoming Posts</h2>
+        </div>
+        <Link href="/studio/content" className="text-sm text-apex-primary hover:underline">
+          View all content
+        </Link>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 text-slate-300 animate-spin" />
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="text-center py-8 text-slate-400">
+          <CalendarClock className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No scheduled posts</p>
+          <Link href="/studio/content/new" className="text-xs text-apex-primary hover:underline mt-1 block">
+            Schedule your first post
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {posts.map(post => (
+            <Link
+              key={post.id}
+              href={`/studio/content/${post.id}`}
+              className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:border-purple-200 hover:bg-purple-50/30 transition-colors group"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-900 truncate group-hover:text-purple-700 transition-colors">
+                  {post.title || 'Untitled'}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {post.channels?.slice(0, 3).map(ch => (
+                    <span key={ch} className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                      {channelLabel(ch)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-3">
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                  {timeUntil(post.scheduledAt)}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -530,6 +530,8 @@ export default function ContentDetailPage() {
       if (data.success) {
         setContent(prev => prev ? { ...prev, status: 'PUBLISHING' } : null)
         setPublishResults([])
+        // Start polling for final publish status
+        pollPublishStatus(content.id)
       } else {
         toast.error(data.error || 'Publishing failed')
       }
@@ -540,6 +542,32 @@ export default function ContentDetailPage() {
       setIsPublishing(false)
     }
   }
+
+  const pollPublishStatus = useCallback((contentId: string) => {
+    let attempts = 0
+    const maxAttempts = 30 // 60s max
+    const interval = setInterval(async () => {
+      attempts++
+      try {
+        const res = await fetch(`/api/content/${contentId}`)
+        const data = await res.json()
+        const status = data.data?.status || data.status
+        if (status === 'PUBLISHED') {
+          clearInterval(interval)
+          setContent(prev => prev ? { ...prev, status: 'PUBLISHED', publishResults: data.data?.publishResults } : null)
+          toast.success('Content published successfully!')
+        } else if (status === 'FAILED') {
+          clearInterval(interval)
+          setContent(prev => prev ? { ...prev, status: 'FAILED', errorMessage: data.data?.errorMessage } : null)
+          toast.error(data.data?.errorMessage || 'Publishing failed')
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval)
+        }
+      } catch {
+        if (attempts >= maxAttempts) clearInterval(interval)
+      }
+    }, 2000)
+  }, [])
 
   const handleResetToDraft = async (force = false) => {
     if (!content) return
@@ -916,7 +944,12 @@ export default function ContentDetailPage() {
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <h1 className="text-2xl font-bold text-slate-900">{content.title}</h1>
-              <span className={cn('px-3 py-1 rounded-full text-sm font-medium', statusConfig.bgColor, statusConfig.color)}>
+              <span className={cn(
+                'px-3 py-1 rounded-full text-sm font-medium inline-flex items-center gap-1.5',
+                statusConfig.bgColor, statusConfig.color,
+                content.status === 'PUBLISHING' && 'animate-pulse'
+              )}>
+                {content.status === 'PUBLISHING' && <Loader2 className="w-3 h-3 animate-spin" />}
                 {statusConfig.label}
               </span>
               {content.aiGenerated && (
