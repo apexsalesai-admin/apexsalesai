@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { hasPermission } from '@/lib/rbac'
 import { UserRole, WorkflowStatus } from '@/types'
 
@@ -36,8 +38,10 @@ const MOCK_WORKFLOWS = [
 // GET /api/workflows - List all workflows
 export async function GET(request: NextRequest) {
   try {
-    // TODO: When workflow model is redesigned, fetch from database
-    // For now, return mock data
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 })
+    }
     return NextResponse.json({
       success: true,
       data: MOCK_WORKFLOWS,
@@ -55,11 +59,15 @@ export async function GET(request: NextRequest) {
 // POST /api/workflows - Create a new workflow
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { name, description } = body
 
-    // TODO: Get user from session and verify permissions
-    const userRole = (request.headers.get('x-user-role') || 'PUBLISHER') as UserRole
+    const userRole = ((session.user as { role?: string }).role || 'PUBLISHER') as UserRole
 
     // Check permissions
     if (!hasPermission(userRole, 'workflows:create')) {

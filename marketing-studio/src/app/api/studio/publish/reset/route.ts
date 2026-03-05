@@ -62,8 +62,6 @@ export async function POST(request: NextRequest) {
       data: { status: 'DRAFT' },
     }))
 
-    console.log('[API:publish/reset] Reset content to DRAFT', { contentId, force: !!force })
-
     return NextResponse.json({
       success: true,
       data: updated,

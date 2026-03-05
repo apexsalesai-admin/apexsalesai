@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { getAuditLogs } from '@/lib/audit'
 import { hasPermission } from '@/lib/rbac'
 import { UserRole, AuditAction } from '@/types'
@@ -6,8 +8,11 @@ import { UserRole, AuditAction } from '@/types'
 // GET /api/audit - Get audit logs (ADMIN only)
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get user from session
-    const userRole = (request.headers.get('x-user-role') || 'VIEWER') as UserRole
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 })
+    }
+    const userRole = ((session.user as { role?: string }).role || 'VIEWER') as UserRole
 
     // Check permissions - only ADMIN and APPROVER can view audit logs
     if (!hasPermission(userRole, 'audit:view')) {

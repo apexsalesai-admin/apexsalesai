@@ -1,71 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight, MessageSquare, Key } from 'lucide-react'
+import { AlertTriangle, Shield, Trash2, Check, X, RefreshCw, Sparkles, ChevronRight, MessageSquare, Key, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { IntegrationType, IntegrationStatus } from '@/types'
 import { getAllConnectors } from '@/lib/connectors'
 
-// Mock connected integrations
-const MOCK_INTEGRATIONS = [
-  {
-    id: 'int_1',
-    type: 'YOUTUBE' as IntegrationType,
-    status: 'CONNECTED' as IntegrationStatus,
-    channelName: 'Lyfye',
-    channelUrl: 'https://youtube.com/@lyfye',
-    connectedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    scopesGranted: ['youtube.readonly', 'youtube.upload'],
-  },
-  {
-    id: 'int_2',
-    type: 'TIKTOK' as IntegrationType,
-    status: 'CONNECTED' as IntegrationStatus,
-    channelName: 'Lyfye',
-    channelUrl: 'https://tiktok.com/@lyfye',
-    connectedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-    scopesGranted: ['user.info.basic', 'video.upload'],
-  },
-  {
-    id: 'int_3',
-    type: 'LINKEDIN' as IntegrationType,
-    status: 'CONNECTED' as IntegrationStatus,
-    channelName: 'Lyfye Company',
-    channelUrl: 'https://linkedin.com/company/lyfye',
-    connectedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    scopesGranted: ['r_liteprofile', 'w_member_social'],
-  },
-]
+interface ConnectedChannel {
+  id: string
+  platform: string
+  displayName: string
+  accountName: string | null
+  isActive: boolean
+  connectedAt: string
+  tokenHealth: 'healthy' | 'expiring_soon' | 'expired' | 'unknown'
+  lastError: string | null
+}
 
 export default function SettingsPage() {
-  const [integrations, setIntegrations] = useState(MOCK_INTEGRATIONS)
+  const [channels, setChannels] = useState<ConnectedChannel[]>([])
+  const [loading, setLoading] = useState(true)
   const [revoking, setRevoking] = useState<string | null>(null)
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null)
   const connectors = getAllConnectors()
 
-  const handleRevoke = async (integrationId: string) => {
-    setRevoking(integrationId)
+  const fetchChannels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/studio/channels')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setChannels(data.channels || [])
+      }
+    } catch (e) {
+      console.error('Failed to fetch channels:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+  useEffect(() => { fetchChannels() }, [fetchChannels])
 
-    // Update integration status
-    setIntegrations(prev =>
-      prev.map(int =>
-        int.id === integrationId
-          ? { ...int, status: 'REVOKED' as IntegrationStatus }
-          : int
-      )
-    )
-
-    setRevoking(null)
-    setConfirmRevoke(null)
-
-    // In production, this would:
-    // 1. Call API to revoke tokens
-    // 2. Create audit log entry
-    // 3. Disable related workflows
+  const handleRevoke = async (channelId: string) => {
+    setRevoking(channelId)
+    try {
+      await fetch('/api/studio/channels', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId }),
+      })
+      setChannels(prev => prev.filter(c => c.id !== channelId))
+    } catch (e) {
+      console.error('Failed to revoke channel:', e)
+    } finally {
+      setRevoking(null)
+      setConfirmRevoke(null)
+    }
   }
 
   return (
@@ -168,116 +157,111 @@ export default function SettingsPage() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-900">Connected Integrations</h2>
-          <button className="btn-secondary text-sm flex items-center space-x-2">
-            <RefreshCw className="w-4 h-4" />
+          <button
+            onClick={() => { setLoading(true); fetchChannels() }}
+            className="btn-secondary text-sm flex items-center space-x-2"
+          >
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
             <span>Refresh All</span>
           </button>
         </div>
 
-        <div className="space-y-4">
-          {integrations.map((integration) => {
-            const connector = connectors.find(c => c.type === integration.type)
-            const isRevoked = integration.status === 'REVOKED'
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+          </div>
+        ) : channels.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">
+            <Shield className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <p className="text-sm">No publishing channels connected</p>
+            <Link href="/studio/integrations" className="text-xs text-apex-primary hover:underline mt-1 block">
+              Connect channels in Integrations
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {channels.map((channel) => {
+              const platformType = channel.platform.toUpperCase()
+              const connector = connectors.find(c => c.type === platformType)
+              const healthColors = {
+                healthy: 'badge-success',
+                expiring_soon: 'badge-warning',
+                expired: 'badge-error',
+                unknown: 'bg-slate-100 text-slate-600',
+              }
 
-            return (
-              <div
-                key={integration.id}
-                className={cn(
-                  'border rounded-lg p-4',
-                  isRevoked ? 'border-red-200 bg-red-50' : 'border-slate-200'
-                )}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4">
-                    <div
-                      className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl font-bold"
-                      style={{ backgroundColor: connector?.color || '#64748b' }}
-                    >
-                      {connector?.name.charAt(0) || '?'}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-medium text-slate-900">{connector?.name}</h3>
-                        <span className={cn(
-                          'badge',
-                          isRevoked ? 'badge-error' : 'badge-success'
-                        )}>
-                          {integration.status}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-600 mt-1">
-                        {integration.channelName}
-                      </p>
-                      <a
-                        href={integration.channelUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-apex-primary hover:underline"
+              return (
+                <div
+                  key={channel.id}
+                  className="border rounded-lg p-4 border-slate-200"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4">
+                      <div
+                        className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl font-bold"
+                        style={{ backgroundColor: connector?.color || '#64748b' }}
                       >
-                        {integration.channelUrl}
-                      </a>
-
-                      {/* Scopes */}
-                      <div className="mt-2">
-                        <p className="text-xs text-slate-500 mb-1">Granted Scopes:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {integration.scopesGranted.map((scope) => (
-                            <span
-                              key={scope}
-                              className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs"
-                            >
-                              {scope}
-                            </span>
-                          ))}
+                        {connector?.name.charAt(0) || channel.platform.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-medium text-slate-900">{channel.displayName}</h3>
+                          <span className={cn('badge', healthColors[channel.tokenHealth])}>
+                            {channel.tokenHealth === 'healthy' ? 'Connected' : channel.tokenHealth.replace('_', ' ')}
+                          </span>
                         </div>
+                        <p className="text-sm text-slate-600 mt-1">
+                          {channel.platform.charAt(0).toUpperCase() + channel.platform.slice(1)}
+                          {channel.accountName && ` — ${channel.accountName}`}
+                        </p>
+                        {channel.lastError && (
+                          <p className="text-xs text-red-500 mt-1">{channel.lastError}</p>
+                        )}
+                        <p className="text-xs text-slate-400 mt-2">
+                          Connected {new Date(channel.connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
                       </div>
-
-                      <p className="text-xs text-slate-400 mt-2">
-                        Connected {formatDate(integration.connectedAt)}
-                      </p>
                     </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div>
-                    {isRevoked ? (
-                      <span className="text-sm text-red-600">Access Revoked</span>
-                    ) : confirmRevoke === integration.id ? (
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-red-600">Confirm revoke?</span>
+                    {/* Actions */}
+                    <div>
+                      {confirmRevoke === channel.id ? (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-red-600">Confirm revoke?</span>
+                          <button
+                            onClick={() => handleRevoke(channel.id)}
+                            disabled={revoking === channel.id}
+                            className="p-1.5 bg-red-600 text-white rounded hover:bg-red-700"
+                          >
+                            {revoking === channel.id ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Check className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setConfirmRevoke(null)}
+                            className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          onClick={() => handleRevoke(integration.id)}
-                          disabled={revoking === integration.id}
-                          className="p-1.5 bg-red-600 text-white rounded hover:bg-red-700"
+                          onClick={() => setConfirmRevoke(channel.id)}
+                          className="btn-danger flex items-center space-x-2"
                         >
-                          {revoking === integration.id ? (
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Check className="w-4 h-4" />
-                          )}
+                          <Trash2 className="w-4 h-4" />
+                          <span>Revoke Access</span>
                         </button>
-                        <button
-                          onClick={() => setConfirmRevoke(null)}
-                          className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmRevoke(integration.id)}
-                        className="btn-danger flex items-center space-x-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Revoke Access</span>
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Security Settings */}
@@ -349,12 +333,4 @@ function ToggleSwitch({ defaultChecked = false }: { defaultChecked?: boolean }) 
       />
     </button>
   )
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }

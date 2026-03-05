@@ -118,7 +118,6 @@ export async function POST(request: NextRequest) {
 
       if (sceneDiff > 3) {
         // AI scene count diverges wildly from regex — trust regex structure, keep AI creativity
-        console.log(`[MIA:AI:CROSSCHECK] Scene count divergence: AI=${aiAnalysis.scenes.length} regex=${regexAnalysis.scenes.length} — merging`)
         analysis = {
           ...regexAnalysis,
           overallFeedback: aiAnalysis.overallFeedback,
@@ -141,11 +140,9 @@ export async function POST(request: NextRequest) {
         analysis = aiAnalysis
       }
 
-      console.log(`[MIA:ANALYZE] AI-powered analysis — scenes=${analysis.scenes.length} ai=true arc="${analysis.narrativeArc}"`)
     } else {
       // AI failed — pure regex fallback
       analysis = regexAnalysis
-      console.log(`[MIA:ANALYZE] Regex fallback — scenes=${analysis.scenes.length} ai=false`)
     }
 
     // Build Mia messages
@@ -165,10 +162,6 @@ export async function POST(request: NextRequest) {
     if (analysis.totalEstimatedCost > remaining) {
       miaMessages.push(generateBudgetWarning(analysis.totalEstimatedCost, remaining))
     }
-
-    console.log(
-      `[MIA:ANALYZE] contentId=${contentId} versionId=${versionId} scenes=${analysis.scenes.length} totalDuration=${analysis.totalEstimatedDuration}s totalCost=$${analysis.totalEstimatedCost.toFixed(2)}`,
-    )
 
     return NextResponse.json({
       success: true,

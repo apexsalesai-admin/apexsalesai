@@ -177,8 +177,6 @@ export async function POST(request: NextRequest) {
       return created
     })
 
-    console.log('[API:Workspace] Created workspace:', workspace.id)
-
     return NextResponse.json(
       {
         success: true,

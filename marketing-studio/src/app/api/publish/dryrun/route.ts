@@ -67,8 +67,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('[CONNECTOR] Dry run initiated', { platform: normalizedPlatform, contentLength: content.length })
-
     // 1. Validate system readiness
     const requirements = await getPublishRequirements({ workspaceId })
 
@@ -83,8 +81,6 @@ export async function POST(request: NextRequest) {
     // 3. Validate content against platform rules
     const connectorConfig = getConnectorConfig(normalizedPlatform)
     const contentValidation = validateContent(normalizedPlatform, content)
-
-    console.log('[CONNECTOR] Token validation passed:', oauthValid)
 
     // 4. Build simulated result — no external API calls
     const result = {
@@ -110,12 +106,6 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     }
 
-    console.log('[CONNECTOR] Dry run completed', {
-      platform: normalizedPlatform,
-      systemReady: result.systemReady,
-      oauthValid,
-      characterLimitOk: contentValidation.characterLimitOk,
-    })
 
     return NextResponse.json(result, { headers: NO_CACHE_HEADERS })
   } catch (error) {

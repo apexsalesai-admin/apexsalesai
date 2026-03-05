@@ -364,12 +364,12 @@ Return ONLY the JSON object, no additional text or markdown.`
         result = await generateWithClaude(prompt)
         usedModel = 'claude-sonnet-4-20250514'
       } catch (claudeError) {
-        console.log('Claude failed, falling back to OpenAI:', claudeError)
+        // Claude unavailable, try OpenAI
         try {
           result = await generateWithOpenAI(prompt)
           usedModel = 'gpt-4o'
         } catch (openaiError) {
-          console.log('OpenAI failed, falling back to Gemini:', openaiError)
+          // OpenAI unavailable, try Gemini
           result = await generateWithGemini(prompt)
           usedModel = 'gemini-2.0-flash'
         }

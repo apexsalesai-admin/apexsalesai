@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // Video Generation API - Integrates with cutting-edge AI video tools
 // Supports: Runway, HeyGen, ElevenLabs, Sora, and more
@@ -149,8 +151,6 @@ async function generateRunwayVideo(
     promptText = promptText.slice(0, RUNWAY_MAX_PROMPT)
   }
 
-  console.log('[LEGACY:RUNWAY:SUBMIT]', { model: process.env.RUNWAY_TEXT_TO_VIDEO_MODEL || 'veo3.1', ratio: mappedRatio, duration: runwayDuration, promptLength: promptText.length })
-
   const response = await fetch(`${baseUrl}/text_to_video`, {
     method: 'POST',
     headers: {
@@ -173,7 +173,6 @@ async function generateRunwayVideo(
   }
 
   const data = await response.json()
-  console.log('[LEGACY:RUNWAY:OK]', { taskId: data.id || data.taskId })
   return {
     taskId: data.id || data.taskId || '',
     status: data.status || 'queued',
@@ -227,14 +226,12 @@ async function generateMusic(style: string, duration: number = 30): Promise<{ mu
 /** @deprecated Use POST /api/studio/versions/[versionId]/render for the Inngest pipeline instead */
 export async function POST(request: NextRequest) {
   try {
-    const body: VideoGenerationRequest = await request.json()
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 })
+    }
 
-    console.log('[RENDER:REQUEST]', {
-      provider: body.videoProvider || 'runway',
-      type: body.type,
-      keySource: process.env.RUNWAY_API_KEY ? 'env' : 'none',
-      pipeline: 'legacy',
-    })
+    const body: VideoGenerationRequest = await request.json()
 
     // Dev fallback: return sample assets so the UI flow is testable without paid API keys
     if (process.env.NODE_ENV === 'development' && !process.env.RUNWAY_API_KEY && !process.env.HEYGEN_API_KEY) {

@@ -231,8 +231,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log('[API:BrandVoice] Saved brand voice:', record.id)
-
     return NextResponse.json(
       {
         success: true,

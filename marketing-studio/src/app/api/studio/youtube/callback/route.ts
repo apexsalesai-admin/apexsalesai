@@ -55,8 +55,6 @@ export async function GET(request: NextRequest) {
       channelUrl: channelInfo.channelUrl,
     })
 
-    console.log(`[API:youtube:callback] Connected channel: ${channelInfo.channelName}`)
-
     return NextResponse.redirect(`${redirectUrl}?youtube_connected=true`)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

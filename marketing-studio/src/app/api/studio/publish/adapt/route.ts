@@ -95,18 +95,15 @@ function sanitizeForJson<T>(obj: T): T {
 }
 
 export async function POST(req: NextRequest) {
-  console.log('[ADAPT] Request received')
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      console.log('[ADAPT] No session')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     let body: { contentId?: string; platforms?: string[]; creatorVoice?: string }
     try {
       body = await req.json()
-      console.log('[ADAPT] Payload:', JSON.stringify({ contentId: body.contentId, platforms: body.platforms }))
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -130,15 +127,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!content) {
-      console.log('[ADAPT] Content not found:', contentId)
       return NextResponse.json({ error: 'Content not found' }, { status: 404 })
     }
 
     if (!content.body?.trim() && !content.title?.trim()) {
       return NextResponse.json({ error: 'Content has no body text to adapt' }, { status: 400 })
     }
-
-    console.log('[ADAPT] Source content length:', content.body.length, 'Platforms:', platforms)
 
     const adaptationInput: AdaptationInput = {
       title: content.title,
@@ -233,7 +227,6 @@ export async function POST(req: NextRequest) {
       })
     )
 
-    console.log('[ADAPT] Complete. Platforms:', results.map(r => r.platform), 'Errors:', errors.length)
     return NextResponse.json({
       success: true,
       adaptations: sanitizeForJson(results),

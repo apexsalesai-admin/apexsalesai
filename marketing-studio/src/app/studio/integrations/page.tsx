@@ -273,13 +273,6 @@ export default function IntegrationsPage() {
               <span>LinkedIn</span>
             </a>
             <a
-              href="/api/studio/channels/connect/youtube"
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-[#FF0000] text-white rounded-lg hover:bg-[#CC0000] transition-colors"
-            >
-              <Youtube className="w-4 h-4" />
-              <span>YouTube</span>
-            </a>
-            <a
               href="/api/studio/channels/connect/x"
               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium bg-black text-white rounded-lg hover:bg-slate-800 transition-colors"
             >

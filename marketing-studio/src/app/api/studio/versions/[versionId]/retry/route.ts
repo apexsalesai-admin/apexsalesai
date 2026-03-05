@@ -112,7 +112,6 @@ export async function POST(
 
     // Production: dispatch via Inngest
     try {
-      console.log('[INNGEST:DISPATCH]', { jobId: videoJob.id, versionId, event: 'studio/video.generate', source: 'retry' })
       await inngest.send({
         name: 'studio/video.generate',
         data: {
@@ -121,7 +120,6 @@ export async function POST(
           workspaceId: workspace.id,
         },
       })
-      console.log('[INNGEST:DISPATCH:OK]', { jobId: videoJob.id })
     } catch (inngestErr) {
       if (isDev) {
         console.warn('[INNGEST:DISPATCH:FAIL]', { jobId: videoJob.id, error: inngestErr instanceof Error ? inngestErr.message : 'unknown' })

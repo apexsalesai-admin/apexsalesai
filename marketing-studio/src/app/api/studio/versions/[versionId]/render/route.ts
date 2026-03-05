@@ -113,19 +113,6 @@ export async function POST(
       }
     }
 
-    console.log('[RENDER:REQUEST]', {
-      workspaceId: workspace.id,
-      versionId,
-      contentId: version.contentId,
-      provider: requestedProvider,
-      model: requestedModel || 'default',
-      durationSeconds,
-      aspectRatio,
-      estimatedCostUsd: costEstimate.usd,
-      keySource: keyResult.source,
-      pipeline: 'inngest',
-    })
-
     // Check for stuck job: QUEUED or PROCESSING for > 5 minutes
     const STUCK_THRESHOLD_MS = 5 * 60 * 1000
     let videoJob: { id: string }
@@ -136,7 +123,6 @@ export async function POST(
       Date.now() - new Date(version.videoJob.createdAt).getTime() > STUCK_THRESHOLD_MS
     ) {
       // Reset the stuck job
-      console.log('[JOB:RESET]', { jobId: version.videoJob.id, oldStatus: version.videoJob.status, ageMs: Date.now() - new Date(version.videoJob.createdAt).getTime() })
       await prisma.studioVideoJob.update({
         where: { id: version.videoJob.id },
         data: {
@@ -236,8 +222,6 @@ export async function POST(
         )
       }
 
-      console.log('[TEMPLATE:FAST-PATH]', { jobId: videoJob.id, scenes: (submitResult.metadata?.frames as unknown[])?.length ?? 0 })
-
       return NextResponse.json({
         success: true,
         data: {
@@ -296,7 +280,6 @@ export async function POST(
 
     // Production: dispatch via Inngest
     try {
-      console.log('[INNGEST:DISPATCH]', { jobId: videoJob.id, versionId, provider: requestedProvider, event: 'studio/video.generate' })
       await inngest.send({
         name: 'studio/video.generate',
         data: {
@@ -309,7 +292,6 @@ export async function POST(
           renderLogId,
         },
       })
-      console.log('[INNGEST:DISPATCH:OK]', { jobId: videoJob.id })
     } catch (inngestErr) {
       // If Inngest is unreachable in dev, fall back to direct provider call
       if (isDev) {

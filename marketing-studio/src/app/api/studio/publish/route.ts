@@ -129,12 +129,6 @@ export async function POST(request: NextRequest) {
 
     const workspaceId = workspace.id
 
-    console.log('[API:Publish] Request received', {
-      workspaceId,
-      contentId,
-      channels,
-      userId,
-    })
 
     // Check system readiness before publishing (scoped to workspace)
     const publishRequirements = await getPublishRequirements({ workspaceId })
@@ -186,8 +180,6 @@ export async function POST(request: NextRequest) {
         startedAt: new Date(),
       },
     })
-
-    console.log('[API:Publish] Job created', { jobId: publishJob.id })
 
     // ── Execute publishing for each channel ───────────────────────
     // Build a per-channel variation map from the request (if provided by cross-post wizard)
@@ -279,11 +271,6 @@ export async function POST(request: NextRequest) {
         new Date(pubChannel.tokenExpiresAt).getTime() < Date.now() + TOKEN_REFRESH_BUFFER_MS
 
       if (isExpired && pubChannel.refreshToken) {
-        console.log(`[API:Publish] Token expired for ${channel}, attempting refresh...`, {
-          expiresAt: pubChannel.tokenExpiresAt,
-          platform: mapped.dbPlatform,
-        })
-
         try {
           let refreshResult: { accessToken: string; refreshToken?: string; expiresIn: number } | null = null
 
@@ -315,9 +302,6 @@ export async function POST(request: NextRequest) {
 
             activeAccessToken = newEncryptedAccess
 
-            console.log(`[API:Publish] Token refreshed for ${channel}`, {
-              newExpiresAt: newExpiresAt.toISOString(),
-            })
           } else {
             console.warn(`[API:Publish] Token refresh returned null for ${channel} — using existing token`)
           }
@@ -420,12 +404,6 @@ export async function POST(request: NextRequest) {
         error: publishResult.error,
       })
 
-      console.log('[API:Publish] Channel result', {
-        channel,
-        success: publishResult.success,
-        postId: publishResult.postId,
-        error: publishResult.error,
-      })
     }
 
     // ── Final status updates ──────────────────────────────────────
@@ -476,15 +454,6 @@ export async function POST(request: NextRequest) {
 
     const durationMs = Date.now() - startTime
 
-    console.log('[API:Publish] Completed', {
-      jobId: publishJob.id,
-      contentId,
-      finalJobStatus,
-      finalContentStatus,
-      durationMs,
-      successCount: succeeded.length,
-      failCount: failed.length,
-    })
 
     return NextResponse.json({
       success: anySuccess,

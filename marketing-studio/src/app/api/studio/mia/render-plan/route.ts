@@ -139,9 +139,6 @@ export async function POST(request: NextRequest) {
 
         sceneJobIds[scene.sceneNumber] = job.id
 
-        console.log(
-          `[MIA:SCENE:CREATE] sceneNumber=${scene.sceneNumber} provider=${scene.provider} duration=${scene.duration}s cost=$${costEst.usd.toFixed(2)} jobId=${job.id}`,
-        )
       }
 
       jobPromises.push(createJob())
@@ -157,10 +154,6 @@ export async function POST(request: NextRequest) {
     if (jobPromises.length > 0) {
       await Promise.all(jobPromises)
     }
-
-    console.log(
-      `[MIA:ORCHESTRATE] contentId=${contentId} scenes=${renderPlan.scenes.length} totalCost=$${renderPlan.totalEstimatedCost.toFixed(2)}`,
-    )
 
     return NextResponse.json({
       success: true,
