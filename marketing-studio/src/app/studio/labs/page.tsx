@@ -189,7 +189,7 @@ export default function LabsPage() {
             Now Live
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">Video Studio Pro</h3>
             <p className="text-slate-600 mb-6">
@@ -242,7 +242,7 @@ export default function LabsPage() {
       {/* All Lab Features Grid */}
       <div>
         <h2 className="text-xl font-bold text-slate-900 mb-6">All Lab Features</h2>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {LAB_FEATURES.map(feature => {
             const Icon = feature.icon
             const statusConfig = STATUS_CONFIG[feature.status]
@@ -306,7 +306,7 @@ export default function LabsPage() {
           <Sparkles className="w-6 h-6 text-purple-600" />
           <h2 className="text-xl font-bold text-slate-900">Lyfye Facts</h2>
         </div>
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { label: 'Content Created', value: '10M+', description: 'pieces of AI-generated content' },
             { label: 'Time Saved', value: '500K+', description: 'hours of manual work' },

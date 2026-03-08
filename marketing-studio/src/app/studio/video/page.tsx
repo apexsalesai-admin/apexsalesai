@@ -125,7 +125,7 @@ We can't wait to share it with you. Stay tuned for the big reveal at noon!`,
               <span>Generate script with Mia</span>
             </Link>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sampleScripts.map((sample, i) => (
               <button
                 key={i}
@@ -149,7 +149,7 @@ We can't wait to share it with you. Stay tuned for the big reveal at noon!`,
         </div>
 
         {/* Features */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { icon: Video, label: 'AI Video Generation', desc: 'Runway, Pika, Sora' },
             { icon: FileText, label: 'AI Avatars', desc: 'HeyGen, Synthesia' },

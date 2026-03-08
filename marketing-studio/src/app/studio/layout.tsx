@@ -20,6 +20,8 @@ import {
   CheckCircle,
   LogOut,
   Plug,
+  PenSquare,
+  FolderOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StudioStatusBanner } from '@/components/ui/studio-status-banner'
@@ -31,9 +33,12 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const NAV_ITEMS = [
   { href: '/studio', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/studio/create', label: 'Create', icon: PenSquare },
   { href: '/studio/content', label: 'Content', icon: FileText },
-  { href: '/studio/approvals', label: 'Approvals', icon: CheckCircle, badge: '3' },
+  { href: '/studio/library', label: 'Library', icon: FolderOpen },
+  { href: '/studio/repurpose', label: 'Repurpose', icon: Sparkles },
   { href: '/studio/content/calendar', label: 'Calendar', icon: Calendar },
+  { href: '/studio/approvals', label: 'Approvals', icon: CheckCircle, badge: '3' },
   { href: '/studio/video', label: 'Video Studio', icon: Video, badge: 'Pro' },
   { href: '/studio/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/studio/labs', label: 'Labs', icon: FlaskConical, badge: 'New' },
@@ -177,7 +182,7 @@ export default function StudioLayout({
                 Ready to create amazing content with you!
               </p>
               <Link
-                href="/studio/content/new"
+                href="/studio/create"
                 className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-sm font-medium text-center block hover:shadow-lg transition-shadow"
               >
                 Create with Mia

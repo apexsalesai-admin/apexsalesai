@@ -61,7 +61,7 @@ export default function StudioDashboard() {
           </p>
         </div>
         <Link
-          href="/studio/content/new"
+          href="/studio/create"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-purple-500/25 transition-all"
         >
           <Sparkles className="w-4 h-4" />
