@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.*
+env.local
+
+# Node modules
+node_modules/
+
+# Next.js build output
+.next/
+out/
+.vercel/
+
+# Prisma generated files
+/generated/prisma
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local AI / dev tooling
+.claude/
+
+# Temporary / debugging files
+cookie.txt
+login_resp.html
+nul
+
+# Build caches
+.cache/
+dist/
+build/
+
+# Misc temp files
+*.tmp
+*.bak
