@@ -17,6 +17,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { assertWorkspaceAccess } from '@/lib/workspace'
+import { checkWorkspaceRole } from '@/lib/auth/withAuth'
 import { z } from 'zod'
 
 const NO_CACHE_HEADERS = {
@@ -192,6 +193,10 @@ export async function POST(request: NextRequest) {
         { status: 403, headers: NO_CACHE_HEADERS }
       )
     }
+
+    // RBAC: require ADMIN role for brand voice writes
+    const roleCheck = await checkWorkspaceRole(session.user.id, data.workspaceId, 'ADMIN');
+    if (roleCheck) return roleCheck;
 
     // Encode writingStyle JSON (stores brand identity fields without dedicated columns)
     const writingStyleJson = JSON.stringify({

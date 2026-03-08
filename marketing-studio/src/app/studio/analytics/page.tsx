@@ -1,242 +1,296 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart3,
   TrendingUp,
-  TrendingDown,
   Eye,
-  Heart,
-  MessageSquare,
-  Share2,
-  Users,
-  Clock,
-  Calendar,
   FileText,
-  Video,
+  CheckCircle,
+  XCircle,
+  ArrowUp,
   Sparkles,
   Target,
+  Users,
   Zap,
-  ArrowUp,
-  ArrowDown,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts'
 
-interface MetricCard {
-  label: string
-  value: string
-  change: number
-  changeLabel: string
-  icon: typeof BarChart3
-  color: string
+interface AnalyticsData {
+  summary: {
+    totalContent: number
+    publishedContent: number
+    draftContent: number
+    reviewContent: number
+    publishSuccess: number
+    publishFailed: number
+    publishRate: number
+  }
+  channelDistribution: Record<string, number>
+  weeklyActivity: string[]
+  recentJobs: {
+    id: string
+    status: string
+    targetChannels: string[]
+    createdAt: string
+    completedAt: string | null
+    contentId: string
+  }[]
 }
 
-const METRICS: MetricCard[] = [
-  { label: 'Total Impressions', value: '124.5K', change: 12.5, changeLabel: 'vs last month', icon: Eye, color: 'blue' },
-  { label: 'Engagement Rate', value: '4.8%', change: 0.6, changeLabel: 'vs last month', icon: Heart, color: 'pink' },
-  { label: 'Total Followers', value: '8,432', change: 324, changeLabel: 'new this month', icon: Users, color: 'purple' },
-  { label: 'Content Published', value: '42', change: 8, changeLabel: 'vs last month', icon: FileText, color: 'emerald' },
-]
+const CHANNEL_COLORS: Record<string, string> = {
+  linkedin: '#0A66C2',
+  LINKEDIN: '#0A66C2',
+  x: '#000000',
+  X_TWITTER: '#000000',
+  twitter: '#000000',
+  TWITTER: '#000000',
+  youtube: '#FF0000',
+  YOUTUBE: '#FF0000',
+  facebook: '#1877F2',
+  FACEBOOK: '#1877F2',
+  instagram: '#E4405F',
+  INSTAGRAM: '#E4405F',
+}
 
-const CHANNEL_STATS = [
-  { channel: 'LinkedIn', impressions: '45.2K', engagement: '5.2%', followers: '3,421', growth: 15, color: 'bg-blue-500' },
-  { channel: 'YouTube', impressions: '32.1K', engagement: '4.1%', followers: '2,156', growth: 22, color: 'bg-red-500' },
-  { channel: 'X/Twitter', impressions: '28.4K', engagement: '3.8%', followers: '1,892', growth: 8, color: 'bg-slate-900' },
-  { channel: 'Instagram', impressions: '18.8K', engagement: '6.2%', followers: '963', growth: 35, color: 'bg-pink-500' },
-]
-
-const TOP_CONTENT = [
-  { title: '5 AI Tools Changing Marketing', type: 'Video', views: '12.4K', engagement: '8.2%', channel: 'YouTube' },
-  { title: 'The Future of B2B Sales', type: 'Post', views: '8.7K', engagement: '6.5%', channel: 'LinkedIn' },
-  { title: 'Quick Marketing Tips Thread', type: 'Thread', views: '6.2K', engagement: '5.1%', channel: 'X/Twitter' },
-  { title: 'Behind the Scenes Reel', type: 'Reel', views: '5.8K', engagement: '9.3%', channel: 'Instagram' },
-]
-
-const TIME_RANGES = [
-  { id: '7d', label: '7 days' },
-  { id: '30d', label: '30 days' },
-  { id: '90d', label: '90 days' },
-  { id: '1y', label: '1 year' },
-]
+const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  COMPLETED: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Published' },
+  PUBLISHED: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Published' },
+  FAILED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Failed' },
+  PUBLISHING: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Publishing' },
+  PENDING: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Pending' },
+  PARTIAL: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Partial' },
+}
 
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState('30d')
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/studio/analytics')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          setData(res.data)
+        } else {
+          setError(res.error || 'Failed to load analytics')
+        }
+      })
+      .catch(() => setError('Failed to load analytics'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
+        <h2 className="text-lg font-semibold text-slate-900 mb-2">Unable to load analytics</h2>
+        <p className="text-sm text-slate-500 mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  const { summary, channelDistribution, weeklyActivity, recentJobs } = data
+
+  // Build weekly activity chart data
+  const weeklyChartData = buildWeeklyChart(weeklyActivity)
+
+  // Build channel pie chart data
+  const channelChartData = Object.entries(channelDistribution).map(([channel, count]) => ({
+    name: formatChannelName(channel),
+    value: count,
+    color: CHANNEL_COLORS[channel] || '#8B5CF6',
+  }))
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
-          <p className="text-slate-500">Track your content performance across all channels</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          {TIME_RANGES.map(range => (
-            <button
-              key={range.id}
-              onClick={() => setTimeRange(range.id)}
-              className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                timeRange === range.id
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'bg-white text-slate-600 hover:bg-slate-100'
-              )}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
+        <p className="text-slate-500">Track your content performance across all channels</p>
       </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-4 gap-6">
-        {METRICS.map(metric => {
-          const Icon = metric.icon
-          const colorClasses: Record<string, string> = {
-            blue: 'bg-blue-100 text-blue-600',
-            pink: 'bg-pink-100 text-pink-600',
-            purple: 'bg-purple-100 text-purple-600',
-            emerald: 'bg-emerald-100 text-emerald-600',
-          }
-
-          return (
-            <div key={metric.label} className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex items-start justify-between mb-4">
-                <div className={cn('p-3 rounded-xl', colorClasses[metric.color])}>
-                  <Icon className="w-6 h-6" />
-                </div>
-                <div className={cn(
-                  'flex items-center space-x-1 text-sm font-medium',
-                  metric.change >= 0 ? 'text-emerald-600' : 'text-red-600'
-                )}>
-                  {metric.change >= 0 ? (
-                    <ArrowUp className="w-4 h-4" />
-                  ) : (
-                    <ArrowDown className="w-4 h-4" />
-                  )}
-                  <span>{Math.abs(metric.change)}%</span>
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-slate-900">{metric.value}</p>
-              <p className="text-sm text-slate-500 mt-1">{metric.label}</p>
-            </div>
-          )
-        })}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <MetricCard
+          icon={FileText}
+          label="Total Content"
+          value={summary.totalContent}
+          subtext={`${summary.draftContent} drafts`}
+          color="blue"
+        />
+        <MetricCard
+          icon={CheckCircle}
+          label="Published"
+          value={summary.publishedContent}
+          subtext={`${summary.publishRate}% success rate`}
+          color="emerald"
+        />
+        <MetricCard
+          icon={Eye}
+          label="In Review"
+          value={summary.reviewContent}
+          subtext="awaiting approval"
+          color="amber"
+        />
+        <MetricCard
+          icon={BarChart3}
+          label="Publish Jobs (30d)"
+          value={summary.publishSuccess + summary.publishFailed}
+          subtext={`${summary.publishSuccess} succeeded, ${summary.publishFailed} failed`}
+          color="purple"
+        />
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Engagement Chart Placeholder */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Weekly Activity */}
         <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-900">Engagement Over Time</h3>
-            <select className="text-sm border border-slate-200 rounded-lg px-3 py-1.5">
-              <option>All Channels</option>
-              <option>LinkedIn</option>
-              <option>YouTube</option>
-              <option>X/Twitter</option>
-              <option>Instagram</option>
-            </select>
-          </div>
-          {/* Simulated Chart */}
-          <div className="h-64 flex items-end justify-between space-x-2">
-            {[65, 45, 72, 58, 82, 68, 75, 90, 78, 85, 92, 88].map((height, i) => (
-              <div
-                key={i}
-                className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-lg transition-all hover:opacity-80"
-                style={{ height: `${height}%` }}
-              />
-            ))}
-          </div>
-          <div className="flex justify-between mt-4 text-xs text-slate-500">
-            <span>Jan</span>
-            <span>Feb</span>
-            <span>Mar</span>
-            <span>Apr</span>
-            <span>May</span>
-            <span>Jun</span>
-            <span>Jul</span>
-            <span>Aug</span>
-            <span>Sep</span>
-            <span>Oct</span>
-            <span>Nov</span>
-            <span>Dec</span>
-          </div>
+          <h3 className="font-bold text-slate-900 mb-6">Content Created (Last 30 Days)</h3>
+          {weeklyChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={weeklyChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  }}
+                />
+                <Bar dataKey="count" fill="#8B5CF6" radius={[4, 4, 0, 0]} name="Content" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-slate-400">
+              No content created in the last 30 days
+            </div>
+          )}
         </div>
 
-        {/* Channel Performance */}
+        {/* Channel Distribution */}
         <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-slate-900 mb-6">Channel Performance</h3>
-          <div className="space-y-4">
-            {CHANNEL_STATS.map(channel => (
-              <div key={channel.channel} className="flex items-center space-x-4">
-                <div className={cn('w-3 h-3 rounded-full', channel.color)} />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-slate-900">{channel.channel}</span>
-                    <span className="text-sm text-slate-500">{channel.impressions}</span>
+          <h3 className="font-bold text-slate-900 mb-6">Publishing by Channel (30d)</h3>
+          {channelChartData.length > 0 ? (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="50%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={channelChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {channelChartData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-3">
+                {channelChartData.map(ch => (
+                  <div key={ch.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ch.color }} />
+                      <span className="text-sm text-slate-700">{ch.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900">{ch.value}</span>
                   </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={cn('h-full rounded-full', channel.color)}
-                      style={{ width: `${channel.growth * 2}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-emerald-600">+{channel.growth}%</p>
-                  <p className="text-xs text-slate-500">growth</p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="h-56 flex items-center justify-center text-slate-400">
+              No publishing data yet
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Top Content & AI Insights */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Top Content */}
+      {/* Recent Publishes + AI Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Publish Jobs */}
         <div className="col-span-2 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="font-bold text-slate-900 mb-6">Top Performing Content</h3>
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs font-semibold text-slate-500 uppercase">
-                <th className="pb-4">Content</th>
-                <th className="pb-4">Type</th>
-                <th className="pb-4">Channel</th>
-                <th className="pb-4 text-right">Views</th>
-                <th className="pb-4 text-right">Engagement</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TOP_CONTENT.map((content, i) => (
-                <tr key={i} className="border-t border-slate-100">
-                  <td className="py-4">
-                    <p className="font-medium text-slate-900">{content.title}</p>
-                  </td>
-                  <td className="py-4">
-                    <span className={cn(
-                      'px-2 py-1 rounded text-xs font-medium',
-                      content.type === 'Video' ? 'bg-red-100 text-red-700' :
-                      content.type === 'Thread' ? 'bg-slate-100 text-slate-700' :
-                      content.type === 'Reel' ? 'bg-pink-100 text-pink-700' :
-                      'bg-blue-100 text-blue-700'
-                    )}>
-                      {content.type}
-                    </span>
-                  </td>
-                  <td className="py-4 text-sm text-slate-600">{content.channel}</td>
-                  <td className="py-4 text-right font-medium">{content.views}</td>
-                  <td className="py-4 text-right">
-                    <span className="text-emerald-600 font-medium">{content.engagement}</span>
-                  </td>
+          <h3 className="font-bold text-slate-900 mb-6">Recent Publish Jobs</h3>
+          {recentJobs.length > 0 ? (
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-xs font-semibold text-slate-500 uppercase">
+                  <th className="pb-4">Channels</th>
+                  <th className="pb-4">Status</th>
+                  <th className="pb-4 text-right">Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentJobs.map(job => {
+                  const style = STATUS_STYLES[job.status] || STATUS_STYLES.PENDING
+                  return (
+                    <tr key={job.id} className="border-t border-slate-100">
+                      <td className="py-3">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {(job.targetChannels || []).map((ch, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-medium"
+                            >
+                              {formatChannelName(ch)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <span className={cn('px-2 py-1 rounded text-xs font-medium', style.bg, style.text)}>
+                          {style.label}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right text-sm text-slate-500">
+                        {new Date(job.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="py-12 text-center text-slate-400">No publish jobs yet</div>
+          )}
         </div>
 
-        {/* AI Insights */}
+        {/* AI Insights (static tips) */}
         <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-200">
           <div className="flex items-center space-x-2 mb-6">
             <Sparkles className="w-5 h-5 text-purple-600" />
@@ -264,41 +318,46 @@ export default function AnalyticsPage() {
             <InsightCard
               icon={Zap}
               title="Quick Win"
-              description="Add CTAs to posts - they increase engagement by 25%"
+              description="Add CTAs to posts — they increase engagement by 25%"
               color="amber"
             />
           </div>
         </div>
       </div>
+    </div>
+  )
+}
 
-      {/* Content Distribution */}
-      <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-        <h3 className="font-bold text-slate-900 mb-6">Content Distribution</h3>
-        <div className="grid grid-cols-6 gap-4">
-          {[
-            { type: 'Posts', count: 18, icon: FileText, color: 'bg-blue-500' },
-            { type: 'Videos', count: 8, icon: Video, color: 'bg-red-500' },
-            { type: 'Threads', count: 6, icon: MessageSquare, color: 'bg-slate-900' },
-            { type: 'Reels', count: 5, icon: Video, color: 'bg-pink-500' },
-            { type: 'Articles', count: 3, icon: FileText, color: 'bg-emerald-500' },
-            { type: 'Stories', count: 2, icon: Clock, color: 'bg-amber-500' },
-          ].map(item => {
-            const Icon = item.icon
-            return (
-              <div key={item.type} className="text-center">
-                <div className={cn(
-                  'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3',
-                  item.color
-                )}>
-                  <Icon className="w-8 h-8 text-white" />
-                </div>
-                <p className="text-2xl font-bold text-slate-900">{item.count}</p>
-                <p className="text-sm text-slate-500">{item.type}</p>
-              </div>
-            )
-          })}
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  subtext,
+  color,
+}: {
+  icon: typeof FileText
+  label: string
+  value: number
+  subtext: string
+  color: 'blue' | 'emerald' | 'amber' | 'purple'
+}) {
+  const colorClasses = {
+    blue: 'bg-blue-100 text-blue-600',
+    emerald: 'bg-emerald-100 text-emerald-600',
+    amber: 'bg-amber-100 text-amber-600',
+    purple: 'bg-purple-100 text-purple-600',
+  }
+
+  return (
+    <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex items-start justify-between mb-4">
+        <div className={cn('p-3 rounded-xl', colorClasses[color])}>
+          <Icon className="w-6 h-6" />
         </div>
       </div>
+      <p className="text-3xl font-bold text-slate-900">{value}</p>
+      <p className="text-sm text-slate-500 mt-1">{label}</p>
+      <p className="text-xs text-slate-400 mt-0.5">{subtext}</p>
     </div>
   )
 }
@@ -334,4 +393,48 @@ function InsightCard({
       </div>
     </div>
   )
+}
+
+function formatChannelName(ch: string): string {
+  const names: Record<string, string> = {
+    linkedin: 'LinkedIn',
+    LINKEDIN: 'LinkedIn',
+    x: 'X',
+    X_TWITTER: 'X',
+    twitter: 'X',
+    TWITTER: 'X',
+    youtube: 'YouTube',
+    YOUTUBE: 'YouTube',
+    facebook: 'Facebook',
+    FACEBOOK: 'Facebook',
+    instagram: 'Instagram',
+    INSTAGRAM: 'Instagram',
+  }
+  return names[ch] || ch
+}
+
+function buildWeeklyChart(dates: string[]): { week: string; count: number }[] {
+  if (!dates.length) return []
+
+  const now = new Date()
+  const weeks: { week: string; count: number }[] = []
+
+  for (let i = 4; i >= 0; i--) {
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - i * 7)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 7)
+
+    const count = dates.filter(d => {
+      const date = new Date(d)
+      return date >= weekStart && date < weekEnd
+    }).length
+
+    weeks.push({
+      week: `Week ${5 - i}`,
+      count,
+    })
+  }
+
+  return weeks
 }

@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getOrCreateWorkspace } from '@/lib/workspace'
 import { getYouTubeAuthUrl } from '@/lib/integrations/youtube-oauth'
+import { checkWorkspaceRole } from '@/lib/auth/withAuth'
 
 export async function GET() {
   try {
@@ -18,6 +19,10 @@ export async function GET() {
     }
 
     const workspace = await getOrCreateWorkspace(session.user.id)
+
+    // RBAC: require ADMIN role for connecting OAuth
+    const roleCheck = await checkWorkspaceRole(session.user.id, workspace.id, 'ADMIN');
+    if (roleCheck) return roleCheck;
 
     // Encode workspace + user info in state parameter for callback
     const state = Buffer.from(

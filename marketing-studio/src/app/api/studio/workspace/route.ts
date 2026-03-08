@@ -19,6 +19,7 @@ import {
   assertWorkspaceAccess,
 } from '@/lib/workspace'
 import { prisma } from '@/lib/db'
+import { checkWorkspaceRole } from '@/lib/auth/withAuth'
 import { z } from 'zod'
 
 /** Returns true when the error looks like a Prisma / DB connectivity failure */
@@ -245,6 +246,10 @@ export async function PATCH(request: NextRequest) {
         { status: 403, headers: NO_CACHE_HEADERS }
       )
     }
+
+    // RBAC: require ADMIN role for workspace updates
+    const roleCheck = await checkWorkspaceRole(session.user.id, workspaceId, 'ADMIN');
+    if (roleCheck) return roleCheck;
 
     const updated = await updateWorkspace(workspaceId, {
       ...(name ? { name } : {}),

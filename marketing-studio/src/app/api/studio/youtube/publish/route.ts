@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getOrCreateWorkspace } from '@/lib/workspace'
 import { uploadToYouTube } from '@/lib/integrations/youtube-upload'
+import { checkWorkspaceRole } from '@/lib/auth/withAuth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,10 @@ export async function POST(request: NextRequest) {
     }
 
     const workspace = await getOrCreateWorkspace(session.user.id)
+
+    // RBAC: require CREATOR role for publishing videos
+    const roleCheck = await checkWorkspaceRole(session.user.id, workspace.id, 'CREATOR');
+    if (roleCheck) return roleCheck;
 
     const result = await uploadToYouTube({
       workspaceId: workspace.id,

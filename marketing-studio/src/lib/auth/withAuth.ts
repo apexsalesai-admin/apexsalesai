@@ -7,12 +7,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import * as Sentry from '@sentry/nextjs';
 
 const ROLE_HIERARCHY: Record<string, number> = {
   VIEWER: 0,
-  EDITOR: 1,
-  ADMIN: 2,
-  OWNER: 3,
+  CREATOR: 1,
+  APPROVER: 2,
+  ADMIN: 3,
+  OWNER: 4,
 };
 
 export interface AuthContext {
@@ -29,7 +31,7 @@ export interface AuthContext {
 
 export interface WithAuthOptions {
   requireWorkspace?: boolean;
-  requiredRole?: 'VIEWER' | 'EDITOR' | 'ADMIN' | 'OWNER';
+  requiredRole?: 'VIEWER' | 'CREATOR' | 'APPROVER' | 'ADMIN' | 'OWNER';
 }
 
 type AuthenticatedHandler = (
@@ -119,12 +121,49 @@ export function withAuth(
       return await handler(req, ctx, routeParams);
     } catch (error) {
       console.error('[withAuth] Handler error:', error);
+      Sentry.captureException(error);
       return NextResponse.json(
         { error: 'Internal server error' },
         { status: 500 }
       );
     }
   };
+}
+
+/**
+ * Standalone role check for routes that use getOrCreateWorkspace().
+ * Returns null if authorized, or a 403 NextResponse if not.
+ */
+export async function checkWorkspaceRole(
+  userId: string,
+  workspaceId: string,
+  requiredRole: 'VIEWER' | 'CREATOR' | 'APPROVER' | 'ADMIN' | 'OWNER'
+): Promise<NextResponse | null> {
+  const membership = await prisma.studioWorkspaceMember.findFirst({
+    where: { workspaceId, userId },
+  });
+
+  if (!membership) {
+    return NextResponse.json(
+      { error: 'Not a member of this workspace' },
+      { status: 403 }
+    );
+  }
+
+  const userLevel = ROLE_HIERARCHY[membership.role] ?? -1;
+  const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 999;
+
+  if (userLevel < requiredLevel) {
+    return NextResponse.json(
+      {
+        error: `Requires ${requiredRole} role or higher`,
+        currentRole: membership.role,
+      },
+      { status: 403 }
+    );
+  }
+
+  return null;
 }
 
 function extractWorkspaceId(req: NextRequest): string | null {

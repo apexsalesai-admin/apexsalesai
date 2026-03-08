@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getOrCreateWorkspace } from '@/lib/workspace'
 import { IntegrationManager } from '@/lib/integrations/integration-manager'
+import { checkWorkspaceRole } from '@/lib/auth/withAuth'
 
 export async function DELETE(
   _request: NextRequest,
@@ -22,6 +23,10 @@ export async function DELETE(
 
     const { provider } = await params
     const workspace = await getOrCreateWorkspace(session.user.id)
+
+    // RBAC: require ADMIN role for disconnecting integrations
+    const roleCheck = await checkWorkspaceRole(session.user.id, workspace.id, 'ADMIN');
+    if (roleCheck) return roleCheck;
 
     await IntegrationManager.disconnect(provider, workspace.id, session.user.id)
 
