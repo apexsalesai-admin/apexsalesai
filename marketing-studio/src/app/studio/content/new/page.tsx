@@ -29,6 +29,7 @@ function ContentCreatorWrapper() {
 
   const dateParam = searchParams.get('date')
   const initialDate = dateParam ? new Date(dateParam) : undefined
+  const typeParam = searchParams.get('type') as 'post' | 'video' | 'article' | 'thread' | 'story' | 'reel' | null
 
   const handleSave = async (draft: ContentDraft) => {
     setIsSaving(true)
@@ -97,6 +98,7 @@ function ContentCreatorWrapper() {
       {/* Content Creator Wizard */}
       <ContentCreator
         initialDate={initialDate}
+        initialType={typeParam || undefined}
         onSave={handleSave}
         onCancel={handleCancel}
         isSaving={isSaving}

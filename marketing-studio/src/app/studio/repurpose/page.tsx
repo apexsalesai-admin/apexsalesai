@@ -205,14 +205,14 @@ export default function RepurposePage() {
           </div>
 
           {/* Content */}
-          {activeTab && results[activeTab] && (
+          {activeTab && activeTab in results && (
             <div>
               <div className="relative">
                 <pre className="p-4 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">
-                  {results[activeTab]}
+                  {results[activeTab] || '(No content generated for this format)'}
                 </pre>
                 <button
-                  onClick={() => handleCopy(results[activeTab])}
+                  onClick={() => handleCopy(results[activeTab] || '')}
                   className="absolute top-3 right-3 p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
                   title="Copy to clipboard"
                 >

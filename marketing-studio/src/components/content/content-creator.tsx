@@ -247,16 +247,17 @@ const CONTENT_TEMPLATES = [
 
 interface ContentCreatorProps {
   initialDate?: Date
+  initialType?: ContentType
   onSave?: (draft: ContentDraft & { aiGenerated?: boolean; aiTopic?: string; aiTone?: string }) => void
   onCancel?: () => void
   isSaving?: boolean
 }
 
-export function ContentCreator({ initialDate, onSave, onCancel, isSaving = false }: ContentCreatorProps) {
+export function ContentCreator({ initialDate, initialType, onSave, onCancel, isSaving = false }: ContentCreatorProps) {
   const [step, setStep] = useState(1)
   const [draft, setDraft] = useState<ContentDraft>({
     channels: [],
-    contentType: 'post',
+    contentType: initialType || 'post',
     title: '',
     body: '',
     hashtags: [],

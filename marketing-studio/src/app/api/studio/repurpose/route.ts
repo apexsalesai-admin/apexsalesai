@@ -73,7 +73,9 @@ export async function POST(request: NextRequest) {
       .map((f, i) => `${i + 1}. ${FORMAT_INSTRUCTIONS[f]}`)
       .join('\n')
 
-    const prompt = `You are Mia, an AI content strategist. Repurpose the following content into the requested formats. Preserve the core message and adapt the tone for each platform. Never use em dashes.
+    const formatKeys = targetFormats.join(', ')
+
+    const prompt = `You are Mia, an AI content strategist. Repurpose the following content into the requested formats. Preserve the core message and adapt the tone for each platform. Never use em dashes. Use commas, semicolons, or separate sentences instead.
 
 ORIGINAL CONTENT:
 Title: ${original.title}
@@ -82,7 +84,7 @@ Body: ${original.body}
 TARGET FORMATS:
 ${formatList}
 
-Return ONLY a valid JSON object where each key is the format name and the value is the repurposed text. No markdown fences, no explanation.`
+Return ONLY a valid JSON object. Use these EXACT keys: ${formatKeys}. Each value is the repurposed text as a string. No markdown fences, no explanation, no extra text outside the JSON.`
 
     let aiResponse: string
 
@@ -133,16 +135,56 @@ Return ONLY a valid JSON object where each key is the format name and the value 
       aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     }
 
-    // Parse JSON from AI response
-    const cleaned = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const repurposed = JSON.parse(cleaned)
+    // Parse JSON from AI response — robust extraction
+    let cleaned = aiResponse
+      .replace(/```json\s*/gi, '')
+      .replace(/```\s*/gi, '')
+      .trim()
+
+    // Extract JSON object from surrounding text
+    const jsonStart = cleaned.indexOf('{')
+    const jsonEnd = cleaned.lastIndexOf('}')
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.substring(jsonStart, jsonEnd + 1)
+    }
+
+    let repurposed: Record<string, string>
+    try {
+      repurposed = JSON.parse(cleaned)
+    } catch {
+      console.error('[API:Repurpose] JSON parse failed. Raw:', aiResponse.substring(0, 500))
+      return NextResponse.json(
+        { success: false, error: 'AI response was not valid JSON. Please try again.' },
+        { status: 500 }
+      )
+    }
+
+    // Normalize keys: if AI used display names, map back to enum keys
+    const KEY_MAP: Record<string, string> = {
+      'LinkedIn Post': 'LINKEDIN_POST',
+      'X Thread': 'X_THREAD',
+      'Blog Article': 'BLOG_ARTICLE',
+      'Email Newsletter': 'EMAIL_NEWSLETTER',
+      'YouTube Description': 'YOUTUBE_DESCRIPTION',
+      'Short Summary': 'SHORT_SUMMARY',
+    }
+
+    const normalized: Record<string, string> = {}
+    for (const [key, value] of Object.entries(repurposed)) {
+      const mappedKey = KEY_MAP[key] || key
+      if (typeof value === 'string') {
+        normalized[mappedKey] = value
+      } else {
+        normalized[mappedKey] = String(value)
+      }
+    }
 
     return NextResponse.json({
       success: true,
       data: {
         originalId: contentId,
         originalTitle: original.title,
-        repurposed,
+        repurposed: normalized,
         formats: targetFormats,
       },
     })
