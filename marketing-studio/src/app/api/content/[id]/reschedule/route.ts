@@ -11,14 +11,12 @@ import { prisma } from '@/lib/db'
 import { ContentStatus } from '@prisma/client'
 import { log, logError } from '@/lib/dev-mode'
 import { inngest } from '@/lib/inngest/client'
+import { withAuth } from '@/lib/auth/withAuth'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
-    const body = await request.json()
+    const { id } = await routeParams.params
+    const body = await req.json()
     const { scheduledFor } = body
 
     if (!scheduledFor) {
@@ -66,7 +64,7 @@ export async function POST(
       await inngest.send({
         name: 'studio/content.schedule.requested',
         data: {
-          userId: request.headers.get('x-user-id') || 'system',
+          userId: session.user.id,
           contentId: id,
           title: content.title,
           body: content.body,
@@ -92,4 +90,4 @@ export async function POST(
       { status: 500 }
     )
   }
-}
+});

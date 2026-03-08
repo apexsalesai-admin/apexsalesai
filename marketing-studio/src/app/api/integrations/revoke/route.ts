@@ -1,44 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { createAuditLog } from '@/lib/audit'
-import { hasPermission } from '@/lib/rbac'
-import { UserRole } from '@/types'
+import { withAuth } from '@/lib/auth/withAuth'
 
 // POST /api/integrations/revoke - Kill switch to revoke integration access
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, { session }) => {
   try {
-    const body = await request.json()
+    const body = await req.json()
     const { integrationId, reason } = body
 
-    // TODO: Get user from session
-    const userId = request.headers.get('x-user-id') || 'admin'
-    const userEmail = request.headers.get('x-user-email') || 'admin@lyfye.com'
-    const userRole = (request.headers.get('x-user-role') || 'ADMIN') as UserRole
-    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+    const userId = session.user.id
+    const userEmail = session.user.email
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip')
 
-    // CRITICAL: Only ADMIN can use kill switch
-    if (!hasPermission(userRole, 'integrations:revoke')) {
-      await createAuditLog({
-        action: 'INTEGRATION_REVOKED',
-        userId,
-        userEmail,
-        resourceType: 'integration',
-        resourceId: integrationId,
-        details: {
-          success: false,
-          error: 'Permission denied - attempted unauthorized revoke',
-        },
-        ipAddress: ipAddress || undefined,
-      })
-
+    if (!integrationId) {
       return NextResponse.json(
-        { success: false, error: 'Permission denied. Only admins can revoke integrations.' },
-        { status: 403 }
+        { success: false, error: 'integrationId is required' },
+        { status: 400 }
       )
     }
 
     // Get integration details before revoking
-    // Using studioIntegration model for workspace-scoped integrations
     const integration = await prisma.studioIntegration.findUnique({
       where: { id: integrationId },
     })
@@ -55,7 +37,7 @@ export async function POST(request: NextRequest) {
       where: { id: integrationId },
       data: {
         status: 'REVOKED',
-        accessTokenEncrypted: null,  // Clear tokens
+        accessTokenEncrypted: null,
         refreshTokenEncrypted: null,
         revokedAt: new Date(),
         revokedBy: userId,
@@ -80,12 +62,6 @@ export async function POST(request: NextRequest) {
       ipAddress: ipAddress || undefined,
     })
 
-    // TODO: In production, also:
-    // 1. Disable all workflows using this integration
-    // 2. Cancel any pending publish operations
-    // 3. Send notification to integration owner
-    // 4. Revoke OAuth tokens with the provider (if possible)
-
     return NextResponse.json({
       success: true,
       data: {
@@ -102,4 +78,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+});

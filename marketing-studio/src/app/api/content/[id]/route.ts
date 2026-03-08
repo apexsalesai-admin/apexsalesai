@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma, withRetry } from '@/lib/db'
 import { ContentStatus, ContentType } from '@prisma/client'
 import { log, logError } from '@/lib/dev-mode'
+import { withAuth } from '@/lib/auth/withAuth'
 
 // GET - Get single content item
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
+    const { id } = await routeParams.params
 
     const content = await withRetry(() =>
       prisma.scheduledContent.findUnique({ where: { id } })
@@ -33,16 +31,13 @@ export async function GET(
       { status: 500 }
     )
   }
-}
+});
 
 // PUT - Update content item
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
-    const body = await request.json()
+    const { id } = await routeParams.params
+    const body = await req.json()
 
     const {
       title,
@@ -84,16 +79,13 @@ export async function PUT(
       { status: 500 }
     )
   }
-}
+});
 
 // PATCH - Partial update (any fields)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
-    const body = await request.json()
+    const { id } = await routeParams.params
+    const body = await req.json()
     const {
       title,
       body: contentBody,
@@ -146,15 +138,12 @@ export async function PATCH(
       { status: 500 }
     )
   }
-}
+});
 
 // DELETE - Delete content item
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
+    const { id } = await routeParams.params
 
     // Verify exists before deleting
     const existing = await withRetry(() => prisma.scheduledContent.findUnique({ where: { id } }))
@@ -180,4 +169,4 @@ export async function DELETE(
       { status: 500 }
     )
   }
-}
+});

@@ -16,6 +16,7 @@ import { checkRenderBudget, recordRenderSubmission } from '@/lib/providers/video
 import { getVideoProvider } from '@/lib/providers/video/registry'
 import { inngest } from '@/lib/inngest/client'
 import type { MiaRenderPlan } from '@/lib/studio/mia-types'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 const MAX_CONCURRENT = 2
 
@@ -25,6 +26,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body = await request.json()
     const { contentId, versionId, renderPlan } = body as {

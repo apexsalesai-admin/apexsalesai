@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { ContentStatus, ContentType } from '@prisma/client'
 import { randomUUID } from 'crypto'
+import { withAuth } from '@/lib/auth/withAuth'
 
 // GET - List all scheduled content
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, { session }) => {
   try {
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     const content = await prisma.scheduledContent.findMany({
       where,
       orderBy: { scheduledFor: 'asc' },
+      take: 100,
     })
 
     return NextResponse.json({
@@ -44,12 +46,12 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+});
 
 // POST - Create new scheduled content
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, { session }) => {
   try {
-    const body = await request.json()
+    const body = await req.json()
 
     const {
       title,
@@ -123,4 +125,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+});

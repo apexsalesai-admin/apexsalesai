@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getBestProvider } from '@/lib/ai-gateway'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 type Action =
   | 'viral-hooks'
@@ -206,6 +207,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body: SuggestRequest = await request.json()
     const { action } = body

@@ -13,6 +13,7 @@ import { getOrCreateWorkspace } from '@/lib/workspace'
 import { getBrandVoiceForWorkspace } from '@/lib/brand-voice'
 import { getBestProvider } from '@/lib/ai-gateway'
 import type { MiaContextRequest, MiaContextResponse } from '@/lib/studio/mia-creative-types'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -81,6 +82,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, greeting: '', brandName: '', recentTopics: [], error: 'Unauthorized' } satisfies MiaContextResponse, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body: MiaContextRequest = await request.json()
     const workspace = await getOrCreateWorkspace(session.user.id)

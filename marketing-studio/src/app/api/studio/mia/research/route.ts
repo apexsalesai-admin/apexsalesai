@@ -19,6 +19,7 @@ import type {
   AngleSource,
 } from '@/lib/studio/mia-creative-types'
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -95,6 +96,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, angles: [], error: 'Unauthorized' } satisfies MiaResearchResponse, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body = await request.json()
     const { topic, channels, contentType, goal, seed, action, brandName, currentAngles, userFeedback, profile } = body as MiaResearchRequest & {

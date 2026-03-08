@@ -11,13 +11,11 @@ import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/db'
 import { ContentStatus } from '@prisma/client'
 import { log, logError } from '@/lib/dev-mode'
+import { withAuth } from '@/lib/auth/withAuth'
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withAuth(async (req, { session }, routeParams) => {
   try {
-    const { id } = await params
+    const { id } = await routeParams.params
 
     const original = await prisma.scheduledContent.findUnique({
       where: { id },
@@ -67,4 +65,4 @@ export async function POST(
       { status: 500 }
     )
   }
-}
+});

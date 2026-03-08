@@ -19,6 +19,7 @@ import { generateScriptAnalysis, generateDurationWarning, generateBudgetWarning 
 import { checkRenderBudget } from '@/lib/providers/video/budget'
 import type { MiaMessage, MiaCopilotMode } from '@/lib/studio/mia-types'
 import type { ScriptAnalysisResult } from '@/lib/studio/mia-script-analyzer'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 /** Map integration type to provider names */
 const TYPE_TO_PROVIDERS: Record<string, string[]> = {
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body = await request.json()
     const { contentId, versionId, targetPlatform, mode } = body as {

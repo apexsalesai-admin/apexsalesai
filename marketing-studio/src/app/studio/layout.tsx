@@ -27,6 +27,7 @@ import { FadeTransition } from '@/components/ui/page-transition'
 import { CommandPalette } from '@/components/ui/command-palette'
 import { MiaProvider } from '@/components/providers/mia-provider'
 import { MiaTrigger } from '@/components/ui/mia-trigger'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const NAV_ITEMS = [
   { href: '/studio', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -190,7 +191,9 @@ export default function StudioLayout({
 
         {/* Main content */}
         <main className="flex-1 p-8">
-          <FadeTransition>{children}</FadeTransition>
+          <ErrorBoundary>
+            <FadeTransition>{children}</FadeTransition>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

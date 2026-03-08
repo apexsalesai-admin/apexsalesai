@@ -20,6 +20,7 @@ import type {
   FixSuggestion,
 } from '@/lib/studio/mia-creative-types'
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 async function callAI(prompt: string, maxTokens = 2048): Promise<string> {
   const provider = getBestProvider()
@@ -403,6 +404,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body = await request.json()
     const workspace = await getOrCreateWorkspace(session.user.id)

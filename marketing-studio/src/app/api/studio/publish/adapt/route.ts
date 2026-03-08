@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { prisma, withRetry } from '@/lib/db'
 import { getBestProvider } from '@/lib/ai-gateway'
 import {
@@ -100,6 +101,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.publish, session.user.id);
+    if (limited) return limited;
 
     let body: { contentId?: string; platforms?: string[]; creatorVoice?: string }
     try {

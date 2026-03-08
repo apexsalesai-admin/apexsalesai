@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { scoreProviders } from '@/lib/studio/video-scoring'
 import type { ScoringInput } from '@/lib/studio/video-scoring'
 import { getActiveProviders } from '@/lib/shared/video-providers'
@@ -18,6 +19,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.video, session.user.id);
+    if (limited) return limited;
 
     const body: ScoringInput = await request.json()
 

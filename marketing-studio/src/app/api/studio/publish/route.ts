@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { prisma, withRetry } from '@/lib/db'
 import { getPublishRequirements } from '@/lib/readiness'
 import { getOrCreateWorkspace } from '@/lib/workspace'
@@ -52,6 +53,7 @@ const PublishRequestSchema = z.object({
     body: z.string().optional(),
     title: z.string().optional(),
   })).optional(),
+  idempotencyKey: z.string().max(255).optional(),
 })
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -87,6 +89,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+
+    const limited = applyRateLimit(RATE_LIMITS.publish, session.user.id);
+    if (limited) return limited;
 
     // Parse and validate request body
     const body = await request.json()
@@ -129,6 +134,28 @@ export async function POST(request: NextRequest) {
 
     const workspaceId = workspace.id
 
+    // Idempotency check: if a job with this key already exists, return it
+    if (validation.data.idempotencyKey) {
+      const existing = await withRetry(() =>
+        prisma.studioPublishJob.findFirst({
+          where: {
+            idempotencyKey: validation.data.idempotencyKey,
+            workspaceId,
+          },
+        })
+      )
+      if (existing) {
+        return NextResponse.json(
+          {
+            success: true,
+            message: 'Publish job already exists',
+            jobId: existing.id,
+            status: existing.status,
+          },
+          { status: 200 }
+        )
+      }
+    }
 
     // Check system readiness before publishing (scoped to workspace)
     const publishRequirements = await getPublishRequirements({ workspaceId })
@@ -178,6 +205,7 @@ export async function POST(request: NextRequest) {
         status: 'PUBLISHING',
         targetChannels: channels,
         startedAt: new Date(),
+        idempotencyKey: validation.data.idempotencyKey || undefined,
       },
     })
 

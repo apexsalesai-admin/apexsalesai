@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getBestProvider } from '@/lib/ai-gateway'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
+    if (limited) return limited;
 
     const body = await req.json()
     const { title, body: contentBody, keywords } = body as {

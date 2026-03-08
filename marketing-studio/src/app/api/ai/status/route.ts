@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withAuth } from '@/lib/auth/withAuth'
 
 interface ProviderStatus {
   id: string
@@ -10,7 +11,7 @@ interface ProviderStatus {
 }
 
 // GET /api/ai/status - Check AI provider status
-export async function GET() {
+export const GET = withAuth(async (req, { session }) => {
   const providers: ProviderStatus[] = []
 
   // Check Anthropic
@@ -85,11 +86,11 @@ export async function GET() {
       anyConfigured: providers.some((p) => p.configured),
     },
   })
-}
+});
 
 // POST /api/ai/status - Test a specific provider
-export async function POST(request: NextRequest) {
-  const body = await request.json()
+export const POST = withAuth(async (req, { session }) => {
+  const body = await req.json()
   const { provider } = body
 
   const startTime = Date.now()
@@ -233,4 +234,4 @@ export async function POST(request: NextRequest) {
       latencyMs,
     })
   }
-}
+});
