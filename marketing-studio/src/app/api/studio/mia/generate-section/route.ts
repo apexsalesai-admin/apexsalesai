@@ -139,12 +139,17 @@ async function handleGenerateSection(
   const typeSpecificInstruction = getSectionInstruction(contentType, sectionType)
   const currentInstruction = typeSpecificInstruction || defaultSectionInstructions[sectionType] || defaultSectionInstructions.body
 
-  // Use type-specific system prompt if available, otherwise default
-  const systemContext = typeConfig.systemPrompt
-    ? `${typeConfig.systemPrompt}\n\n`
-    : ''
+  // When a type-specific system prompt exists, REPLACE the generic persona entirely.
+  // Two conflicting "You are Mia" lines confuse the AI into generating wrong content.
+  const persona = typeConfig.systemPrompt
+    ? typeConfig.systemPrompt
+    : `You are Mia, an expert AI content strategist.`
 
-  const prompt = `${profilePrompt}${brandGuardrail}${systemContext}You are Mia, an expert AI content strategist. Generate the "${sectionLabel}" section for ${contentType} content on ${channelList}.
+  console.log('[GENERATE] contentType:', contentType, 'sectionType:', sectionType, 'hasTypePrompt:', !!typeConfig.systemPrompt)
+
+  const prompt = `${profilePrompt}${brandGuardrail}${persona}
+
+Generate the "${sectionLabel}" section for ${contentType} content on ${channelList}.
 
 Topic: "${topic}"
 Angle: "${angle.title}" -- ${angle.description}
@@ -334,16 +339,21 @@ The "overall" should be a weighted average using the weights specified above.`
 // ─── Revise section based on user direction ──────────────────────────────────
 
 async function handleRevise(
-  body: { sectionType: string; existingContent: string; userDirection: string; topic: string; angle: { title: string }; channels: string[]; goal?: string; brandName?: string; profile?: CreatorProfile | null },
+  body: { sectionType: string; existingContent: string; userDirection: string; topic: string; angle: { title: string }; channels: string[]; contentType?: string; goal?: string; brandName?: string; profile?: CreatorProfile | null },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { sectionType, existingContent, userDirection, topic, angle, channels, goal, brandName, profile } = body
+  const { sectionType, existingContent, userDirection, topic, angle, channels, contentType, goal, brandName, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
   const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
   const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
   const channelList = channels.join(', ') || 'social media'
 
-  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist revising a ${sectionType} section.
+  const typeConfig = getContentTypeConfig(contentType || 'post')
+  const persona = typeConfig.systemPrompt
+    ? `${typeConfig.systemPrompt} You are revising a ${sectionType} section.`
+    : `You are Mia, an expert AI content strategist revising a ${sectionType} section.`
+
+  const prompt = `${profilePrompt}${brandGuardrail}${persona}
 
 Current content:
 """
@@ -386,19 +396,25 @@ async function handleAssist(
     topic: string
     angle: { title: string }
     channels: string[]
+    contentType?: string
     goal?: string
     brandName?: string
     profile?: CreatorProfile | null
   },
   workspaceId: string
 ): Promise<NextResponse> {
-  const { sectionType, existingContent, assistRequest, topic, angle, channels, goal, brandName, profile } = body
+  const { sectionType, existingContent, assistRequest, topic, angle, channels, contentType, goal, brandName, profile } = body
   const brandVoice = await getBrandVoiceForWorkspace(workspaceId)
   const brandGuardrail = buildBrandGuardrail(brandName || brandVoice.brandName)
   const profilePrompt = profile ? buildProfileSystemPrompt(profile) + '\n\n' : ''
   const channelList = channels.join(', ') || 'social media'
 
-  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an AI content strategist helping a user edit their ${sectionType} section in real-time.
+  const typeConfig = getContentTypeConfig(contentType || 'post')
+  const persona = typeConfig.systemPrompt
+    ? `${typeConfig.systemPrompt} You are helping the user edit their ${sectionType} section in real-time.`
+    : `You are Mia, an AI content strategist helping a user edit their ${sectionType} section in real-time.`
+
+  const prompt = `${profilePrompt}${brandGuardrail}${persona}
 
 The user is currently editing this content:
 """
