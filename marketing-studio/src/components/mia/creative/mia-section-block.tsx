@@ -5,16 +5,36 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react'
 import type { SectionDraft, SectionType } from '@/lib/studio/mia-creative-types'
 
-const SECTION_LABELS: Record<SectionType, string> = {
+const SECTION_LABELS: Partial<Record<SectionType, string>> = {
   hook: 'Opening Hook',
   body: 'Main Body',
   cta: 'Call to Action',
+  headline: 'Headline',
+  introduction: 'Introduction',
+  conclusion: 'Conclusion',
+  subject_line: 'Subject Line',
+  preview_text: 'Preview Text',
+  visual_concept: 'Visual Concept',
+  prompt_variations: 'DALL-E Prompts',
+  strategy_overview: 'Strategy Overview',
+  channel_plan: 'Channel Plan',
+  messaging_framework: 'Messaging Framework',
 }
 
-const SECTION_DESCRIPTIONS: Record<SectionType, string> = {
+const SECTION_DESCRIPTIONS: Partial<Record<SectionType, string>> = {
   hook: 'The first thing your audience sees — make it count',
   body: 'Where you deliver value and build your argument',
   cta: 'Drive action with a clear next step',
+  headline: 'The title that draws readers in',
+  introduction: 'Set the stage and hook your readers',
+  conclusion: 'Wrap up with key takeaways and next steps',
+  subject_line: 'The make-or-break line that drives opens',
+  preview_text: 'The supporting text visible in the inbox',
+  visual_concept: 'The creative direction for your image',
+  prompt_variations: 'Detailed prompts for AI image generation',
+  strategy_overview: 'Your campaign blueprint and objectives',
+  channel_plan: 'Platform-specific content strategy',
+  messaging_framework: 'Core messages and tone guidelines',
 }
 
 interface MiaSectionBlockProps {
@@ -66,8 +86,8 @@ export function MiaSectionBlock({
     onAssist?.(content, request)
   }
 
-  const label = SECTION_LABELS[section.type]
-  const description = SECTION_DESCRIPTIONS[section.type]
+  const label = SECTION_LABELS[section.type] || section.type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  const description = SECTION_DESCRIPTIONS[section.type] || 'Build this section of your content'
 
   // Auto-generate when becoming active with no content
   if (isActive && !section.content && !isGenerating) {

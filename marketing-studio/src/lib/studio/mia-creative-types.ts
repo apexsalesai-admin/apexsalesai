@@ -17,7 +17,7 @@ export type MiaCreativePhase =
 
 // ─── Section Types ─────────────────────────────────────────────────────────────
 
-export type SectionType = 'hook' | 'body' | 'cta'
+export type SectionType = 'hook' | 'body' | 'cta' | 'headline' | 'introduction' | 'conclusion' | 'subject_line' | 'preview_text' | 'visual_concept' | 'prompt_variations' | 'strategy_overview' | 'channel_plan' | 'messaging_framework'
 
 export interface SectionDraft {
   type: SectionType

@@ -23,13 +23,24 @@ import type {
 } from '@/lib/studio/mia-creative-types'
 import type { BudgetBand, QualityTier } from '@/lib/studio/video-scoring'
 import type { CreatorProfile } from '@/lib/studio/creator-profile'
+import { getContentTypeConfig, hasCustomSections } from '@/lib/content/content-type-config'
 
 // ─── Initial State ─────────────────────────────────────────────────────────────
 
-const SECTION_ORDER: SectionType[] = ['hook', 'body', 'cta']
+const DEFAULT_SECTION_ORDER: SectionType[] = ['hook', 'body', 'cta']
 
-function createInitialSections(): SectionDraft[] {
-  return SECTION_ORDER.map((type) => ({
+function createInitialSections(contentType?: string): SectionDraft[] {
+  if (contentType && hasCustomSections(contentType)) {
+    const config = getContentTypeConfig(contentType)
+    return config.sections.map((s) => ({
+      type: s.type,
+      content: '',
+      version: 0,
+      accepted: false,
+      rejectedVersions: [],
+    }))
+  }
+  return DEFAULT_SECTION_ORDER.map((type) => ({
     type,
     content: '',
     version: 0,
@@ -222,7 +233,7 @@ function reducer(state: MiaSessionState, action: MiaSessionAction): MiaSessionSt
     }
 
     case 'RESET':
-      return { ...initialState, sections: createInitialSections() }
+      return { ...initialState, sections: createInitialSections() }  // Will be re-initialized by hook
 
     default:
       return state
@@ -246,7 +257,12 @@ export function useMiaCreativeSession({
   profile,
   onComplete,
 }: UseMiaCreativeSessionProps) {
-  const [state, dispatch] = useReducer(reducer, initialState)
+  // Initialize with type-aware sections
+  const typeAwareInitialState: MiaSessionState = {
+    ...initialState,
+    sections: createInitialSections(contentType),
+  }
+  const [state, dispatch] = useReducer(reducer, typeAwareInitialState)
   const thinkingIdRef = useRef(0)
   const seedRef = useRef(0)
   const videoProviderRef = useRef<string | undefined>(undefined)
@@ -425,7 +441,9 @@ export function useMiaCreativeSession({
 
       dispatch({ type: 'REVISE_SECTION_START', sectionIndex })
 
-      const sectionLabel = section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action'
+      const reviseTypeConfig = getContentTypeConfig(contentType)
+      const reviseSectionDef = reviseTypeConfig.sections.find(s => s.type === section.type)
+      const sectionLabel = reviseSectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
       addThinking('building', `Revising ${sectionLabel}`, `Based on your direction: "${direction.slice(0, 80)}${direction.length > 80 ? '...' : ''}"`)
 
       try {
@@ -440,6 +458,7 @@ export function useMiaCreativeSession({
             topic: state.topic,
             angle: state.selectedAngle,
             channels,
+            contentType,
             goal,
             brandName: state.brandName || undefined,
             profile: profile || undefined,
@@ -467,7 +486,9 @@ export function useMiaCreativeSession({
 
       dispatch({ type: 'ASSIST_SECTION_START', sectionIndex })
 
-      const sectionLabel = section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action'
+      const assistTypeConfig = getContentTypeConfig(contentType)
+      const assistSectionDef = assistTypeConfig.sections.find(s => s.type === section.type)
+      const sectionLabel = assistSectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
       addThinking('building', `Assisting with ${sectionLabel}`, `"${assistRequest.slice(0, 80)}${assistRequest.length > 80 ? '...' : ''}"`)
 
       try {
@@ -482,6 +503,7 @@ export function useMiaCreativeSession({
             topic: state.topic,
             angle: state.selectedAngle,
             channels,
+            contentType,
             goal,
             brandName: state.brandName || undefined,
             profile: profile || undefined,
@@ -510,9 +532,11 @@ export function useMiaCreativeSession({
       dispatch({ type: 'SET_LOADING', loading: true })
       dispatch({ type: 'SET_ERROR', error: null })
 
-      const sectionLabel =
-        section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action'
-      addThinking('building', `Writing ${sectionLabel}`, `Crafting section ${sectionIndex + 1} of 3...`)
+      const typeConfig = getContentTypeConfig(contentType)
+      const sectionDef = typeConfig.sections.find(s => s.type === section.type)
+      const sectionLabel = sectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
+      const totalSections = state.sections.length
+      addThinking('building', `Writing ${sectionLabel}`, `Crafting section ${sectionIndex + 1} of ${totalSections}...`)
 
       try {
         const previousSections = state.sections
@@ -601,7 +625,9 @@ export function useMiaCreativeSession({
   const acceptSection = useCallback(
     (index: number) => {
       dispatch({ type: 'ACCEPT_SECTION', index })
-      const label = SECTION_ORDER[index]
+      const typeConfig = getContentTypeConfig(contentType)
+      const sectionDef = typeConfig.sections[index]
+      const label = sectionDef?.label || DEFAULT_SECTION_ORDER[index] || `Section ${index + 1}`
       addThinking('building', `${label} accepted`, 'Moving to next section...')
 
       // If all sections accepted, move to polishing
@@ -611,7 +637,7 @@ export function useMiaCreativeSession({
 
       if (allAccepted) {
         dispatch({ type: 'SET_PHASE', phase: 'polishing' })
-      } else if (index < SECTION_ORDER.length - 1) {
+      } else if (index < state.sections.length - 1) {
         dispatch({ type: 'ADVANCE_SECTION' })
       }
 
@@ -866,15 +892,46 @@ export function useMiaCreativeSession({
     dispatch({ type: 'SET_PHASE', phase: 'done' })
     addThinking('done', 'Content ready!', 'Handing off to preview...')
 
-    const hookSection = state.sections.find((s) => s.type === 'hook')
-    const bodySection = state.sections.find((s) => s.type === 'body')
-    const ctaSection = state.sections.find((s) => s.type === 'cta')
+    const typeConfig = getContentTypeConfig(contentType)
+    const isCustom = hasCustomSections(contentType)
 
-    const hookContent = hookSection?.content || ''
-    const title = hookContent.split('\n')[0].slice(0, 100) || state.topic
+    let title: string
+    let body: string
+    let callToAction = ''
 
-    const bodyParts = [hookContent, bodySection?.content || '', ctaSection?.content || ''].filter(Boolean)
-    const body = bodyParts.join('\n\n')
+    if (isCustom) {
+      // Type-aware assembly
+      const sectionContents = state.sections.map(s => s.content).filter(Boolean)
+      body = sectionContents.join('\n\n')
+
+      // Title extraction based on type config
+      if (typeConfig.titleExtraction === 'headline-section') {
+        const headlineSection = state.sections.find(s => s.type === 'headline' || s.type === 'subject_line')
+        const firstContent = headlineSection?.content || sectionContents[0] || ''
+        title = firstContent.split('\n')[0].slice(0, 100) || state.topic
+      } else {
+        // topic-fallback
+        title = state.topic
+      }
+
+      // Extract CTA from dedicated CTA section if it exists
+      const ctaSec = state.sections.find(s => s.type === 'cta')
+      if (ctaSec?.content) {
+        callToAction = ctaSec.content
+      }
+    } else {
+      // Default pipeline (post, thread, etc.) — unchanged behavior
+      const hookSection = state.sections.find((s) => s.type === 'hook')
+      const bodySection = state.sections.find((s) => s.type === 'body')
+      const ctaSection = state.sections.find((s) => s.type === 'cta')
+
+      const hookContent = hookSection?.content || ''
+      title = hookContent.split('\n')[0].slice(0, 100) || state.topic
+
+      const bodyParts = [hookContent, bodySection?.content || '', ctaSection?.content || ''].filter(Boolean)
+      body = bodyParts.join('\n\n')
+      callToAction = ctaSection?.content || ''
+    }
 
     const hashtagMatches = body.match(/#\w+/g) || []
 
@@ -882,10 +939,10 @@ export function useMiaCreativeSession({
       title,
       body,
       hashtags: hashtagMatches,
-      callToAction: ctaSection?.content || '',
+      callToAction,
       videoProvider: videoProviderRef.current,
     })
-  }, [state.sections, state.topic, onComplete, addThinking])
+  }, [state.sections, state.topic, contentType, onComplete, addThinking])
 
   const completeSession = useCallback(() => {
     // If video/reel content, go to video-offer phase first

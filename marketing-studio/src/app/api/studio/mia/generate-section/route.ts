@@ -21,6 +21,7 @@ import type {
 } from '@/lib/studio/mia-creative-types'
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { getContentTypeConfig, getSectionInstruction } from '@/lib/content/content-type-config'
 
 async function callAI(prompt: string, maxTokens = 2048): Promise<string> {
   const provider = getBestProvider()
@@ -122,13 +123,26 @@ async function handleGenerateSection(
     ? `\n\nPreviously rejected versions (write something DIFFERENT):\n${rejectedVersions.map((v, i) => `Rejected v${i + 1}: ${v}`).join('\n')}`
     : ''
 
-  const sectionInstructions: Record<string, string> = {
+  // Default section instructions (used for post and other social types)
+  const defaultSectionInstructions: Record<string, string> = {
     hook: 'Write an attention-grabbing opening hook (1-3 sentences). Make it scroll-stopping. Use a proven formula: curiosity gap, bold statement, question, or story opener.',
     body: 'Write the main body content (2-5 paragraphs). Deliver value, support the angle with specifics. Use clear structure and engaging language.',
     cta: 'Write a compelling call-to-action (1-2 sentences). Be specific about what the reader should do next. Match the content goal.',
   }
 
-  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionType.toUpperCase()} section for ${contentType} content on ${channelList}.
+  // Use type-specific instruction if available, otherwise fall back to defaults
+  const sectionInstructions: Record<string, string> = defaultSectionInstructions
+  const typeSpecificInstruction = getSectionInstruction(contentType, sectionType)
+  if (typeSpecificInstruction) {
+    sectionInstructions[sectionType] = typeSpecificInstruction
+  }
+
+  // Get section label from type config for better prompt context
+  const typeConfig = getContentTypeConfig(contentType)
+  const sectionDef = typeConfig.sections.find(s => s.type === sectionType)
+  const sectionLabel = sectionDef?.label || sectionType.toUpperCase()
+
+  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionLabel} section for ${contentType} content on ${channelList}.
 
 Topic: "${topic}"
 Angle: "${angle.title}" — ${angle.description}
@@ -251,7 +265,22 @@ async function handleScore(
   const channelList = channels.join(', ') || 'social media'
   const assembledDraft = sections.map((s) => `[${s.type.toUpperCase()}]: ${s.content}`).join('\n\n')
 
-  const prompt = `You are Mia, an expert AI content strategist. Score this ${contentType} draft for ${channelList} on 5 dimensions (0-100 each).
+  // Type-specific scoring dimensions
+  const typeConfig = getContentTypeConfig(contentType)
+  const dimensions = typeConfig.scoringDimensions.length > 0
+    ? typeConfig.scoringDimensions
+    : [
+        { key: 'hook', label: 'Hook', description: 'How attention-grabbing is the opening?' },
+        { key: 'clarity', label: 'Clarity', description: 'How clear and well-structured is the message?' },
+        { key: 'cta', label: 'CTA', description: 'How strong is the call-to-action?' },
+        { key: 'seo', label: 'SEO', description: 'How well optimized for search/discovery?' },
+        { key: 'platformFit', label: 'Platform Fit', description: 'How well does it fit ' + channelList + ' conventions?' },
+      ]
+
+  const dimensionLines = dimensions.map(d => `- ${d.key}: ${d.description}`).join('\n')
+  const dimensionKeys = dimensions.map(d => `"${d.key}": 0`).join(', ')
+
+  const prompt = `You are Mia, an expert AI content strategist. Score this ${contentType} draft for ${channelList} on ${dimensions.length} dimensions (0-100 each).
 
 Topic: "${topic}"
 Angle: "${angle.title}"
@@ -260,30 +289,34 @@ Draft:
 ${assembledDraft}
 
 Dimensions:
-- hook: How attention-grabbing is the opening?
-- clarity: How clear and well-structured is the message?
-- cta: How strong is the call-to-action?
-- seo: How well optimized for search/discovery?
-- platformFit: How well does it fit ${channelList} conventions?
+${dimensionLines}
 
 Return ONLY a JSON object:
-{"hook": 0, "clarity": 0, "cta": 0, "seo": 0, "platformFit": 0, "overall": 0}
+{${dimensionKeys}, "overall": 0}
 
-The "overall" should be a weighted average of the 5 scores.`
+The "overall" should be a weighted average of the scores.`
 
   const raw = await callAI(prompt, 256)
-  const parsed = parseJSON(raw) as { hook: number; clarity: number; cta: number; seo: number; platformFit: number; overall: number }
+  const parsed = parseJSON(raw) as Record<string, number>
+
+  // Build scores object from dynamic dimensions
+  const scores: Record<string, number> = {}
+  for (const dim of dimensions) {
+    scores[dim.key] = Math.min(100, Math.max(0, parsed[dim.key] || 0))
+  }
+  scores.overall = Math.min(100, Math.max(0, parsed.overall || 0))
+
+  // For backward compatibility, map type-specific keys to standard keys
+  // so the MomentumMeter component can still render
+  if (!('hook' in scores)) scores.hook = scores[dimensions[0]?.key] || 0
+  if (!('clarity' in scores)) scores.clarity = scores[dimensions[1]?.key] || 0
+  if (!('cta' in scores)) scores.cta = scores[dimensions[2]?.key] || 0
+  if (!('seo' in scores)) scores.seo = scores[dimensions[3]?.key] || 0
+  if (!('platformFit' in scores)) scores.platformFit = scores[dimensions[4]?.key] || 0
 
   return NextResponse.json({
     success: true,
-    scores: {
-      hook: Math.min(100, Math.max(0, parsed.hook || 0)),
-      clarity: Math.min(100, Math.max(0, parsed.clarity || 0)),
-      cta: Math.min(100, Math.max(0, parsed.cta || 0)),
-      seo: Math.min(100, Math.max(0, parsed.seo || 0)),
-      platformFit: Math.min(100, Math.max(0, parsed.platformFit || 0)),
-      overall: Math.min(100, Math.max(0, parsed.overall || 0)),
-    },
+    scores,
   })
 }
 

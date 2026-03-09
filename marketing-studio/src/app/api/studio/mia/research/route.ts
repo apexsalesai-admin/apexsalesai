@@ -20,6 +20,7 @@ import type {
 } from '@/lib/studio/mia-creative-types'
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { getContentTypeConfig } from '@/lib/content/content-type-config'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -232,7 +233,13 @@ Return ONLY a JSON object (no markdown):
     const goalContext = goal ? `Content goal: ${goal}.` : ''
     const seedContext = seed ? `(Variation seed: ${seed} — generate COMPLETELY DIFFERENT angles from any previous set.)\n` : ''
 
-    const prompt = `${profilePrompt}${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
+    // Type-specific research framing
+    const typeConfig = getContentTypeConfig(contentType)
+    const typeContext = typeConfig.researchContext
+      ? `\n\nContent type guidance: ${typeConfig.researchContext}`
+      : ''
+
+    const prompt = `${profilePrompt}${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}${typeContext}
 
 Topic: "${topic}"
 ${sourceContext}

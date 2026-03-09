@@ -38,7 +38,7 @@ export function MiaSectionBuilder({
       >
         <h3 className="text-xl font-bold text-slate-900">Building your content</h3>
         <p className="text-slate-500 mt-1">
-          {sections.filter((s) => s.accepted).length} of 3 sections complete
+          {sections.filter((s) => s.accepted).length} of {sections.length} sections complete
         </p>
       </motion.div>
 
