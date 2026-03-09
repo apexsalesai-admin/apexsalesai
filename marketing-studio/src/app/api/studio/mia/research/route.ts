@@ -233,13 +233,22 @@ Return ONLY a JSON object (no markdown):
     const goalContext = goal ? `Content goal: ${goal}.` : ''
     const seedContext = seed ? `(Variation seed: ${seed} — generate COMPLETELY DIFFERENT angles from any previous set.)\n` : ''
 
-    // Type-specific research framing
+    // Check for type-specific research prompt (full replacement)
     const typeConfig = getContentTypeConfig(contentType)
-    const typeContext = typeConfig.researchContext
-      ? `\n\nContent type guidance: ${typeConfig.researchContext}`
-      : ''
+    const typeResearchPrompt = typeConfig.researchPrompt(topic, channels)
 
-    const prompt = `${profilePrompt}${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}${typeContext}
+    let prompt: string
+    let usesTypeSpecificFormat = false
+
+    if (typeResearchPrompt) {
+      // Type-specific: full prompt replacement with angle format adaptation
+      // Type-specific prompts return [{title, description, whyItWorks}] format
+      // We wrap with brand/profile/seed context
+      prompt = `${profilePrompt}${brandGuardrail}${seedContext}${typeResearchPrompt}${sourceContext}`
+      usesTypeSpecificFormat = true
+    } else {
+      // Default social post research (UNCHANGED)
+      prompt = `${profilePrompt}${brandGuardrail}${seedContext}You are Mia, an expert AI content strategist. Given a topic, suggest 3 distinct creative angles for ${contentType} content on ${channelList}. ${goalContext}
 
 Topic: "${topic}"
 ${sourceContext}
@@ -262,16 +271,22 @@ Return ONLY a JSON object (no markdown):
     }
   ]
 }`
+    }
 
     const raw = await callAI(prompt)
-    const parsed = parseJSON(raw) as { angles: AngleCard[] }
+    const parsed = parseJSON(raw) as { angles?: AngleCard[] } | AngleCard[]
 
-    // Ensure we have valid angle data
-    const angles: AngleCard[] = (parsed.angles || []).slice(0, 3).map((a, i) => ({
+    // Type-specific prompts may return a flat array instead of {angles: [...]}
+    const rawAngles = Array.isArray(parsed)
+      ? parsed
+      : (parsed as { angles?: AngleCard[] }).angles || []
+
+    // Normalize angle data (type-specific format uses whyItWorks instead of rationale)
+    const angles: AngleCard[] = rawAngles.slice(0, 3).map((a: AngleCard & { whyItWorks?: string }, i: number) => ({
       id: a.id || `angle-${i + 1}`,
       title: a.title || `Angle ${i + 1}`,
       description: a.description || '',
-      rationale: a.rationale || '',
+      rationale: a.rationale || a.whyItWorks || '',
       sources: Array.isArray(a.sources) ? a.sources : [],
     }))
 

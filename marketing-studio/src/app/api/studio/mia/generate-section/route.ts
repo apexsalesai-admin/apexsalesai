@@ -130,28 +130,30 @@ async function handleGenerateSection(
     cta: 'Write a compelling call-to-action (1-2 sentences). Be specific about what the reader should do next. Match the content goal.',
   }
 
-  // Use type-specific instruction if available, otherwise fall back to defaults
-  const sectionInstructions: Record<string, string> = defaultSectionInstructions
-  const typeSpecificInstruction = getSectionInstruction(contentType, sectionType)
-  if (typeSpecificInstruction) {
-    sectionInstructions[sectionType] = typeSpecificInstruction
-  }
-
-  // Get section label from type config for better prompt context
+  // Get type config for type-aware behavior
   const typeConfig = getContentTypeConfig(contentType)
   const sectionDef = typeConfig.sections.find(s => s.type === sectionType)
-  const sectionLabel = sectionDef?.label || sectionType.toUpperCase()
+  const sectionLabel = sectionDef?.title || sectionType.toUpperCase()
 
-  const prompt = `${profilePrompt}${brandGuardrail}You are Mia, an expert AI content strategist. Generate the ${sectionLabel} section for ${contentType} content on ${channelList}.
+  // Use type-specific instruction if available, otherwise fall back to defaults
+  const typeSpecificInstruction = getSectionInstruction(contentType, sectionType)
+  const currentInstruction = typeSpecificInstruction || defaultSectionInstructions[sectionType] || defaultSectionInstructions.body
+
+  // Use type-specific system prompt if available, otherwise default
+  const systemContext = typeConfig.systemPrompt
+    ? `${typeConfig.systemPrompt}\n\n`
+    : ''
+
+  const prompt = `${profilePrompt}${brandGuardrail}${systemContext}You are Mia, an expert AI content strategist. Generate the "${sectionLabel}" section for ${contentType} content on ${channelList}.
 
 Topic: "${topic}"
-Angle: "${angle.title}" — ${angle.description}
+Angle: "${angle.title}" -- ${angle.description}
 ${goalContext}
 ${brandContext}
 ${prevContext}
 ${rejectedContext}
 
-Section instructions: ${sectionInstructions[sectionType]}
+Section instructions: ${currentInstruction}
 
 Return ONLY a JSON object (no markdown):
 {
@@ -265,22 +267,22 @@ async function handleScore(
   const channelList = channels.join(', ') || 'social media'
   const assembledDraft = sections.map((s) => `[${s.type.toUpperCase()}]: ${s.content}`).join('\n\n')
 
-  // Type-specific scoring dimensions
+  // Type-specific scoring criteria
   const typeConfig = getContentTypeConfig(contentType)
-  const dimensions = typeConfig.scoringDimensions.length > 0
-    ? typeConfig.scoringDimensions
+  const criteria = typeConfig.scoringCriteria.length > 0
+    ? typeConfig.scoringCriteria
     : [
-        { key: 'hook', label: 'Hook', description: 'How attention-grabbing is the opening?' },
-        { key: 'clarity', label: 'Clarity', description: 'How clear and well-structured is the message?' },
-        { key: 'cta', label: 'CTA', description: 'How strong is the call-to-action?' },
-        { key: 'seo', label: 'SEO', description: 'How well optimized for search/discovery?' },
-        { key: 'platformFit', label: 'Platform Fit', description: 'How well does it fit ' + channelList + ' conventions?' },
+        { key: 'hook', label: 'Hook', weight: 20, description: 'How attention-grabbing is the opening?' },
+        { key: 'clarity', label: 'Clarity', weight: 20, description: 'How clear and well-structured is the message?' },
+        { key: 'cta', label: 'CTA', weight: 20, description: 'How strong is the call-to-action?' },
+        { key: 'seo', label: 'SEO', weight: 20, description: 'How well optimized for search/discovery?' },
+        { key: 'platformFit', label: 'Platform Fit', weight: 20, description: 'How well does it fit ' + channelList + ' conventions?' },
       ]
 
-  const dimensionLines = dimensions.map(d => `- ${d.key}: ${d.description}`).join('\n')
-  const dimensionKeys = dimensions.map(d => `"${d.key}": 0`).join(', ')
+  const dimensionLines = criteria.map(d => `- ${d.key} (weight: ${d.weight}%): ${d.description}`).join('\n')
+  const dimensionKeys = criteria.map(d => `"${d.key}": 0`).join(', ')
 
-  const prompt = `You are Mia, an expert AI content strategist. Score this ${contentType} draft for ${channelList} on ${dimensions.length} dimensions (0-100 each).
+  const prompt = `You are Mia, an expert AI content strategist. Score this ${contentType} draft for ${channelList} on ${criteria.length} criteria (0-100 each).
 
 Topic: "${topic}"
 Angle: "${angle.title}"
@@ -288,31 +290,40 @@ Angle: "${angle.title}"
 Draft:
 ${assembledDraft}
 
-Dimensions:
+Scoring criteria (score each 0-100):
 ${dimensionLines}
 
 Return ONLY a JSON object:
 {${dimensionKeys}, "overall": 0}
 
-The "overall" should be a weighted average of the scores.`
+The "overall" should be a weighted average using the weights specified above.`
 
   const raw = await callAI(prompt, 256)
   const parsed = parseJSON(raw) as Record<string, number>
 
-  // Build scores object from dynamic dimensions
+  // Build scores object from dynamic criteria
   const scores: Record<string, number> = {}
-  for (const dim of dimensions) {
-    scores[dim.key] = Math.min(100, Math.max(0, parsed[dim.key] || 0))
+  for (const c of criteria) {
+    scores[c.key] = Math.min(100, Math.max(0, parsed[c.key] || 0))
   }
-  scores.overall = Math.min(100, Math.max(0, parsed.overall || 0))
+
+  // Calculate weighted overall if not provided
+  if (parsed.overall) {
+    scores.overall = Math.min(100, Math.max(0, parsed.overall))
+  } else {
+    const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0)
+    scores.overall = Math.round(
+      criteria.reduce((sum, c) => sum + (scores[c.key] * c.weight), 0) / (totalWeight || 1)
+    )
+  }
 
   // For backward compatibility, map type-specific keys to standard keys
   // so the MomentumMeter component can still render
-  if (!('hook' in scores)) scores.hook = scores[dimensions[0]?.key] || 0
-  if (!('clarity' in scores)) scores.clarity = scores[dimensions[1]?.key] || 0
-  if (!('cta' in scores)) scores.cta = scores[dimensions[2]?.key] || 0
-  if (!('seo' in scores)) scores.seo = scores[dimensions[3]?.key] || 0
-  if (!('platformFit' in scores)) scores.platformFit = scores[dimensions[4]?.key] || 0
+  if (!('hook' in scores)) scores.hook = scores[criteria[0]?.key] || 0
+  if (!('clarity' in scores)) scores.clarity = scores[criteria[1]?.key] || 0
+  if (!('cta' in scores)) scores.cta = scores[criteria[2]?.key] || 0
+  if (!('seo' in scores)) scores.seo = scores[criteria[3]?.key] || 0
+  if (!('platformFit' in scores)) scores.platformFit = scores[criteria[4]?.key] || 0
 
   return NextResponse.json({
     success: true,

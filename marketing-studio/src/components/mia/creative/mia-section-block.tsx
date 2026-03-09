@@ -5,36 +5,37 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Heart, RefreshCw, PenTool, Check, Loader2, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react'
 import type { SectionDraft, SectionType } from '@/lib/studio/mia-creative-types'
 
+// Default labels for section types (overridden by config titles when available)
 const SECTION_LABELS: Partial<Record<SectionType, string>> = {
   hook: 'Opening Hook',
   body: 'Main Body',
   cta: 'Call to Action',
-  headline: 'Headline',
+  headline: 'Headline & Introduction',
   introduction: 'Introduction',
-  conclusion: 'Conclusion',
-  subject_line: 'Subject Line',
+  conclusion: 'Conclusion & Call to Action',
+  subject_line: 'Subject Line & Preview',
   preview_text: 'Preview Text',
-  visual_concept: 'Visual Concept',
-  prompt_variations: 'DALL-E Prompts',
-  strategy_overview: 'Strategy Overview',
-  channel_plan: 'Channel Plan',
-  messaging_framework: 'Messaging Framework',
+  visual_concept: 'Primary Image Prompt',
+  prompt_variations: 'Alternative Style',
+  strategy_overview: 'LinkedIn Post',
+  channel_plan: 'X/Twitter Thread',
+  messaging_framework: 'Email Draft',
 }
 
 const SECTION_DESCRIPTIONS: Partial<Record<SectionType, string>> = {
-  hook: 'The first thing your audience sees — make it count',
+  hook: 'The first thing your audience sees, make it count',
   body: 'Where you deliver value and build your argument',
   cta: 'Drive action with a clear next step',
-  headline: 'The title that draws readers in',
+  headline: 'Hook readers and establish your thesis',
   introduction: 'Set the stage and hook your readers',
-  conclusion: 'Wrap up with key takeaways and next steps',
-  subject_line: 'The make-or-break line that drives opens',
+  conclusion: 'Summarize and drive the reader to act',
+  subject_line: 'The first thing recipients see',
   preview_text: 'The supporting text visible in the inbox',
-  visual_concept: 'The creative direction for your image',
-  prompt_variations: 'Detailed prompts for AI image generation',
-  strategy_overview: 'Your campaign blueprint and objectives',
-  channel_plan: 'Platform-specific content strategy',
-  messaging_framework: 'Core messages and tone guidelines',
+  visual_concept: 'Main visual concept for DALL-E generation',
+  prompt_variations: 'Different visual interpretation',
+  strategy_overview: 'Professional thought leadership content',
+  channel_plan: 'Engaging thread for X/Twitter',
+  messaging_framework: 'Direct outreach or newsletter content',
 }
 
 interface MiaSectionBlockProps {

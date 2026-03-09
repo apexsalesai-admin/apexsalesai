@@ -443,7 +443,7 @@ export function useMiaCreativeSession({
 
       const reviseTypeConfig = getContentTypeConfig(contentType)
       const reviseSectionDef = reviseTypeConfig.sections.find(s => s.type === section.type)
-      const sectionLabel = reviseSectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
+      const sectionLabel = reviseSectionDef?.title || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
       addThinking('building', `Revising ${sectionLabel}`, `Based on your direction: "${direction.slice(0, 80)}${direction.length > 80 ? '...' : ''}"`)
 
       try {
@@ -474,7 +474,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'REVISE_SECTION_ERROR', sectionIndex, error: msg })
       }
     },
-    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, profile, addThinking]
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, contentType, goal, profile, addThinking]
   )
 
   // ── Inline Mia Assist — help user during editing ─────────────────────────
@@ -488,7 +488,7 @@ export function useMiaCreativeSession({
 
       const assistTypeConfig = getContentTypeConfig(contentType)
       const assistSectionDef = assistTypeConfig.sections.find(s => s.type === section.type)
-      const sectionLabel = assistSectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
+      const sectionLabel = assistSectionDef?.title || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
       addThinking('building', `Assisting with ${sectionLabel}`, `"${assistRequest.slice(0, 80)}${assistRequest.length > 80 ? '...' : ''}"`)
 
       try {
@@ -519,7 +519,7 @@ export function useMiaCreativeSession({
         dispatch({ type: 'ASSIST_SECTION_ERROR', sectionIndex, error: msg })
       }
     },
-    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, goal, profile, addThinking]
+    [state.sections, state.selectedAngle, state.topic, state.brandName, channels, contentType, goal, profile, addThinking]
   )
 
   // ── Generate a single section ──────────────────────────────────────────────
@@ -534,7 +534,7 @@ export function useMiaCreativeSession({
 
       const typeConfig = getContentTypeConfig(contentType)
       const sectionDef = typeConfig.sections.find(s => s.type === section.type)
-      const sectionLabel = sectionDef?.label || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
+      const sectionLabel = sectionDef?.title || (section.type === 'hook' ? 'opening hook' : section.type === 'body' ? 'main body' : 'call to action')
       const totalSections = state.sections.length
       addThinking('building', `Writing ${sectionLabel}`, `Crafting section ${sectionIndex + 1} of ${totalSections}...`)
 
@@ -625,9 +625,9 @@ export function useMiaCreativeSession({
   const acceptSection = useCallback(
     (index: number) => {
       dispatch({ type: 'ACCEPT_SECTION', index })
-      const typeConfig = getContentTypeConfig(contentType)
-      const sectionDef = typeConfig.sections[index]
-      const label = sectionDef?.label || DEFAULT_SECTION_ORDER[index] || `Section ${index + 1}`
+      const acceptTypeConfig = getContentTypeConfig(contentType)
+      const acceptSectionDef = acceptTypeConfig.sections[index]
+      const label = acceptSectionDef?.title || DEFAULT_SECTION_ORDER[index] || `Section ${index + 1}`
       addThinking('building', `${label} accepted`, 'Moving to next section...')
 
       // If all sections accepted, move to polishing
@@ -644,7 +644,7 @@ export function useMiaCreativeSession({
       // Score content after each acceptance
       setTimeout(() => scoreContent(), 200)
     },
-    [state.sections, addThinking, scoreContent]
+    [state.sections, contentType, addThinking, scoreContent]
   )
 
   const retrySection = useCallback(
