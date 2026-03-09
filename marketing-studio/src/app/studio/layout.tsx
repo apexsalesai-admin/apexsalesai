@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   { href: '/studio/library', label: 'Library', icon: FolderOpen },
   { href: '/studio/repurpose', label: 'Repurpose', icon: Sparkles },
   { href: '/studio/content/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/studio/approvals', label: 'Approvals', icon: CheckCircle, badge: '3' },
+  { href: '/studio/approvals', label: 'Approvals', icon: CheckCircle },
   { href: '/studio/video', label: 'Video Studio', icon: Video, badge: 'Pro' },
   { href: '/studio/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/studio/labs', label: 'Labs', icon: FlaskConical, badge: 'New' },

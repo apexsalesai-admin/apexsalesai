@@ -75,7 +75,7 @@ import { VideoPreviewPlayer } from '@/components/content/video-preview-player'
 import type { VideoRenderState } from '@/types/content-draft'
 import { createEmptyVideoRenderState } from '@/types/content-draft'
 
-type ContentType = 'post' | 'video' | 'article' | 'thread' | 'story' | 'reel'
+type ContentType = 'post' | 'video' | 'article' | 'thread' | 'story' | 'reel' | 'image' | 'campaign'
 type ToneType = 'professional' | 'friendly' | 'bold' | 'educational' | 'witty' | 'inspirational' | 'urgent' | 'storytelling'
 type ContentGoal = 'awareness' | 'engagement' | 'leads' | 'sales' | 'education' | 'community'
 type VideoLength = 'short' | 'medium' | 'long'
@@ -216,6 +216,8 @@ const CONTENT_TYPES = [
   { id: 'thread' as ContentType, name: 'Thread', icon: Layers, description: 'Multi-part connected posts', color: 'from-purple-500 to-pink-500' },
   { id: 'story' as ContentType, name: 'Story', icon: Flame, description: '24-hour ephemeral content', color: 'from-amber-500 to-orange-500' },
   { id: 'reel' as ContentType, name: 'Reel', icon: Play, description: 'Short-form vertical video', color: 'from-pink-500 to-rose-500' },
+  { id: 'image' as ContentType, name: 'Image', icon: ImageIcon, description: 'AI-generated illustration', color: 'from-pink-500 to-fuchsia-500' },
+  { id: 'campaign' as ContentType, name: 'Campaign', icon: Megaphone, description: 'Multi-channel strategy', color: 'from-purple-500 to-indigo-500' },
 ]
 
 const AI_TONES = [
@@ -256,9 +258,10 @@ interface ContentCreatorProps {
 }
 
 export function ContentCreator({ initialDate, initialType, onSave, onCancel, isSaving = false }: ContentCreatorProps) {
-  const [step, setStep] = useState(1)
+  const isDirectCreateMode = initialType && ['article', 'image', 'campaign'].includes(initialType)
+  const [step, setStep] = useState(isDirectCreateMode ? 2 : 1)
   const [draft, setDraft] = useState<ContentDraft>({
-    channels: [],
+    channels: isDirectCreateMode ? ['LINKEDIN' as IntegrationType] : [],
     contentType: initialType || 'post',
     title: '',
     body: '',
@@ -518,6 +521,37 @@ export function ContentCreator({ initialDate, initialType, onSave, onCancel, isS
   const aiTone = aiTones[0]
 
   const isVideoContent = draft.contentType === 'video' || draft.contentType === 'reel'
+  const isImageContent = draft.contentType === 'image'
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
+
+  const handleGenerateImage = async () => {
+    if (!draft.body) return
+    setIsGeneratingImage(true)
+    try {
+      const promptMatch = draft.body.match(/Prompt \d+[:\s]*([\s\S]+?)(?=Prompt \d+|$)/)
+      const imagePrompt = promptMatch?.[1]?.trim() || draft.body.substring(0, 1000)
+      const res = await fetch('/api/studio/mia/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: imagePrompt, size: '1024x1024' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Image generation failed')
+      }
+      const data = await res.json()
+      if (data.url) {
+        setGeneratedImageUrl(data.url)
+        setDraft(prev => ({ ...prev, media: [...prev.media, data.url] }))
+      }
+    } catch (err) {
+      console.error('[IMAGE] Generation failed:', err)
+      setGenerationError(err instanceof Error ? err.message : 'Image generation failed')
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
 
   const canProceed = () => {
     switch (step) {
@@ -586,6 +620,10 @@ export function ContentCreator({ initialDate, initialType, onSave, onCancel, isS
   }
 
   const handleBack = () => {
+    if (isDirectCreateMode && step <= 2) {
+      if (onCancel) onCancel()
+      return
+    }
     if (step > 1) {
       setStep(step - 1)
     }
@@ -2416,6 +2454,40 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                   </div>
                 )}
 
+                {/* Image Generation (Step 3 — image type only) */}
+                {isImageContent && draft.body && (
+                  <div className="max-w-2xl mx-auto mt-8 space-y-4">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                      <h4 className="font-semibold text-slate-900 mb-3 flex items-center space-x-2">
+                        <ImageIcon className="w-4 h-4 text-pink-600" />
+                        <span>Generated Image Prompts</span>
+                      </h4>
+                      <pre className="whitespace-pre-wrap text-sm text-slate-600 leading-relaxed">{draft.body}</pre>
+                    </div>
+                    <button
+                      onClick={handleGenerateImage}
+                      disabled={isGeneratingImage}
+                      className="w-full py-3 bg-pink-600 text-white rounded-xl font-medium hover:bg-pink-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isGeneratingImage ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating with DALL-E...</>
+                      ) : (
+                        <><Sparkles className="w-4 h-4" /> Generate Image with DALL-E</>
+                      )}
+                    </button>
+                    {generatedImageUrl && (
+                      <div className="rounded-xl overflow-hidden border border-slate-200">
+                        <NextImage src={generatedImageUrl} alt="Generated image" width={1024} height={1024} className="w-full" unoptimized />
+                        <div className="p-3 bg-white flex gap-2">
+                          <a href={generatedImageUrl} target="_blank" rel="noopener noreferrer" className="flex-1 py-2 text-center text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
+                            Open Full Size
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Video Script Display + Analyze (Step 3 — video/reel only) */}
                 {(draft.contentType === 'video' || draft.contentType === 'reel') && draft.videoScript && (
                   <div className="max-w-2xl mx-auto mt-8 space-y-4">
@@ -2873,11 +2945,11 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between mt-8">
         <button
-          onClick={step === 1 ? onCancel : handleBack}
+          onClick={step === 1 || (isDirectCreateMode && step <= 2) ? onCancel : handleBack}
           className="btn-secondary flex items-center space-x-2 px-6 py-3 rounded-xl"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>{step === 1 ? 'Cancel' : 'Back'}</span>
+          <span>{step === 1 || (isDirectCreateMode && step <= 2) ? 'Cancel' : 'Back'}</span>
         </button>
 
         {step < totalSteps ? (

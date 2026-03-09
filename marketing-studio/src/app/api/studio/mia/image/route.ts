@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const limited = applyRateLimit(RATE_LIMITS.video, session.user.id)
+    if (limited) return limited
+
+    const body = await request.json()
+    const { prompt, size = '1024x1024' } = body
+
+    if (!prompt || typeof prompt !== 'string') {
+      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
+    }
+
+    const validSizes = ['1024x1024', '1792x1024', '1024x1792']
+    if (!validSizes.includes(size)) {
+      return NextResponse.json(
+        { error: `Invalid size. Valid: ${validSizes.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured. Set OPENAI_API_KEY in environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    console.log('[IMAGE:DALLE] Generating image:', prompt.substring(0, 100))
+
+    const response = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: prompt.substring(0, 4000),
+        n: 1,
+        size,
+        quality: 'standard',
+        response_format: 'url',
+      }),
+    })
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}))
+      console.error('[IMAGE:DALLE] OpenAI error:', errData)
+      return NextResponse.json(
+        { error: errData.error?.message || `OpenAI API error (${response.status})` },
+        { status: response.status }
+      )
+    }
+
+    const data = await response.json()
+    const imageUrl = data.data?.[0]?.url
+    const revisedPrompt = data.data?.[0]?.revised_prompt
+
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'No image URL in response' }, { status: 500 })
+    }
+
+    console.log('[IMAGE:DALLE] Image generated successfully')
+
+    return NextResponse.json({
+      success: true,
+      url: imageUrl,
+      revisedPrompt: revisedPrompt || null,
+    })
+  } catch (error) {
+    console.error('[IMAGE:DALLE] Error:', error)
+    return NextResponse.json(
+      { error: 'Image generation failed. Please try again.' },
+      { status: 500 }
+    )
+  }
+}
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
