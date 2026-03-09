@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sparkles, Loader2, AlertCircle, Copy, Check, ArrowLeft } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Sparkles, Loader2, AlertCircle, Copy, Check, ArrowLeft, Save } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -22,11 +23,13 @@ const FORMATS = [
 ] as const
 
 export default function RepurposePage() {
+  const router = useRouter()
   const [contentList, setContentList] = useState<ContentItem[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [selectedFormats, setSelectedFormats] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<Record<string, string> | null>(null)
   const [activeTab, setActiveTab] = useState('')
@@ -85,6 +88,35 @@ export default function RepurposePage() {
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleSave = async (format: string, text: string) => {
+    setSaving(true)
+    try {
+      const label = FORMATS.find(f => f.id === format)?.label || format
+      const res = await fetch('/api/content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${label} (Repurposed)`,
+          body: text,
+          contentType: 'POST',
+          channels: [],
+          aiGenerated: true,
+          aiTopic: label,
+          aiTone: 'PROFESSIONAL',
+        }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      const data = await res.json()
+      if (data.success && data.data?.id) {
+        router.push(`/studio/content/${data.data.id}`)
+      }
+    } catch {
+      setError('Failed to save. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -211,12 +243,24 @@ export default function RepurposePage() {
                 <pre className="p-4 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">
                   {results[activeTab] || '(No content generated for this format)'}
                 </pre>
+                <div className="absolute top-3 right-3 flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopy(results[activeTab] || '')}
+                    className="p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-slate-400" />}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
                 <button
-                  onClick={() => handleCopy(results[activeTab] || '')}
-                  className="absolute top-3 right-3 p-2 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-                  title="Copy to clipboard"
+                  onClick={() => handleSave(activeTab, results[activeTab] || '')}
+                  disabled={saving || !results[activeTab]}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
                 >
-                  {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-slate-400" />}
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save as New Content
                 </button>
               </div>
             </div>

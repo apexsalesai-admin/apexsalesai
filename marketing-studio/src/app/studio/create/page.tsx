@@ -25,14 +25,14 @@ const CONTENT_TYPES = [
     description: 'Blog posts, thought leadership',
     icon: BookOpen,
     color: 'bg-emerald-500',
-    href: '/studio/content/new?type=article',
+    href: '/studio/create/article',
   },
   {
     title: 'Email',
     description: 'Outreach, newsletters, sequences',
     icon: Mail,
     color: 'bg-amber-500',
-    href: '/studio/content/new?type=post',
+    href: '/studio/create/email',
   },
   {
     title: 'Video',
@@ -46,14 +46,14 @@ const CONTENT_TYPES = [
     description: 'AI illustrations, graphics, banners',
     icon: Image,
     color: 'bg-pink-500',
-    href: '/studio/content/new?type=post',
+    href: '/studio/create/image',
   },
   {
     title: 'Campaign',
     description: 'Multi-channel content strategy',
     icon: Megaphone,
     color: 'bg-purple-500',
-    href: '/studio/content/new?type=post',
+    href: '/studio/create/campaign',
     badge: 'Pro',
   },
   {
@@ -61,7 +61,7 @@ const CONTENT_TYPES = [
     description: 'Slides, pitch decks, reports',
     icon: Presentation,
     color: 'bg-indigo-500',
-    href: '/studio/content/new?type=article',
+    href: '/studio/create/presentation',
   },
   {
     title: 'Repurpose',
