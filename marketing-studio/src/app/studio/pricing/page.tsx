@@ -77,6 +77,7 @@ export default function PricingPage() {
   const [interval, setInterval] = useState<'monthly' | 'yearly'>('monthly')
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTier, setCurrentTier] = useState<string>('free')
+  const [upgradeError, setUpgradeError] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const success = searchParams.get('success')
   const canceled = searchParams.get('canceled')
@@ -90,23 +91,29 @@ export default function PricingPage() {
       .catch(() => {})
   }, [])
 
-  const handleUpgrade = async (tier: string) => {
+  const handleUpgrade = async (tier: string, selectedInterval: 'monthly' | 'yearly') => {
     if (tier === 'free' || tier === currentTier) return
     setLoading(tier)
+    setUpgradeError(null)
     try {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, interval }),
+        body: JSON.stringify({ tier, interval: selectedInterval }),
       })
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
       } else {
-        console.error('Checkout error:', data.error)
+        setUpgradeError(
+          data.error?.includes('Price not configured')
+            ? 'This plan is not yet available. Please contact support@lyfye.com'
+            : 'Upgrade temporarily unavailable. Please contact support@lyfye.com'
+        )
         setLoading(null)
       }
     } catch {
+      setUpgradeError('Upgrade temporarily unavailable. Please contact support@lyfye.com')
       setLoading(null)
     }
   }
@@ -137,6 +144,11 @@ export default function PricingPage() {
         {canceled && (
           <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-xl text-center text-amber-700">
             Checkout was canceled. No charges were made.
+          </div>
+        )}
+        {upgradeError && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl text-center text-red-700">
+            {upgradeError}
           </div>
         )}
 
@@ -238,7 +250,7 @@ export default function PricingPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleUpgrade(plan.tier)}
+                    onClick={() => handleUpgrade(plan.tier, interval)}
                     disabled={loading !== null}
                     className={cn(
                       'w-full py-2.5 px-4 text-sm font-medium rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50',

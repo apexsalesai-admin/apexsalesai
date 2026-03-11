@@ -70,12 +70,25 @@ export async function checkUsageLimit(
           : config.monthlyContentLimit
 
     // Unlimited (-1) means no cap
-    if (limitField === -1) {
-      return { allowed: true, tier }
+    if (limitField < 0) {
+      return { allowed: true, tier, usage: { used: 0, limit: -1 } }
+    }
+
+    // No user record in DB - treat as fresh (0 used)
+    if (!user) {
+      return {
+        allowed: limitField > 0,
+        tier,
+        usage: { used: 0, limit: limitField },
+        ...(limitField === 0 && {
+          reason: `${config.label} plan does not include ${action}. Upgrade for access.`,
+          upgradeRequired: true,
+        }),
+      }
     }
 
     // Auto-reset: if usageResetAt is in the past (or null), reset counters
-    if (user && (!user.usageResetAt || user.usageResetAt < new Date())) {
+    if (!user.usageResetAt || user.usageResetAt < new Date()) {
       const now = new Date()
       const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1)
       await prisma.echo_breaker_users.update({
