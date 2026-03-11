@@ -27,9 +27,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[STRIPE:USAGE] Error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch usage' },
-      { status: 500 }
-    )
+    return NextResponse.json({ tier: 'free', used: 0, limit: 5, imageUsed: 0, imageLimit: 2 })
   }
 }
