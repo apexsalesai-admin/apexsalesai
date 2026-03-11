@@ -291,6 +291,27 @@ export function ContentCreator({ initialDate, initialType, onSave, onCancel, isS
   // Mia Creative Mode
   const [miaCreativeMode, setMiaCreativeMode] = useState(true)
 
+  // Preview Edit Modal State
+  const [isEditingPreview, setIsEditingPreview] = useState(false)
+  const [previewEditTitle, setPreviewEditTitle] = useState('')
+  const [previewEditBody, setPreviewEditBody] = useState('')
+
+  const insertPreviewFormatting = useCallback((prefix: string, suffix: string = '') => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('#preview-edit-body-textarea')
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const text = previewEditBody
+    const selected = text.slice(start, end)
+    const newText = text.slice(0, start) + prefix + (selected || 'text') + (suffix || prefix) + text.slice(end)
+    setPreviewEditBody(newText)
+    setTimeout(() => {
+      textarea.focus()
+      const pos = start + prefix.length + (selected || 'text').length
+      textarea.setSelectionRange(pos, pos)
+    }, 0)
+  }, [previewEditBody])
+
   // Creator Profile
   const [activeProfile, setActiveProfile] = useState<CreatorProfile | null>(null)
 
@@ -2706,13 +2727,90 @@ ${generateTimestamps ? '- Include timestamps/chapters for the video' : ''}
                 {/* Edit CTA */}
                 <div className="flex justify-center mt-6">
                   <button
-                    onClick={() => setStep(2)}
+                    onClick={() => {
+                      setPreviewEditTitle(draft.title || '')
+                      setPreviewEditBody(draft.body || '')
+                      setIsEditingPreview(true)
+                    }}
                     className="flex items-center space-x-2 text-slate-500 hover:text-apex-primary transition-colors"
                   >
                     <PenTool className="w-4 h-4" />
                     <span>Edit content</span>
                   </button>
                 </div>
+
+                {/* Inline Edit Modal */}
+                {isEditingPreview && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-slate-900">Edit Content</h3>
+                          <button
+                            onClick={() => setIsEditingPreview(false)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+                            <input
+                              type="text"
+                              value={previewEditTitle}
+                              onChange={(e) => setPreviewEditTitle(e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Content</label>
+                            <div className="flex items-center gap-1 p-1 bg-slate-50 border border-slate-200 rounded-t-lg border-b-0">
+                              <button type="button" onClick={() => insertPreviewFormatting('**')} className="px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded" title="Bold">B</button>
+                              <button type="button" onClick={() => insertPreviewFormatting('*')} className="px-2 py-1 text-xs italic text-slate-600 hover:bg-slate-200 rounded" title="Italic">I</button>
+                              <button type="button" onClick={() => insertPreviewFormatting('## ', '\n')} className="px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded" title="Heading">H2</button>
+                              <button type="button" onClick={() => insertPreviewFormatting('\n- ')} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded" title="Bullet list">&bull; List</button>
+                              <button type="button" onClick={() => insertPreviewFormatting('\n1. ')} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded" title="Numbered list">1. List</button>
+                              <div className="flex-1" />
+                              <span className="text-xs text-slate-400">{previewEditBody.length} chars</span>
+                            </div>
+                            <textarea
+                              id="preview-edit-body-textarea"
+                              value={previewEditBody}
+                              onChange={(e) => setPreviewEditBody(e.target.value)}
+                              rows={12}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-b-lg text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                          <button
+                            onClick={() => setIsEditingPreview(false)}
+                            className="px-4 py-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDraft(prev => ({
+                                ...prev,
+                                title: previewEditTitle,
+                                body: previewEditBody,
+                              }))
+                              setIsEditingPreview(false)
+                            }}
+                            className="px-4 py-2 text-sm text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                          >
+                            Save Changes
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

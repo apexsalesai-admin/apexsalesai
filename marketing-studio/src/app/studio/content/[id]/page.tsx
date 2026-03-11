@@ -169,6 +169,22 @@ export default function ContentDetailPage() {
   const [editHashtags, setEditHashtags] = useState('')
   const [editCallToAction, setEditCallToAction] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+
+  const insertEditFormatting = useCallback((prefix: string, suffix: string = '') => {
+    const textarea = document.querySelector<HTMLTextAreaElement>('#edit-body-textarea')
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selected = editBody.slice(start, end)
+    const newText = editBody.slice(0, start) + prefix + (selected || 'text') + (suffix || prefix) + editBody.slice(end)
+    setEditBody(newText)
+    setTimeout(() => {
+      textarea.focus()
+      const pos = start + prefix.length + (selected || 'text').length
+      textarea.setSelectionRange(pos, pos)
+    }, 0)
+  }, [editBody])
+
   const [isDuplicating, setIsDuplicating] = useState(false)
   const [showRescheduleModal, setShowRescheduleModal] = useState(false)
   const [rescheduleDate, setRescheduleDate] = useState('')
@@ -1885,10 +1901,20 @@ export default function ContentDetailPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Body</label>
+                <div className="flex items-center gap-1 p-1 bg-slate-50 border border-slate-200 rounded-t-lg border-b-0">
+                  <button type="button" onClick={() => insertEditFormatting('**')} className="px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded" title="Bold">B</button>
+                  <button type="button" onClick={() => insertEditFormatting('*')} className="px-2 py-1 text-xs italic text-slate-600 hover:bg-slate-200 rounded" title="Italic">I</button>
+                  <button type="button" onClick={() => insertEditFormatting('## ', '\n')} className="px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded" title="Heading">H2</button>
+                  <button type="button" onClick={() => insertEditFormatting('\n- ')} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded" title="Bullet list">&bull; List</button>
+                  <button type="button" onClick={() => insertEditFormatting('\n1. ')} className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded" title="Numbered list">1. List</button>
+                  <div className="flex-1" />
+                  <span className="text-xs text-slate-400">{editBody.length} chars</span>
+                </div>
                 <textarea
+                  id="edit-body-textarea"
                   value={editBody}
                   onChange={e => setEditBody(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[160px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-b-lg text-sm resize-y min-h-[160px] font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
               <div>
