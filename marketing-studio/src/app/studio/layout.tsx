@@ -30,6 +30,7 @@ import { CommandPalette } from '@/components/ui/command-palette'
 import { MiaProvider } from '@/components/providers/mia-provider'
 import { MiaTrigger } from '@/components/ui/mia-trigger'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { UsageMeter } from '@/components/subscription/usage-meter'
 
 const NAV_ITEMS = [
   { href: '/studio', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -189,6 +190,9 @@ export default function StudioLayout({
               </Link>
             </div>
           </div>
+
+          {/* Usage Meter */}
+          <UsageMeter />
 
           {/* Quick Stats */}
           <SidebarStats />
