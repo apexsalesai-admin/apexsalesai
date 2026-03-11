@@ -21,6 +21,7 @@ import type {
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getContentTypeConfig } from '@/lib/content/content-type-config'
+import { checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -100,6 +101,16 @@ export async function POST(request: NextRequest) {
 
     const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
     if (limited) return limited;
+
+    const usageCheck = await checkUsageLimit(session.user.id, 'content')
+    if (!usageCheck.allowed) {
+      return NextResponse.json(
+        { success: false, angles: [], error: usageCheck.reason } satisfies MiaResearchResponse,
+        { status: 403 }
+      )
+    }
+
+    await recordUsage(session.user.id, 'mia_research').catch(console.error)
 
     const body = await request.json()
     const { topic, channels, contentType, goal, seed, action, brandName, currentAngles, userFeedback, profile } = body as MiaResearchRequest & {

@@ -1,15 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { VideoStudio } from '@/components/content/video-studio'
 import { Video, Sparkles, FileText, ArrowRight, Play, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { UpgradePrompt } from '@/components/subscription/upgrade-prompt'
 
 export default function VideoStudioPage() {
   const [script, setScript] = useState('')
   const [title, setTitle] = useState('')
   const [showStudio, setShowStudio] = useState(false)
+  const [tier, setTier] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/stripe/usage')
+      .then((r) => r.json())
+      .then((d) => setTier(d.tier || 'free'))
+      .catch(() => setTier('free'))
+  }, [])
+
+  if (tier === 'free') {
+    return (
+      <UpgradePrompt
+        feature="Video Generation"
+        description="Create professional AI-generated videos from scripts. Available on Pro and Enterprise plans."
+      />
+    )
+  }
 
   const sampleScripts = [
     {

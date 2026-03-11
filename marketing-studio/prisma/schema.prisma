@@ -975,20 +975,37 @@ model echo_breaker_users {
   lastResetAt          DateTime        @default(now())
   monthlyExports       Int             @default(0)
   monthlyVerifications Int             @default(0)
-  stripeCustomerId     String?
+  stripeCustomerId     String?         @unique
   stripeSubscriptionId String?
   subscriptionEndsAt   DateTime?
   subscriptionStatus   String          @default("active")
   subscriptionTier     String          @default("free")
   trialEndsAt          DateTime?
   verificationsCount   Int             @default(0)
+  monthlyContentLimit  Int             @default(5)
+  monthlyContentUsed   Int             @default(0)
+  monthlyImageUsed     Int             @default(0)
+  usageResetAt         DateTime?
   accounts             accounts[]
   sessions             sessions[]
   verifications        verifications[]
+  usageRecords         UsageRecord[]
 
   @@index([email])
   @@index([subscriptionStatus])
   @@index([subscriptionTier])
+}
+
+model UsageRecord {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  tier      String   @default("free")
+  createdAt DateTime @default(now())
+  user      echo_breaker_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, action, createdAt])
 }
 
 model integrations {

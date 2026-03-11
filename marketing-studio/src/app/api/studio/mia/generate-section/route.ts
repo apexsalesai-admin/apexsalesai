@@ -22,6 +22,7 @@ import type {
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getContentTypeConfig, getSectionInstruction } from '@/lib/content/content-type-config'
+import { checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
 
 async function callAI(prompt: string, maxTokens = 2048): Promise<string> {
   const provider = getBestProvider()
@@ -467,6 +468,16 @@ export async function POST(request: NextRequest) {
 
     const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
     if (limited) return limited;
+
+    const usageCheck = await checkUsageLimit(session.user.id, 'content')
+    if (!usageCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: usageCheck.reason },
+        { status: 403 }
+      )
+    }
+
+    await recordUsage(session.user.id, 'mia_generate').catch(console.error)
 
     const body = await request.json()
     const workspace = await getOrCreateWorkspace(session.user.id)

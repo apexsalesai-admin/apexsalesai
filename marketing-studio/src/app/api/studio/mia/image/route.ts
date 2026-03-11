@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
+import { checkFeatureAccess, checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +13,22 @@ export async function POST(request: NextRequest) {
 
     const limited = applyRateLimit(RATE_LIMITS.video, session.user.id)
     if (limited) return limited
+
+    const featureCheck = await checkFeatureAccess(session.user.id, 'images')
+    if (!featureCheck.allowed) {
+      return NextResponse.json(
+        { error: featureCheck.reason },
+        { status: 403 }
+      )
+    }
+
+    const usageCheck = await checkUsageLimit(session.user.id, 'image')
+    if (!usageCheck.allowed) {
+      return NextResponse.json(
+        { error: usageCheck.reason },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const { prompt, size = '1024x1024' } = body
@@ -72,6 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[IMAGE:DALLE] Image generated successfully')
+    await recordUsage(session.user.id, 'image_generate').catch(console.error)
 
     return NextResponse.json({
       success: true,
