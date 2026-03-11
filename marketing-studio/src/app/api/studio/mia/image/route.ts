@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { checkFeatureAccess, checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
+import { put } from '@vercel/blob'
 
 export async function POST(request: NextRequest) {
   try {
@@ -91,9 +92,27 @@ export async function POST(request: NextRequest) {
     console.log('[IMAGE:DALLE] Image generated successfully')
     await recordUsage(session.user.id, 'image_generate').catch(console.error)
 
+    // Persist to Vercel Blob so the URL does not expire
+    let persistentUrl = imageUrl
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const imageResponse = await fetch(imageUrl)
+        const imageBuffer = await imageResponse.arrayBuffer()
+        const filename = `studio-images/${Date.now()}-${Math.random().toString(36).slice(2)}.png`
+        const blob = await put(filename, imageBuffer, {
+          access: 'public',
+          contentType: 'image/png',
+        })
+        persistentUrl = blob.url
+        console.log('[IMAGE:BLOB] Persisted to Vercel Blob:', persistentUrl)
+      } catch (err) {
+        console.error('[IMAGE:BLOB] Upload failed, using DALL-E URL:', err)
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      url: imageUrl,
+      url: persistentUrl,
       revisedPrompt: revisedPrompt || null,
     })
   } catch (error) {

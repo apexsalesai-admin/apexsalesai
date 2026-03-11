@@ -66,6 +66,7 @@ export const POST = withAuth(async (req, { session }) => {
       aiGenerated = false,
       aiTopic,
       aiTone,
+      mediaUrls = [],
     } = body
 
     // Validate required fields
@@ -101,11 +102,13 @@ export const POST = withAuth(async (req, { session }) => {
         hashtags,
         callToAction,
         variations,
+        mediaUrls: Array.isArray(mediaUrls) ? mediaUrls : [],
         scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
         status,
         aiGenerated,
         aiTopic,
         aiTone,
+        createdById: session.user.id,
       },
     })
 

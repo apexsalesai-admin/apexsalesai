@@ -14,6 +14,7 @@ interface SaveAssetParams {
   aiTopic?: string
   aiTone?: string
   channels?: string[]
+  mediaUrls?: string[]
 }
 
 interface SaveResult {
@@ -46,6 +47,7 @@ export async function saveGeneratedAsset(params: SaveAssetParams): Promise<SaveR
         aiGenerated: params.aiGenerated ?? true,
         aiTopic: params.aiTopic || params.title,
         aiTone: params.aiTone || 'PROFESSIONAL',
+        ...(params.mediaUrls && params.mediaUrls.length > 0 && { mediaUrls: params.mediaUrls }),
       }),
     })
 

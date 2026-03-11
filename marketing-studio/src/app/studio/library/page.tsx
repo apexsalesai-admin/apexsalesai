@@ -24,6 +24,7 @@ interface ContentItem {
   status: string
   createdAt: string
   channels: string[]
+  mediaUrls?: string[]
 }
 
 interface TypeCount {
@@ -171,20 +172,35 @@ export default function LibraryPage() {
           {filtered.map(item => {
             const Icon = TYPE_ICONS[item.contentType] || FileText
             const statusStyle = STATUS_STYLES[item.status] || STATUS_STYLES.DRAFT
+            const hasImage = item.mediaUrls && item.mediaUrls.length > 0
+            const detailHref = hasImage ? `/studio/image/${item.id}` : `/studio/content/${item.id}`
             return (
               <Link
                 key={item.id}
-                href={`/studio/content/${item.id}`}
+                href={detailHref}
                 className="flex items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all"
               >
-                <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-5 h-5 text-slate-500" />
-                </div>
+                {hasImage ? (
+                  <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.mediaUrls![0]}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-5 h-5 text-slate-500" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-900 truncate">{item.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {new Date(item.createdAt).toLocaleDateString()}
-                    {item.body && ` · ${item.body.split(/\s+/).length} words`}
+                    {!hasImage && item.body && ` · ${item.body.split(/\s+/).length} words`}
+                    {hasImage && ' · Image'}
                   </p>
                 </div>
                 <span className={cn('px-2 py-1 rounded text-xs font-medium', statusStyle.bg, statusStyle.text)}>

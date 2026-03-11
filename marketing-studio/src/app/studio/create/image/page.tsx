@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Image as ImageIcon, Sparkles, Loader2, Download, Save, RefreshCw } from 'lucide-react'
 import { CreationWorkspace, type WorkspaceStep } from '@/components/studio/creation-workspace'
-import { saveGeneratedAsset, redirectAfterSave } from '@/lib/studio/save-generated-asset'
+import { saveGeneratedAsset } from '@/lib/studio/save-generated-asset'
+import { ImageRefinePanel } from '@/components/studio/image-refine-panel'
 import { cn } from '@/lib/utils'
 
 const STEPS: WorkspaceStep[] = [
@@ -31,10 +32,12 @@ const SIZE_OPTIONS = [
 
 export default function CreateImagePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialPrompt = searchParams.get('prompt') || ''
   const [step, setStep] = useState(0)
 
   // Step 0: Concept
-  const [concept, setConcept] = useState('')
+  const [concept, setConcept] = useState(initialPrompt)
 
   // Step 1: Style
   const [selectedStyle, setSelectedStyle] = useState('illustration')
@@ -57,7 +60,6 @@ export default function CreateImagePage() {
     setError('')
 
     try {
-      // Call research API to get visual angles
       const researchRes = await fetch('/api/studio/mia/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,7 +77,6 @@ export default function CreateImagePage() {
 
       if (!firstAngle) throw new Error('No visual concepts generated')
 
-      // Call generate-section to create a DALL-E prompt
       const generateRes = await fetch('/api/studio/mia/generate-section', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,12 +113,12 @@ export default function CreateImagePage() {
     }
   }
 
-  const handleGenerateImage = async () => {
+  const handleGenerateImage = async (promptOverride?: string) => {
     setIsGeneratingImage(true)
     setError('')
 
     try {
-      const promptToUse = generatedPrompt || `${selectedStyle} style: ${concept}`
+      const promptToUse = promptOverride || generatedPrompt || `${selectedStyle} style: ${concept}`
 
       const res = await fetch('/api/studio/mia/image', {
         method: 'POST',
@@ -138,6 +139,7 @@ export default function CreateImagePage() {
 
       setGeneratedImageUrl(data.url)
       setRevisedPrompt(data.revisedPrompt || '')
+      if (promptOverride) setGeneratedPrompt(promptOverride)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Image generation failed'
       setError(message)
@@ -155,10 +157,11 @@ export default function CreateImagePage() {
       body: generatedPrompt || concept,
       contentType: 'POST',
       aiTopic: concept,
+      mediaUrls: generatedImageUrl ? [generatedImageUrl] : [],
     })
 
-    if (result.success) {
-      redirectAfterSave(router, result.contentId)
+    if (result.success && result.contentId) {
+      router.push(`/studio/image/${result.contentId}`)
     } else {
       setError(result.error || 'Save failed')
     }
@@ -321,7 +324,7 @@ export default function CreateImagePage() {
 
           {!generatedImageUrl && (
             <button
-              onClick={handleGenerateImage}
+              onClick={() => handleGenerateImage()}
               disabled={isGeneratingImage || !generatedPrompt}
               className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -335,22 +338,25 @@ export default function CreateImagePage() {
 
           {generatedImageUrl && (
             <div className="space-y-4">
-              <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-lg">
+              <div
+                className="relative w-full rounded-2xl overflow-hidden border border-slate-200 shadow-lg mx-auto"
+                style={{ maxWidth: selectedSize === '1792x1024' ? '800px' : '600px' }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={generatedImageUrl}
                   alt={concept}
-                  className="w-full"
+                  className="w-full h-auto block"
                 />
               </div>
 
               {revisedPrompt && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 text-center">
                   <span className="font-medium">DALL-E revised prompt:</span> {revisedPrompt}
                 </p>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => {
                     setGeneratedImageUrl('')
@@ -370,6 +376,15 @@ export default function CreateImagePage() {
                   <Download className="w-4 h-4" /> Download
                 </a>
               </div>
+
+              {/* Mia Refinement Panel */}
+              <ImageRefinePanel
+                currentPrompt={generatedPrompt}
+                onRegenerate={async (newPrompt) => {
+                  await handleGenerateImage(newPrompt)
+                }}
+                isGenerating={isGeneratingImage}
+              />
             </div>
           )}
         </div>
@@ -379,9 +394,12 @@ export default function CreateImagePage() {
       {step === 3 && (
         <div className="space-y-6">
           {generatedImageUrl && (
-            <div className="rounded-2xl overflow-hidden border border-slate-200 max-w-md mx-auto">
+            <div
+              className="rounded-2xl overflow-hidden border border-slate-200 mx-auto"
+              style={{ maxWidth: selectedSize === '1792x1024' ? '800px' : '600px' }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={generatedImageUrl} alt={concept} className="w-full" />
+              <img src={generatedImageUrl} alt={concept} className="w-full h-auto block" />
             </div>
           )}
 
