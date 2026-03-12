@@ -1394,4 +1394,5 @@ enum ContentType {
   VIDEO
   ARTICLE
   THREAD
+  IMAGE
 }

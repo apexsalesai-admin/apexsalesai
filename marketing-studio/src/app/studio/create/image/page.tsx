@@ -155,7 +155,7 @@ export default function CreateImagePage() {
     const result = await saveGeneratedAsset({
       title: concept,
       body: generatedPrompt || concept,
-      contentType: 'POST',
+      contentType: 'IMAGE',
       aiTopic: concept,
       mediaUrls: generatedImageUrl ? [generatedImageUrl] : [],
     })

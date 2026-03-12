@@ -4,12 +4,9 @@ interface SaveAssetParams {
   title: string
   body: string
   /**
-   * Prisma ContentType enum only supports: POST, VIDEO, ARTICLE, THREAD.
-   * For non-post asset types, use the closest valid value:
-   * - article / presentation -> 'ARTICLE'
-   * - image / email / campaign -> 'POST'
+   * Prisma ContentType enum: POST, VIDEO, ARTICLE, THREAD, IMAGE.
    */
-  contentType: 'POST' | 'VIDEO' | 'ARTICLE' | 'THREAD'
+  contentType: 'POST' | 'VIDEO' | 'ARTICLE' | 'THREAD' | 'IMAGE'
   aiGenerated?: boolean
   aiTopic?: string
   aiTone?: string

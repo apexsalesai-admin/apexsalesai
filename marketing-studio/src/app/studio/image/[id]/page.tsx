@@ -61,15 +61,23 @@ export default function ImageDetailPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!imageUrl) return
-    const link = document.createElement('a')
-    link.href = imageUrl
-    link.download = `${content.title || 'generated-image'}.png`
-    link.target = '_blank'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    try {
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `lyfye-image-${params.id}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      // Fallback: open in new tab
+      window.open(imageUrl, '_blank')
+    }
   }
 
   const handleRegenerateSimilar = () => {

@@ -7,6 +7,7 @@ import {
   Video,
   Mail,
   BookOpen,
+  ImageIcon,
   Loader2,
   AlertCircle,
   Search,
@@ -35,6 +36,7 @@ interface TypeCount {
 const TYPE_TABS = [
   { id: 'all', label: 'All' },
   { id: 'POST', label: 'Posts' },
+  { id: 'IMAGE', label: 'Images' },
   { id: 'VIDEO', label: 'Videos' },
   { id: 'ARTICLE', label: 'Articles' },
   { id: 'EMAIL', label: 'Emails' },
@@ -42,6 +44,7 @@ const TYPE_TABS = [
 
 const TYPE_ICONS: Record<string, typeof FileText> = {
   POST: FileText,
+  IMAGE: ImageIcon,
   VIDEO: Video,
   ARTICLE: BookOpen,
   EMAIL: Mail,
