@@ -174,11 +174,11 @@ function LoginContent() {
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
           By signing in, you agree to our{' '}
-          <a href="#" className="text-cyan-500 hover:underline">
+          <a href="https://lyfye.com/terms" target="_blank" rel="noopener noreferrer" className="text-cyan-500 hover:underline">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="#" className="text-cyan-500 hover:underline">
+          <a href="https://lyfye.com/privacy" target="_blank" rel="noopener noreferrer" className="text-cyan-500 hover:underline">
             Privacy Policy
           </a>
         </p>
