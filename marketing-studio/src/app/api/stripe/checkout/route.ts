@@ -62,12 +62,13 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://studio.lyfye.com'
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: 'https://studio.lyfye.com/studio/pricing?success=true',
-      cancel_url: 'https://studio.lyfye.com/studio/pricing?canceled=true',
+      success_url: `${baseUrl}/studio/pricing?success=true`,
+      cancel_url: `${baseUrl}/studio/pricing?canceled=true`,
       metadata: {
         userId: session.user.id,
         tier,

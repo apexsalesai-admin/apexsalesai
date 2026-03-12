@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
-import { checkFeatureAccess, checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
+import { recordUsage } from '@/lib/subscription/check-access'
 import { put } from '@vercel/blob'
 
 export async function POST(request: NextRequest) {
@@ -15,25 +15,7 @@ export async function POST(request: NextRequest) {
     const limited = applyRateLimit(RATE_LIMITS.video, session.user.id)
     if (limited) return limited
 
-    try {
-      const featureCheck = await checkFeatureAccess(session.user.id, 'images')
-      if (!featureCheck.allowed) {
-        return NextResponse.json(
-          { error: featureCheck.reason },
-          { status: 403 }
-        )
-      }
-
-      const usageCheck = await checkUsageLimit(session.user.id, 'image')
-      if (!usageCheck.allowed) {
-        return NextResponse.json(
-          { error: usageCheck.reason },
-          { status: 403 }
-        )
-      }
-    } catch (err) {
-      console.error('[API:mia:image] Usage/feature check failed, proceeding:', err)
-    }
+    // Image generation gated at UI layer only. Core function — no server-side usage gate.
 
     const body = await request.json()
     const { prompt, size = '1024x1024' } = body
