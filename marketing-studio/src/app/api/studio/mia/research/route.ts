@@ -102,12 +102,16 @@ export async function POST(request: NextRequest) {
     const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
     if (limited) return limited;
 
-    const usageCheck = await checkUsageLimit(session.user.id, 'content')
-    if (!usageCheck.allowed) {
-      return NextResponse.json(
-        { success: false, angles: [], error: usageCheck.reason } satisfies MiaResearchResponse,
-        { status: 403 }
-      )
+    try {
+      const usageCheck = await checkUsageLimit(session.user.id, 'content')
+      if (!usageCheck.allowed) {
+        return NextResponse.json(
+          { success: false, angles: [], error: usageCheck.reason } satisfies MiaResearchResponse,
+          { status: 403 }
+        )
+      }
+    } catch (err) {
+      console.error('[API:mia:research] Usage check failed, proceeding:', err)
     }
 
     await recordUsage(session.user.id, 'mia_research').catch(console.error)

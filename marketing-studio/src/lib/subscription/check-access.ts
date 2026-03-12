@@ -62,6 +62,14 @@ export async function checkUsageLimit(
     const tier = user?.subscriptionTier || 'free'
     const config = getTierConfig(tier)
 
+    // Check DB-level limit override (user record may have -1 for unlimited)
+    if (user && action === 'content') {
+      const dbLimit = (user as Record<string, unknown>).monthlyContentLimit as number | null | undefined
+      if (dbLimit === -1 || dbLimit === null) {
+        return { allowed: true, tier, usage: { used: 0, limit: -1 } }
+      }
+    }
+
     const limitField =
       action === 'image'
         ? config.monthlyImageLimit
