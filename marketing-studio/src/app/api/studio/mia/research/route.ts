@@ -21,7 +21,7 @@ import type {
 import { buildProfileSystemPrompt, type CreatorProfile } from '@/lib/studio/creator-profile'
 import { applyRateLimit, RATE_LIMITS } from '@/lib/middleware/rate-limit'
 import { getContentTypeConfig } from '@/lib/content/content-type-config'
-import { checkUsageLimit, recordUsage } from '@/lib/subscription/check-access'
+import { recordUsage } from '@/lib/subscription/check-access'
 
 async function callAI(prompt: string): Promise<string> {
   const provider = getBestProvider()
@@ -102,18 +102,8 @@ export async function POST(request: NextRequest) {
     const limited = applyRateLimit(RATE_LIMITS.mia, session.user.id);
     if (limited) return limited;
 
-    try {
-      const usageCheck = await checkUsageLimit(session.user.id, 'content')
-      if (!usageCheck.allowed) {
-        return NextResponse.json(
-          { success: false, angles: [], error: usageCheck.reason } satisfies MiaResearchResponse,
-          { status: 403 }
-        )
-      }
-    } catch (err) {
-      console.error('[API:mia:research] Usage check failed, proceeding:', err)
-    }
-
+    // Research/angle generation is a core Mia function — no usage gate.
+    // Usage is recorded for analytics only; never blocks the request.
     await recordUsage(session.user.id, 'mia_research').catch(console.error)
 
     const body = await request.json()
