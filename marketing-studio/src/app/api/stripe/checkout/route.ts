@@ -77,9 +77,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: checkoutSession.url })
   } catch (error) {
-    console.error('[STRIPE:CHECKOUT] Error:', error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('[STRIPE:CHECKOUT] Error:', errMsg)
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { error: errMsg.includes('STRIPE_SECRET_KEY')
+          ? 'Stripe is not configured. Contact support@lyfye.com'
+          : 'Checkout unavailable. Please try again.' },
       { status: 500 }
     )
   }

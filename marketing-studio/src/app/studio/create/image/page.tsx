@@ -30,6 +30,11 @@ const SIZE_OPTIONS = [
   { id: '1024x1792', label: 'Portrait (9:16)', description: 'Stories, mobile' },
 ]
 
+const IMAGE_PROVIDERS = [
+  { id: 'dalle', label: 'DALL-E 3', badge: 'OpenAI', available: true },
+  { id: 'leonardo', label: 'Leonardo AI', badge: 'Standard', available: false },
+]
+
 export default function CreateImagePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -42,6 +47,7 @@ export default function CreateImagePage() {
   // Step 1: Style
   const [selectedStyle, setSelectedStyle] = useState('illustration')
   const [selectedSize, setSelectedSize] = useState('1024x1024')
+  const [imageProvider, setImageProvider] = useState('dalle')
 
   // Step 2: Generate
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
@@ -310,6 +316,33 @@ export default function CreateImagePage() {
                 >
                   <span className="block text-sm font-medium text-slate-900">{size.label}</span>
                   <span className="block text-xs text-slate-500 mt-1">{size.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Provider Selector */}
+          <div className="p-6 bg-white rounded-xl border border-slate-200">
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Generation Engine</h3>
+            <div className="flex gap-3">
+              {IMAGE_PROVIDERS.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => p.available && setImageProvider(p.id)}
+                  className={cn(
+                    'px-4 py-3 rounded-xl border text-sm font-medium transition-colors',
+                    imageProvider === p.id && p.available
+                      ? 'border-pink-500 bg-pink-50 text-pink-700'
+                      : 'border-slate-200 text-slate-500',
+                    !p.available && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  {p.label}
+                  {!p.available && (
+                    <span className="ml-2 text-xs bg-slate-100 px-1.5 py-0.5 rounded">
+                      Coming Soon
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

@@ -17,8 +17,16 @@ export default function VideoStudioPage() {
     fetch('/api/stripe/usage')
       .then((r) => r.json())
       .then((d) => setTier(d.tier || 'free'))
-      .catch(() => setTier('free'))
+      .catch(() => setTier('pro')) // fail open — don't block on network error
   }, [])
+
+  if (tier === null) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full" />
+      </div>
+    )
+  }
 
   if (tier === 'free') {
     return (

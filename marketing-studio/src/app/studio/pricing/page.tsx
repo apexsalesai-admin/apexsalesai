@@ -108,12 +108,12 @@ export default function PricingPage() {
         setUpgradeError(
           data.error?.includes('Price not configured')
             ? 'This plan is not yet available. Please contact support@lyfye.com'
-            : 'Upgrade temporarily unavailable. Please contact support@lyfye.com'
+            : "We're setting up checkout. Refresh the page and try again, or email support@lyfye.com"
         )
         setLoading(null)
       }
     } catch {
-      setUpgradeError('Upgrade temporarily unavailable. Please contact support@lyfye.com')
+      setUpgradeError("We're setting up checkout. Refresh the page and try again, or email support@lyfye.com")
       setLoading(null)
     }
   }

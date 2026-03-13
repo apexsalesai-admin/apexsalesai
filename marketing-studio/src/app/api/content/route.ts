@@ -123,9 +123,10 @@ export const POST = withAuth(async (req, { session }) => {
           : 'Content saved as draft',
     })
   } catch (error) {
-    console.error('Error creating content:', error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error('[API:content:POST] DB error:', errMsg)
     return NextResponse.json(
-      { success: false, error: 'Failed to create content' },
+      { success: false, error: 'Failed to save content', detail: errMsg },
       { status: 500 }
     )
   }
