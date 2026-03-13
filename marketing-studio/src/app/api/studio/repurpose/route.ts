@@ -7,7 +7,8 @@ import { getBestProvider } from '@/lib/ai-gateway'
 import { z } from 'zod'
 
 const repurposeSchema = z.object({
-  contentId: z.string().min(1),
+  contentId: z.string().min(1).optional(),
+  sourceText: z.string().min(20).optional(),
   targetFormats: z.array(
     z.enum([
       'LINKEDIN_POST',
@@ -18,6 +19,8 @@ const repurposeSchema = z.object({
       'SHORT_SUMMARY',
     ])
   ).min(1).max(6),
+}).refine(d => d.contentId || d.sourceText, {
+  message: 'Either contentId or sourceText is required',
 })
 
 const FORMAT_INSTRUCTIONS: Record<string, string> = {
@@ -48,16 +51,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { contentId, targetFormats } = parsed.data
+    const { contentId, sourceText: rawText, targetFormats } = parsed.data
 
-    const original = await prisma.scheduledContent.findUnique({
-      where: { id: contentId },
-    })
+    let originalTitle = 'Pasted Content'
+    let originalBody = rawText || ''
+    let originalId = contentId || 'external'
 
-    if (!original || !original.body) {
+    if (contentId) {
+      const original = await prisma.scheduledContent.findUnique({
+        where: { id: contentId },
+      })
+
+      if (!original || !original.body) {
+        return NextResponse.json(
+          { error: 'Content not found or has no body text' },
+          { status: 404 }
+        )
+      }
+      originalTitle = original.title
+      originalBody = original.body
+      originalId = original.id
+    }
+
+    if (!originalBody) {
       return NextResponse.json(
-        { error: 'Content not found or has no body text' },
-        { status: 404 }
+        { error: 'No source content provided' },
+        { status: 400 }
       )
     }
 
@@ -78,8 +97,8 @@ export async function POST(request: NextRequest) {
     const prompt = `You are Mia, an AI content strategist. Repurpose the following content into the requested formats. Preserve the core message and adapt the tone for each platform. Never use em dashes. Use commas, semicolons, or separate sentences instead.
 
 ORIGINAL CONTENT:
-Title: ${original.title}
-Body: ${original.body}
+Title: ${originalTitle}
+Body: ${originalBody}
 
 TARGET FORMATS:
 ${formatList}
@@ -182,8 +201,8 @@ Return ONLY a valid JSON object. Use these EXACT keys: ${formatKeys}. Each value
     return NextResponse.json({
       success: true,
       data: {
-        originalId: contentId,
-        originalTitle: original.title,
+        originalId,
+        originalTitle,
         repurposed: normalized,
         formats: targetFormats,
       },

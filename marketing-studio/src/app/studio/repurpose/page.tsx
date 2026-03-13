@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Sparkles, Loader2, AlertCircle, Copy, Check, ArrowLeft, Save } from 'lucide-react'
+import { Sparkles, Loader2, AlertCircle, Copy, Check, ArrowLeft, Save, Globe, Upload, Library } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +34,10 @@ export default function RepurposePage() {
   const [results, setResults] = useState<Record<string, string> | null>(null)
   const [activeTab, setActiveTab] = useState('')
   const [copied, setCopied] = useState(false)
+  const [sourceMode, setSourceMode] = useState<'library' | 'url' | 'file'>('library')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [sourceText, setSourceText] = useState('')
+  const [fetchingUrl, setFetchingUrl] = useState(false)
 
   // Load user's content
   useEffect(() => {
@@ -54,20 +58,75 @@ export default function RepurposePage() {
     )
   }
 
+  const handleFetchUrl = async () => {
+    if (!sourceUrl.trim()) return
+    setFetchingUrl(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/studio/mia/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: sourceUrl,
+          channels: ['LINKEDIN'],
+          contentType: 'article',
+          goal: 'repurpose',
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.angles?.[0]) {
+        setSourceText(
+          data.angles.map((a: { title: string; description: string; rationale: string }) =>
+            `${a.title}\n${a.description}\n${a.rationale}`
+          ).join('\n\n')
+        )
+      } else {
+        setError('Could not fetch content from URL. Try pasting the text directly.')
+      }
+    } catch {
+      setError('Failed to fetch URL content.')
+    } finally {
+      setFetchingUrl(false)
+    }
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setSourceText(ev.target?.result as string || '')
+    }
+    reader.readAsText(file)
+  }
+
+  const canRepurpose = selectedFormats.length > 0 && (
+    (sourceMode === 'library' && selectedId) ||
+    (sourceMode === 'url' && sourceText) ||
+    (sourceMode === 'file' && sourceText)
+  )
+
   const handleRepurpose = async () => {
-    if (!selectedId || selectedFormats.length === 0) return
+    if (!canRepurpose) return
     setGenerating(true)
     setError(null)
     setResults(null)
 
     try {
+      const bodyPayload: Record<string, unknown> = {
+        targetFormats: selectedFormats,
+      }
+
+      if (sourceMode === 'library') {
+        bodyPayload.contentId = selectedId
+      } else {
+        bodyPayload.sourceText = sourceText
+      }
+
       const res = await fetch('/api/studio/repurpose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contentId: selectedId,
-          targetFormats: selectedFormats,
-        }),
+        body: JSON.stringify(bodyPayload),
       })
 
       const data = await res.json()
@@ -101,7 +160,7 @@ export default function RepurposePage() {
           title: `${label} (Repurposed)`,
           body: text,
           contentType: 'POST',
-          channels: [],
+          channels: ['LINKEDIN'],
           aiGenerated: true,
           aiTopic: label,
           aiTone: 'PROFESSIONAL',
@@ -136,38 +195,124 @@ export default function RepurposePage() {
         </div>
       </div>
 
-      {/* Step 1: Select Content */}
+      {/* Step 1: Select Content Source */}
       <div className="p-6 bg-white rounded-xl border border-slate-200">
         <label className="block text-sm font-medium text-slate-700 mb-3">
-          1. Select content to repurpose
+          1. Choose your source
         </label>
-        {loading ? (
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading your content...
+
+        {/* Source Mode Tabs */}
+        <div className="flex gap-2 mb-4">
+          {([
+            { id: 'library' as const, label: 'From Library', icon: Library },
+            { id: 'url' as const, label: 'From a URL', icon: Globe },
+            { id: 'file' as const, label: 'From a File', icon: Upload },
+          ]).map(mode => (
+            <button
+              key={mode.id}
+              onClick={() => setSourceMode(mode.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                sourceMode === mode.id
+                  ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                  : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+              )}
+            >
+              <mode.icon className="w-4 h-4" />
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Library Mode */}
+        {sourceMode === 'library' && (
+          loading ? (
+            <div className="flex items-center gap-2 text-slate-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading your content...
+            </div>
+          ) : contentList.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              No content with body text found.{' '}
+              <Link href="/studio/create" className="text-purple-600 hover:text-purple-700">Create something first.</Link>
+            </p>
+          ) : (
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="">Choose a piece of content...</option>
+              {contentList.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.title} ({item.contentType})
+                </option>
+              ))}
+            </select>
+          )
+        )}
+
+        {/* URL Mode */}
+        {sourceMode === 'url' && (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="Paste a URL to repurpose content from..."
+                className="flex-1 px-4 py-3 rounded-lg border border-slate-300 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+              />
+              <button
+                onClick={handleFetchUrl}
+                disabled={fetchingUrl || !sourceUrl.trim()}
+                className="px-4 py-3 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {fetchingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+                Fetch
+              </button>
+            </div>
+            {sourceText && (
+              <textarea
+                value={sourceText}
+                onChange={(e) => setSourceText(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 text-sm text-slate-700 resize-y"
+                placeholder="Fetched content will appear here — you can edit before repurposing"
+              />
+            )}
           </div>
-        ) : contentList.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            No content with body text found.{' '}
-            <Link href="/studio/create" className="text-purple-600 hover:text-purple-700">Create something first.</Link>
-          </p>
-        ) : (
-          <select
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            <option value="">Choose a piece of content...</option>
-            {contentList.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.title} ({item.contentType})
-              </option>
-            ))}
-          </select>
+        )}
+
+        {/* File Mode */}
+        {sourceMode === 'file' && (
+          <div className="space-y-3">
+            <label className="flex items-center justify-center gap-3 px-6 py-8 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-purple-400 hover:bg-purple-50/50 transition-colors">
+              <Upload className="w-5 h-5 text-slate-400" />
+              <span className="text-sm text-slate-500">
+                {sourceText ? 'File loaded — click to replace' : 'Click to upload .txt, .md, or .pdf'}
+              </span>
+              <input
+                type="file"
+                accept=".txt,.md,.pdf,.docx"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+            {sourceText && (
+              <textarea
+                value={sourceText}
+                onChange={(e) => setSourceText(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 text-sm text-slate-700 resize-y"
+                placeholder="File content — you can edit before repurposing"
+              />
+            )}
+          </div>
         )}
       </div>
 
       {/* Step 2: Choose Formats */}
-      {selectedId && (
+      {(selectedId || sourceText) && (
         <div className="p-6 bg-white rounded-xl border border-slate-200">
           <label className="block text-sm font-medium text-slate-700 mb-3">
             2. Choose target formats
@@ -191,7 +336,7 @@ export default function RepurposePage() {
 
           <button
             onClick={handleRepurpose}
-            disabled={generating || selectedFormats.length === 0}
+            disabled={generating || !canRepurpose}
             className="mt-6 flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
           >
             {generating ? (

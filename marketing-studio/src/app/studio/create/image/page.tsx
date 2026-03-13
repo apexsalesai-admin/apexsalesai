@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Image as ImageIcon, Sparkles, Loader2, Download, Save, RefreshCw } from 'lucide-react'
+import { Image as ImageIcon, Sparkles, Loader2, Download, Save, RefreshCw, Link2, Send, PenLine } from 'lucide-react'
 import { CreationWorkspace, type WorkspaceStep } from '@/components/studio/creation-workspace'
 import { saveGeneratedAsset } from '@/lib/studio/save-generated-asset'
 import { ImageRefinePanel } from '@/components/studio/image-refine-panel'
@@ -54,6 +54,31 @@ export default function CreateImagePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
+
+  const handleDownload = async () => {
+    if (!generatedImageUrl) return
+    try {
+      const response = await fetch(generatedImageUrl)
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `lyfye-image-${Date.now()}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(generatedImageUrl, '_blank')
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (!generatedImageUrl) return
+    await navigator.clipboard.writeText(generatedImageUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const handleGeneratePrompt = async () => {
     setIsGeneratingPrompt(true)
@@ -366,15 +391,12 @@ export default function CreateImagePage() {
                 >
                   <RefreshCw className="w-4 h-4" /> Regenerate
                 </button>
-                <a
-                  href={generatedImageUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
+                <button
+                  onClick={handleDownload}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50"
                 >
                   <Download className="w-4 h-4" /> Download
-                </a>
+                </button>
               </div>
 
               {/* Mia Refinement Panel */}
@@ -407,24 +429,41 @@ export default function CreateImagePage() {
             <h3 className="text-lg font-semibold text-slate-900 mb-2">Your image is ready</h3>
             <p className="text-sm text-slate-500 mb-6">Save to your Library, download, or use in a post</p>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <button
+                onClick={handleCopyLink}
+                className="flex flex-col items-center gap-2 px-4 py-4 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <Link2 className="w-5 h-5" />
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
+              <button
+                onClick={handleDownload}
+                className="flex flex-col items-center gap-2 px-4 py-4 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                Download
+              </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 disabled:opacity-50"
+                className="flex flex-col items-center gap-2 px-4 py-4 text-sm font-medium text-white bg-purple-600 rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors"
               >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                 Save to Library
               </button>
-              <a
-                href={generatedImageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="flex items-center justify-center gap-2 px-6 py-3 text-slate-600 bg-white border border-slate-200 rounded-xl font-medium hover:bg-slate-50"
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams()
+                  if (generatedImageUrl) params.set('imageUrl', generatedImageUrl)
+                  if (concept) params.set('topic', concept)
+                  router.push(`/studio/content/new?${params.toString()}`)
+                }}
+                className="flex flex-col items-center gap-2 px-4 py-4 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
               >
-                <Download className="w-4 h-4" /> Download Image
-              </a>
+                <PenLine className="w-5 h-5" />
+                Add to Post
+              </button>
             </div>
           </div>
         </div>

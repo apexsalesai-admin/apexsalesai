@@ -77,7 +77,8 @@ export const POST = withAuth(async (req, { session }) => {
       )
     }
 
-    if (channels.length === 0) {
+    // Images and other assets may not have channels — default to LINKEDIN
+    if (channels.length === 0 && contentType.toUpperCase() !== 'IMAGE') {
       return NextResponse.json(
         { success: false, error: 'At least one channel is required' },
         { status: 400 }
